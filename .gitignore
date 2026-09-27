@@ -1,1 +1,20 @@
 .DS_Store
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.idea/
+TestResults/
+*.trx
+efbundle
+efbundle.exe
+
+# Local document storage fallback (D-28)
+uploads/
+
+# Local environment overrides
+.env
+appsettings.*.local.json
