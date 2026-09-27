@@ -51,6 +51,7 @@ Markers used below:
 | D-36 | Azure hosting: Container Apps (scale to zero) + serverless SQL | ACCEPTED |
 | D-37 | Package versions and licences (+ AutoMapper CVE suppression) | ACCEPTED |
 | D-38 | Phase 1 cross-cutting choices (errors, auth, shadow columns, health, toolchain) | PROPOSED |
+| D-39 | Phase 2 domain and schema choices (+ two open questions) | ACCEPTED |
 
 ---
 
@@ -925,7 +926,8 @@ decisions. None changes an FRS business rule. Listed here so none is a silent ch
 9. **Signing key.** `Auth:SigningKey` (≥ 32 characters, validated at start-up). Development uses a clearly labelled local key in
    `appsettings.Development.json`; the base `appsettings.json` has none, so a non-development host refuses to start without one. In Azure it arrives as the
    Container Apps secret `Auth__SigningKey`, which references Key Vault (D-36). No Key Vault SDK is needed in code.
-10. **Correlation id.** It is accepted from the client only if it is 1–64 characters of `[A-Za-z0-9-_.]`; otherwise it is replaced with a new GUID, never
+10. **Correlation id.** ~~It is accepted from the client only if it is 1–64 characters of `[A-Za-z0-9-_.]`~~ **Amended by D-39 Q1 (2026-09-27):** it is
+    accepted from the client only if it is a GUID in the 36-character "D" form, because ClaimAuditLog.CorrelationId is a GUID (FRS §9.8); otherwise it is replaced with a new GUID, never
     rejected. It is echoed in the response, pushed into the logging scope for the whole request, and exposed to the SPA through CORS.
 11. **Health.** `/health/live` has no dependencies, so a paused serverless database never restarts the container. `/health/ready` checks the database. Both are
     anonymous. These are the Container Apps probes (D-36).
@@ -940,3 +942,70 @@ decisions. None changes an FRS business rule. Listed here so none is a silent ch
 
 **Rationale.** Each item is small and reversible, and each closes a gap the phase could not leave open.
 **Status:** PROPOSED (2026-09-27): awaiting Vlad's review.
+
+## D-39 — Phase 2 domain and schema choices
+**Context.** Phase 2 built the Claim aggregate and its schema. Two points need Vlad's decision (Q1, Q2); the rest are choices where the
+FRS/brief are silent or where the Phase 0 plan turned out to need a refinement. None changes an FRS business rule.
+
+**Open questions (need a decision before the migration is generated).**
+- **Q1. `ClaimAuditLog.CorrelationId` type.** FRS §9.8 says GUID. D-38 item 10 (PROPOSED) accepts any client correlation id of 1–64
+  `[A-Za-z0-9-_.]` characters (e.g. `fnol-intake-42`), which does not fit a UNIQUEIDENTIFIER.
+  - (a) Keep UNIQUEIDENTIFIER; the middleware accepts a client id only if it is a GUID and otherwise generates one (the generated id is
+    echoed, so the client can still correlate). Changes D-38 item 10 and one Phase 1 test.
+  - (b) NVARCHAR(64); **DEVIATION** from FRS §9.8, no change to Phase 1.
+  - (c) Keep UNIQUEIDENTIFIER and store NULL when the id is not a GUID (loses the link for those requests).
+  - **Recommendation: (a)**: the FRS column type stays exact, and D-38 is still PROPOSED, so changing it is cheap.
+  - **Decision (Vlad, 2026-09-27): (a).** D-38 item 10 amended; `API_CORR_Non_guid_correlation_id_is_replaced` covers `fnol-intake-42` and the braced form.
+- **Q2. Loading the aggregate for commands.** ARCHITECTURE-PLAN §2.2 said a command loads "only the reserve transactions it needs". The
+  domain rules (one pending per component, CC-01, "an approved reserve exists", CurrentAmount = Σ approved) are simplest and safest when the
+  aggregate sees the **whole** history. **Recommendation:** load the full aggregate (split query). A claim has tens of transactions, not
+  thousands; if that ever changes, the component already stores the `CurrentAmount` projection and `LastChangeSequence`, so partial loading
+  can be added behind the repository without touching the domain.
+  - **Decision (Vlad, 2026-09-27): approved** (full aggregate load). ARCHITECTURE-PLAN §2.2 updated.
+
+**Choices (ASSUMPTION unless cited).**
+1. **Primary key column is `Id`** in every table (FRS §9 names them `ClaimId`, `ReserveHistoryId`, …; §9 says "you do not need to copy the
+   schema verbatim"). Foreign keys keep the FRS names (`ClaimId`, `ReserveComponentId`).
+2. **C# `ReserveTransaction` maps to table `ReserveHistory`.** FRS §15.3 says entity names match table names; a class called
+   `ReserveHistory` that represents one transaction reads wrongly in code. The table keeps the FRS name. `ReserveComponent` →
+   `ClaimReserveComponents` likewise.
+3. **OrganisationId** is a shadow property on every tenant table except `Users` (a real property since Phase 1). It is stamped on insert from
+   `ITenantContext` by `AuditColumnsInterceptor`, which also refuses an insert for another organisation and any change of the column. FKs to
+   `Organisations` exist on root and reference tables (Claims, Policies, CauseOfLossCodes, Users, ClaimNumberCounters); child tables inherit
+   the tenant through their claim.
+4. **LossEvents → CauseOfLossCodes** is a composite FK `(OrganisationId, CauseOfLossCode)` → alternate key `(OrganisationId, Code)`, so a
+   claim can only reference a code of its own organisation (BR-C-05 backstop, D-12).
+5. **Columns added beyond FRS §9:** Claims `ReserveLimitOverride`, `…Reason`, `…ByUserId`, `…At` (BR-R-05, D-11);
+   ClaimReserveComponents `LastChangeSequence` (D-23); ReserveHistory `RequiredAuthority` and `ExceedsAggregateLimit` (BR-R-02, BR-R-05);
+   CauseOfLossCodes `Notes` (the FRS §5.6 seed table has a Notes column that §9.9 omits).
+6. **ReserveHistory:** `IdempotencyKey` is NOT NULL and uniquely indexed (not filtered), because every row gets its key at submission (D-23
+   said "filtered WHERE NOT NULL"). `SubmittedByUserId` is NOT NULL (every submission has a user). `RejectionReason` is NVARCHAR(MAX) ("free
+   text", FRS §15.1). An auto-approved row has `ApprovedAt` set and `ApprovedByUserId` NULL; its status says who decided.
+7. **One active issue per rule:** the unique filtered index on ClaimValidationIssues covers `Status IN ('Open','Acknowledged')` (D-07 said
+   Open only), so an acknowledged warning is not raised again by re-validation. Linking a different policy resolves an acknowledged BR-C-02,
+   because the acknowledgement was for the old policy's period.
+8. **Reject** needs the same authority as approve (FRS §3 "approve/reject reserves up to …"). **Self-rejection is not blocked**: BR-R-03
+   protects against approving one's own money; retract is the documented path for the submitter.
+9. **Aggregate limit:** only an increase of a cost component can cross the limit (`delta > 0`), so a reserve release is never escalated
+   or blocked, even on a claim that is already over the limit.
+10. **Entry conditions for Open** are checked on every requested move to Open (also UnderInvestigation → Open), because BR-ST-02 is stated for
+    "transitioning to Open". They can only fail from Draft in practice. The system-only Reopened → Open step has no conditions.
+11. **Draft claims accept reserve transactions**, because the FNOL initial reserve (FRS §5.2 step 3) is submitted on the Draft claim.
+12. **No `Money` value object.** Amounts are `decimal` with one guard (`Amounts.HasValidScale`: at most 4 decimal places and 15 integer digits,
+    what DECIMAL(19,4) stores), so SQL Server never rounds or rejects a value silently. A `Money` type mapped through value converters would
+    break SQL translation of sums in the read models. The multi-currency answer in REVIEW-PREP is updated accordingly.
+13. **NotFoundException and ForbiddenAccessException moved to the Domain**, so the aggregate can report an unknown child id (404) and a role
+    that can never act (403, D-25) itself.
+14. **UnitOfWork** (transaction inside the execution strategy, change tracker cleared per attempt) exists now; domain-event dispatch and the
+    `UnitOfWorkBehavior` arrive in Phase 3 with the first command, where they can be tested end to end.
+15. **ClaimAuditLog append-only in the database:** an `INSTEAD OF UPDATE, DELETE` trigger that raises an error, plus a `claims_app` role with
+    `DENY UPDATE, DELETE` (used from Phase 7 when the app stops connecting as dbo). EF is told about the trigger (`HasTrigger`) so it does not
+    use `OUTPUT` without `INTO` on that table.
+16. **ClaimNumberCounters** has a check constraint `LastValue BETWEEN 1 AND 9999999` as a backstop to `ClaimNumber.MaxSequence`.
+17. **Unreachable-by-design guards are kept and documented:** with the FRS table, CC-02/CC-03 cannot fail (a claim reaches Closed only through
+    Open, which needs a claimant, and the last claimant cannot be removed); they are tested with a configured Draft → Closed row, which is
+    exactly the brief's "if configured" case (D-20). D-18's "handler must be assigned" cannot fail either, because the creator is assigned.
+18. **`IdempotencyRecords`** (D-24) is created in Phase 3 together with the filter that uses it, not in this migration.
+
+**Rationale.** Each item is small and reversible, and each is visible in the schema or the tests, so none is a silent choice.
+**Status:** ACCEPTED (2026-09-27): Q1 → (a), Q2 → full load; the 18 choices accepted as written, to be revisited after the first deployed version if needed.

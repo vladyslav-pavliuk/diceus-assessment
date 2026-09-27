@@ -1,6 +1,6 @@
 # Architecture plan (draft → becomes ARCHITECTURE.md in Phase 8)
 
-Status: **DRAFT, Phase 0**. Based on the entries in `docs/DECISIONS.md`, all ACCEPTED on 2026-09-27 (D-36 changed to Container Apps).
+Status: **DRAFT, Phase 0; §2.2, §2.3 and §3 revised in Phase 2 (D-39)**. Based on the entries in `docs/DECISIONS.md`, all ACCEPTED on 2026-09-27 (D-36 changed to Container Apps).
 Spec references: FRS = `docs/spec/claims-frs.md`, Brief = `docs/spec/assessment-brief.md`.
 
 ---
@@ -59,14 +59,15 @@ were updated, so neither RowVer conflicts. Likewise, a "close claim" command cou
 - Cost: commands on the *same* claim are serialised optimistically. For a claims workload (a handful of users per claim) this is irrelevant.
 - Side effect, intended: reserve activity counts as a claim update for the SLA clock (FRS §12.2 "not been updated").
 
-Loading: the handler loads the Claim with its components. It loads only the reserve transactions it needs (the target transaction, or the pending ones
-for closure), because the component stores the `CurrentAmount` projection and `LastChangeSequence`. Full history is never needed for a write.
+Loading (revised in D-39 Q2): a command loads the **whole** aggregate, including every reserve transaction (split query). The rules (one pending
+transaction per component, CC-01, "an approved reserve exists", CurrentAmount = Σ approved) are then checked against complete data. A claim has tens of
+transactions; if that changes, the stored `CurrentAmount` projection and `LastChangeSequence` allow partial loading behind the repository.
 
 ### 2.3 Value objects
 | VO | Purpose / invariant |
 |---|---|
 | `ClaimNumber` | `CLM-{YYYY}-{0000000}` format/parse (BR-C-04) |
-| `Money` | decimal amount; currency implicit USD (NOT SPECIFIED, D-33). The seam for multi-currency |
+| ~~`Money`~~ | Not built (D-39 item 12): amounts are `decimal` guarded by `Amounts.HasValidScale` (≤ 4 dp, fits DECIMAL(19,4)); currency implicit USD (D-33) |
 | `PartyName` | Person → FirstName + LastName required; Company → CompanyName required (FRS §9.3) |
 | `ContactInfo` | Email (format), Phone |
 | `GlIdempotencyKey` | `Reserve:{ComponentId}:Change:{Seq}` (D-23) |
@@ -121,12 +122,12 @@ Organisations and Users exist since Phase 1.
 | LossEvents | Id, ClaimId, LossDate, LossDescription, LossLocation?, CauseOfLossCode, EstimatedLossAmount? DECIMAL(19,4), ReportDate, PoliceReportNumber? | Claims; CauseOfLossCodes(OrganisationId, Code) alternate key | UX ClaimId; IX LossDate; IX CauseOfLossCode | ✓ | ✓ | — | ✓ |
 | ClaimParties | Id, ClaimId, PartyRole, PartyType, FirstName?, LastName?, CompanyName?, Email?, Phone?, Notes?, IsActive | Claims | IX (ClaimId, PartyRole, IsActive) | ✓ | ✓ | — | ✓ |
 | ClaimRiskObjects | Id, ClaimId, AssetType, AssetDescription, DamageDescription?, IsPrimary, AssetReference? | Claims | IX ClaimId | ✓ | ✓ | — | ✓ |
-| ClaimValidationIssues | Id, ClaimId, RuleCode, Severity, Field, Message, Status, RaisedAt, ResolvedAt?, ResolvedByUserId?, ResolutionNote? | Claims | UX (ClaimId, RuleCode) WHERE Status='Open' AND IsDeleted=0 | ✓ | ✓ | — | ✓ |
+| ClaimValidationIssues | Id, ClaimId, RuleCode, Severity, Field, Message, Status, RaisedAt, ResolvedAt?, ResolvedByUserId?, ResolutionNote? | Claims | UX (ClaimId, RuleCode) WHERE Status IN ('Open','Acknowledged') AND IsDeleted=0 (D-39 item 7) | ✓ | ✓ | — | ✓ |
 | **ClaimReserveComponents** | Id, ClaimId, Component, CurrentAmount DECIMAL(19,4), LastChangeSequence INT, Status, Notes? | Claims | UX (ClaimId, Component) WHERE IsDeleted=0 | ✓ | ✓ | ✓ | ✓ |
-| ReserveHistory | Id, ReserveComponentId, ClaimId, TransactionType, Amount, PreviousBalance, NewBalance, ApprovalStatus, RequiredAuthority, ApprovedByUserId?, ApprovedAt?, RejectedByUserId?, RejectedAt?, RejectionReason?, ChangeReason, PostingStatus, PostingJobId?, IdempotencyKey?, ChangeSequence, SubmittedByUserId, LimitWarning BIT | Components, Claims | UX (ReserveComponentId, ChangeSequence); UX IdempotencyKey WHERE NOT NULL; UX ReserveComponentId WHERE ApprovalStatus='PendingApproval' (D-22); IX (ClaimId, CreatedAt); IX (ApprovalStatus, PostingStatus, ApprovedAt) for the sweeper | ✓ | ✓ | — | ✓ (amount columns guarded, D-22) |
+| ReserveHistory | Id, ReserveComponentId, ClaimId, TransactionType, Amount, PreviousBalance, NewBalance, ApprovalStatus, RequiredAuthority, ApprovedByUserId?, ApprovedAt?, RejectedByUserId?, RejectedAt?, RejectionReason?, ChangeReason, PostingStatus, PostingJobId?, IdempotencyKey, ChangeSequence, SubmittedByUserId, ExceedsAggregateLimit BIT | Components, Claims | UX (ReserveComponentId, ChangeSequence); UX IdempotencyKey (every row has a key, D-39 item 6); UX ReserveComponentId WHERE ApprovalStatus='PendingApproval' (D-22); IX (ClaimId, CreatedAt); IX (ApprovalStatus, PostingStatus, ApprovedAt) for the sweeper | ✓ | ✓ | — | ✓ (amount columns guarded, D-22) |
 | ClaimDocuments | Id, ClaimId, DocumentType, DocumentName, BlobPath, ContentType, FileSizeBytes BIGINT, UploadedAt, UploadedByUserId?, Notes? | Claims | IX ClaimId | ✓ | ✓ | — | ✓ |
 | **ClaimAuditLog** | Id, ClaimId, EventType, Description, OldValue?, NewValue?, RelatedEntityId?, RelatedEntityType?, CorrelationId?, CreatedAt, CreatedByUserId? | Claims | IX (ClaimId, CreatedAt DESC); IX (ClaimId, EventType, CreatedAt) for SLA dedupe | **—** (D-14) | ✓ | — | CreatedAt/CreatedByUserId only |
-| IdempotencyRecords | Id, UserId, Key, Method, Route, RequestHash, StatusCode?, ResponseBody?, CreatedAt, CompletedAt? | — | UX (UserId, Key) | — | ✓ | — | CreatedAt only |
+| IdempotencyRecords (Phase 3, D-39 item 18) | Id, UserId, Key, Method, Route, RequestHash, StatusCode?, ResponseBody?, CreatedAt, CompletedAt? | — | UX (UserId, Key) | — | ✓ | — | CreatedAt only |
 | Hangfire.* | Hangfire's own schema (`[HangFire]`) in the same database | — | — | — | — | — | — |
 
 Seed data (HasData or migration SQL only, FRS §15.4):

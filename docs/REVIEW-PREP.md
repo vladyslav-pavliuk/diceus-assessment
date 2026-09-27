@@ -69,7 +69,8 @@ had already committed. (D-36, ARCHITECTURE-PLAN §6)
 because that role can never perform the action. (D-25)
 
 **How would you add multi-currency reserves?**
-`Money` becomes (Amount, Currency) with a Currency column on ReserveHistory and components. Authority thresholds and the $10M limit are defined in a base
+Today amounts are plain `decimal`s with one scale guard (D-39 item 12); a `Money` type was left out because value-converted types break SQL
+translation of sums in the read models. For multi-currency, a Currency column goes on ReserveHistory and components. Authority thresholds and the $10M limit are defined in a base
 currency, with an FX rate snapshot stored on each transaction (rate, rate date), so history stays reproducible. Components are keyed by (type, currency),
 and the GL journal carries both amounts. Validation rejects mixed-currency adjustments on one component. (D-33)
 
@@ -119,3 +120,64 @@ pointless restarts. Readiness includes the database, so traffic waits for it ins
 `Auth:DevTokensEnabled` (false by default; the endpoints then answer 404). Tokens are still real HS256 JWTs validated for issuer, audience, lifetime, signature and
 algorithm on every request, with the key from Key Vault. It is on in the demo deployment by decision (D-16), so reviewers can switch roles; a real system would put
 an identity provider behind the same `JwtBearer` validation, with no change to the rest of the API.
+
+## Phase 2: domain model & schema
+**Where do the business rules live, and how do you know nothing bypasses them?**
+In the Claim aggregate (`src/ClaimsModule.Domain/Claims/Claim*.cs`). Entities have no public setters (`DOM_01_Entities_have_no_public_setters`
+checks every entity by reflection) and child collections are read-only wrappers. The only way to change a claim is a method that checks the rule.
+Persistence adds backstops for the rules that matter most: the audit trigger, the amount guard, and unique indexes for claim numbers,
+one pending transaction per component, and one GL idempotency key per row.
+
+**The transition table is in the domain *and* in the database. Isn't that duplication?**
+It is declared once, `ClaimStatusTransition.FrsDefaults()`. HasData seeds exactly those rows, and `CONV_10_Status_transitions_are_the_domain_table`
+proves the database matches. At runtime the aggregate is given the rows loaded from the table (`StatusTransitionTable`), so a changed row changes
+behaviour without a code change. That is how the brief's "Draft → Open → Closed … if configured" is met (D-20); the closure tests use it.
+
+**Why does the aggregate load the whole reserve history?** (D-39 Q2)
+Several rules need it: one pending per component, CC-01, "an approved reserve exists", CurrentAmount = Σ approved. With complete data the domain
+cannot be fooled by a partial load. A claim has tens of transactions. If that grows, the stored `CurrentAmount` and `LastChangeSequence` projections
+allow partial loading behind `IClaimRepository` without touching the domain.
+
+**How do two concurrent approvals on different components not break the $10M limit?**
+Any change inside the aggregate also touches the Claim row (`AuditColumnsInterceptor.TouchChangedClaims`: only `UpdatedAt` is marked modified).
+EF then puts the Claim's RowVer into the UPDATE's WHERE clause, so the second commit on the same claim gets `DbUpdateConcurrencyException` → 409.
+`CONV_08_Concurrent_changes_to_one_claim_conflict_on_RowVer` proves it with two different children. The domain also re-checks the limit at approval
+(`BR_R_05_Limit_is_rechecked_at_approval`).
+
+**Walk me through the claim-number generator.** (D-10)
+`UPDATE ClaimNumberCounters SET LastValue = LastValue + 1 OUTPUT INSERTED.LastValue WHERE OrganisationId = @org AND Year = @year`, run inside the
+claim's own transaction. The row lock serialises concurrent creates, and a rollback takes the increment with it, so there are no duplicates and no
+gaps. The first claim of a year inserts the row; a racing insert gets a PK violation and retries the UPDATE. `BR_C_04_50_parallel_creates_…` runs 50
+concurrent creates released at the same instant. I mutation-checked it: a read-then-write version produced a duplicate at the 6th claim, and the
+unique index `UX_Claims_OrganisationId_ClaimNumber` refused it.
+
+**What stops someone rewriting the audit log?**
+Three layers (D-14). `IAuditLogService` is the only writer. `ImmutableRowsInterceptor` throws on a modified or deleted `ClaimAuditLog` entry.
+The migration adds an `INSTEAD OF UPDATE, DELETE` trigger that throws error 51000. The trigger is what stops set-based `ExecuteUpdate` and raw SQL,
+which never pass through the change tracker (`BR_A_01_Db_trigger_blocks_raw_update_and_delete`). A `claims_app` role with `DENY UPDATE, DELETE`
+is ready for when the app stops connecting as dbo.
+
+**ReserveHistory rows are updated on approval. Isn't that against event sourcing?**
+The FRS itself puts ApprovedBy/At and PostingStatus on the row, so the row is *amount-immutable*, not row-immutable (D-22). The interceptor refuses
+any change to amount, balances, sequence, key, reason or submitter, and any delete, even a soft one (`RSV_04_Modifying_a_history_amount_throws`).
+A change of amount is always a new row.
+
+**How does multi-tenancy work in the database?**
+Every business table has `OrganisationId` (a shadow property except on Users). One global filter per entity combines soft delete and tenant,
+`EF.Property<Guid>(e, "OrganisationId") == CurrentOrganisationId`, and EF evaluates that per query on the context instance. With no tenant the filter
+compares with `Guid.Empty`, so it fails closed. The interceptor stamps OrganisationId on insert and refuses a cross-tenant insert or a changed tenant
+(`SEC_04_*`). The cause-of-loss FK is composite `(OrganisationId, Code)`, so a claim cannot reference another organisation's code.
+
+**Why `ValueGeneratedNever` on keys that have a NEWSEQUENTIALID() default?**
+The domain assigns ids (D-30). With a store-generated key, EF assumes that a new child which already has an id (a party added to a loaded claim) is an
+existing row, and issues an UPDATE instead of an INSERT. The immutability interceptor caught exactly this during Phase 2. The SQL default stays for
+rows inserted outside EF.
+
+**Why is `CorrelationId` a GUID and not the client's string?** (D-39 Q1)
+FRS §9.8 types it as a GUID. The middleware therefore accepts a client id only in GUID form and otherwise generates one, which it echoes, so the client
+can still correlate.
+
+**CC-02 can never fail with the FRS table. Why keep it and how is it tested?**
+The only persisted Critical is "no claimant". A claim reaches Closed only through Open, which needs a claimant, and the last claimant cannot be removed.
+The check stays because the transition table is data. The tests add a configured Draft → Closed row, and CC-02/CC-03 then fail as specified
+(D-39 item 17).
