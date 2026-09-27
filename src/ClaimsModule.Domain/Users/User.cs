@@ -12,6 +12,11 @@ public sealed class User : Entity
     {
     }
 
+    private User(Guid id)
+        : base(id)
+    {
+    }
+
     public Guid OrganisationId { get; private set; }
 
     public string Username { get; private set; } = null!;
@@ -21,4 +26,24 @@ public sealed class User : Entity
     public UserRole Role { get; private set; }
 
     public bool IsActive { get; private set; }
+
+    /// <summary>Users are seeded (D-16); this factory exists for tests and future user management.</summary>
+    public static User Create(Guid organisationId, string username, string displayName, UserRole role)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(username);
+        ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
+        if (!Enum.IsDefined(role))
+        {
+            throw new ArgumentOutOfRangeException(nameof(role), role, "Unknown role.");
+        }
+
+        return new User(SequentialGuid.NewGuid())
+        {
+            OrganisationId = organisationId,
+            Username = username,
+            DisplayName = displayName,
+            Role = role,
+            IsActive = true,
+        };
+    }
 }

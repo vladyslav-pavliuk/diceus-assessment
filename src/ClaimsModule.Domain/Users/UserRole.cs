@@ -16,7 +16,7 @@ public static class UserRoleExtensions
 {
     /// <summary>
     /// True when <paramref name="role"/> has at least the capabilities of <paramref name="minimum"/>.
-    /// Used by the API role policies and, from Phase 2, by the status-transition MinimumRole check (D-09).
+    /// Used by the API role policies and by the status-transition MinimumRole check (D-09).
     /// </summary>
     public static bool IsAtLeast(this UserRole role, UserRole minimum)
     {
