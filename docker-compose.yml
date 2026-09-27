@@ -1,0 +1,65 @@
+# Local development stack (brief §4.1).
+#   docker compose up -d                 SQL Server 2022 + Azurite; run the API with `dotnet run`
+#   docker compose --profile app up -d   also applies the migrations and runs the API in a container
+# All credentials here are local-only defaults. Override the SA password with MSSQL_SA_PASSWORD.
+name: claims-module
+
+x-claims-db: &claims-db "Server=sqlserver,1433;Database=ClaimsModule;User Id=sa;Password=${MSSQL_SA_PASSWORD:-Local_dev_Passw0rd!};TrustServerCertificate=True"
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-Local_dev_Passw0rd!}
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q 'SELECT 1' -b -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    command: azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --location /data --loose
+    ports:
+      - "10000:10000"
+    volumes:
+      - azurite-data:/data
+
+  migrate:
+    profiles: [app]
+    build:
+      context: .
+      target: migrator
+    environment:
+      ConnectionStrings__ClaimsDb: *claims-db
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
+  api:
+    profiles: [app]
+    build:
+      context: .
+      target: runtime
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__ClaimsDb: *claims-db
+    ports:
+      - "5080:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      azurite:
+        condition: service_started
+
+volumes:
+  sqlserver-data:
+  azurite-data:

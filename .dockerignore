@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+**/TestResults/
+.git/
+.vs/
+.idea/
+docs/
+tests/
+web/
+uploads/
+**/*.user
+**/.DS_Store
+**/appsettings.*.local.json
