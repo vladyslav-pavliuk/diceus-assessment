@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- HTTP-level tests (WebApplicationFactory + Testcontainers SQL Server) and whole-solution
+       architecture tests, which need a reference to every layer. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ClaimsModule.API\ClaimsModule.API.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="NetArchTest.Rules" />
+    <PackageReference Include="Testcontainers.MsSql" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- Composition root: the only project that references every other layer. -->
+  <ItemGroup>
+    <ProjectReference Include="..\ClaimsModule.Application\ClaimsModule.Application.csproj" />
+    <ProjectReference Include="..\ClaimsModule.Infrastructure\ClaimsModule.Infrastructure.csproj" />
+    <ProjectReference Include="..\ClaimsModule.Persistence\ClaimsModule.Persistence.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Swashbuckle.AspNetCore" />
+    <!-- Design-time only: the API is the startup project for `dotnet ef` (migrations live in Persistence). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
