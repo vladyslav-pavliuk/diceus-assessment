@@ -16,7 +16,7 @@ public static class DependencyInjection
 
             // Order matters: the first behaviour added is the outermost.
             // Logging wraps everything (including validation failures); validation runs before the
-            // handler and, from Phase 2, before the UnitOfWorkBehavior opens a transaction.
+            // handler and, from Phase 3, before the UnitOfWorkBehavior opens a transaction.
             configuration.AddOpenBehavior(typeof(LoggingBehavior<,>));
             configuration.AddOpenBehavior(typeof(ValidationBehavior<,>));
         });

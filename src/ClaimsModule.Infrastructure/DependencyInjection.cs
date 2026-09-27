@@ -2,6 +2,7 @@ using ClaimsModule.Application.Abstractions;
 using ClaimsModule.Application.Abstractions.Auth;
 using ClaimsModule.Infrastructure.Auth;
 using ClaimsModule.Infrastructure.Correlation;
+using ClaimsModule.Infrastructure.Tenancy;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -17,6 +18,9 @@ public static class DependencyInjection
 
         services.AddScoped<CorrelationContext>();
         services.AddScoped<ICorrelationContext>(provider => provider.GetRequiredService<CorrelationContext>());
+
+        services.AddScoped<TenantContext>();
+        services.AddScoped<ITenantContext>(provider => provider.GetRequiredService<TenantContext>());
 
         services.AddOptions<AuthOptions>()
             .Bind(configuration.GetSection(AuthOptions.SectionName))

@@ -1,4 +1,7 @@
+using ClaimsModule.Application.Abstractions;
 using ClaimsModule.Application.Abstractions.Persistence;
+using ClaimsModule.Persistence.ClaimNumbers;
+using ClaimsModule.Persistence.Interceptors;
 using ClaimsModule.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -12,6 +15,9 @@ public static class DependencyInjection
 
     public static IServiceCollection AddPersistence(this IServiceCollection services)
     {
+        services.AddSingleton<ImmutableRowsInterceptor>();
+        services.AddScoped<AuditColumnsInterceptor>();
+
         services.AddDbContext<ClaimsDbContext>((provider, options) =>
         {
             var connectionString = provider.GetRequiredService<IConfiguration>().GetConnectionString(ConnectionStringName);
@@ -21,10 +27,19 @@ public static class DependencyInjection
             }
 
             // Retries cover transient Azure SQL errors, including a serverless database resuming from
-            // auto-pause (D-36). Explicit transactions must then run inside the execution strategy (Phase 2 UoW).
+            // auto-pause (D-36). Explicit transactions therefore run inside the execution strategy (UnitOfWork).
             options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure());
+
+            // Order matters: the immutability guard must see a delete before it becomes a soft delete.
+            options.AddInterceptors(
+                provider.GetRequiredService<ImmutableRowsInterceptor>(),
+                provider.GetRequiredService<AuditColumnsInterceptor>());
         });
 
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IAuditLogService, AuditLogService>();
+        services.AddScoped<IClaimNumberGenerator, ClaimNumberGenerator>();
+        services.AddScoped<IClaimRepository, ClaimRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
 
         services.AddHealthChecks().AddDbContextCheck<ClaimsDbContext>("database", tags: [HealthCheckTags.Ready]);
