@@ -49,7 +49,8 @@ Markers used below:
 | D-34 | Seeded policies expire around the review date | ACCEPTED |
 | D-35 | Hangfire retry count and the exhausted-retries path | ACCEPTED |
 | D-36 | Azure hosting: Container Apps (scale to zero) + serverless SQL | ACCEPTED |
-| D-37 | Package versions and licences | ACCEPTED |
+| D-37 | Package versions and licences (+ AutoMapper CVE suppression) | ACCEPTED |
+| D-38 | Phase 1 cross-cutting choices (errors, auth, shadow columns, health, toolchain) | PROPOSED |
 
 ---
 
@@ -857,3 +858,85 @@ NetArchTest.Rules. Versions are pinned in `Directory.Packages.props`. The exact 
 
 **Rationale.** Pinning licence-safe majors avoids a runtime licence warning and removes a reviewer question.
 **Status:** ACCEPTED (2026-09-27)
+
+**Phase 1 verification (2026-09-27, nuget.org catalog `licenseExpression`).** Pinned in `Directory.Packages.props` with
+`CentralPackageTransitivePinningEnabled`:
+
+| Package | Version | Licence | Note |
+|---|---|---|---|
+| MediatR | 12.5.0 | Apache-2.0 | last 12.x; 13.0+ requires a licence key. In 12.5 `RequestHandlerDelegate` takes a `CancellationToken` |
+| AutoMapper | 14.0.0 | **MIT** | last 14.x; 15.0+ requires a licence key. **Correction:** CLAUDE.md said "last Apache-licensed"; AutoMapper 14 is MIT (CLAUDE.md fixed) |
+| FluentValidation (+ DependencyInjectionExtensions) | 12.1.1 | Apache-2.0 | |
+| Microsoft.EntityFrameworkCore.SqlServer / .Design, Microsoft.AspNetCore.Authentication.JwtBearer, Microsoft.Extensions.* | 9.0.20 | MIT | latest .NET 9 servicing |
+| Microsoft.IdentityModel.JsonWebTokens | 8.19.2 | MIT | the exact version JwtBearer 9.0.20 depends on; mixing IdentityModel versions breaks at runtime |
+| Serilog.AspNetCore | 9.0.0 | Apache-2.0 | |
+| Swashbuckle.AspNetCore | 9.0.6 | MIT | |
+| xunit 2.9.3, xunit.runner.visualstudio 3.1.5 | | Apache-2.0 | |
+| Shouldly | 4.3.0 | BSD-3-Clause | |
+| NetArchTest.Rules | 1.3.2 | MIT (licence file; no SPDX expression in the catalog) | |
+| Testcontainers.MsSql | 4.15.0 | MIT | |
+| Microsoft.NET.Test.Sdk 17.14.1, coverlet.collector 6.0.4, Microsoft.Extensions.TimeProvider.Testing 9.10.0 | | MIT | |
+| dotnet-ef (local tool, `dotnet-tools.json`) | 9.0.20 | MIT | |
+| Hangfire 1.8.x, Azure.Storage.Blobs 12.x, Azure.Identity 1.x | — | LGPL-3.0 / MIT / MIT | added in Phases 4–5 |
+
+**Amendment (2026-09-27): AutoMapper 14.0.0 has CVE-2026-32933 / GHSA-rvv3-g6hj-g44x (high).** Mapping a deeply self-referencing object graph
+(about 25,000 levels) overflows the stack and kills the process. Affected: every version below 15.1.1 (and 16.0.0–16.1.0). **No 14.x patch exists**; the
+fixed majors are commercial. With `TreatWarningsAsErrors`, the NuGet audit (NU1903) fails the build.
+- Options: (a) stay on 14.0.0 and suppress **only this advisory**; (b) upgrade to 16.x with a (free Community) licence key; (c) keep 14.0.0 and downgrade
+  NU1903 to a warning solution-wide.
+- **Decision (Vlad, 2026-09-27): (a).** `<NuGetAuditSuppress Include="https://github.com/advisories/GHSA-rvv3-g6hj-g44x" />` in `Directory.Build.props`.
+  Every other advisory still fails the build.
+- **Why it is not exploitable here:** we map only DB-loaded entities to DTOs, never request input; no mapped type references itself; System.Text.Json
+  rejects request bodies nested deeper than 64 levels anyway.
+- **Guards (tests):** `CONV_15_Mapped_types_are_not_self_referencing` (walks every mapped source/destination type graph for cycles) and
+  `CONV_15_Requests_are_never_mapped` (no map from a MediatR request type). If either ever fails, revisit (b).
+
+## D-38 — Phase 1 cross-cutting choices
+**Context.** Phase 1 had to decide several points that neither the FRS nor the brief specifies (NOT SPECIFIED), plus two refinements of earlier
+decisions. None changes an FRS business rule. Listed here so none is a silent choice (CLAUDE.md working agreement).
+
+**Choices (all ASSUMPTION unless cited).**
+1. **Error bodies.** Every error is a ProblemDetails with a short `type` code instead of a URI (`ValidationError`, `NotFound`, `Forbidden`, `Conflict`,
+   `Unauthorized`, `ServerError`, …), mirroring FRS §10.4's `"type": "ValidationError"`.
+   - Every 422 has **exactly** `type`, `title`, `status`, `errors`. That covers FluentValidation failures, domain `BusinessRuleViolationException`s and
+     unbindable input. Framework-generated 401/403/404 bodies are normalised the same way (`traceId` removed).
+   - The correlation id travels in the `X-Correlation-Id` response header, not the body, so the 422 body stays exactly as specified.
+   - 500 bodies carry no exception detail outside Development.
+2. **Validation stays in the pipeline.** `SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true`: model binding only binds, and FluentValidation
+   in the MediatR pipeline produces the messages (CLAUDE.md rule 2). Otherwise `[ApiController]` would answer a missing field with its own wording before our
+   validator runs, which matters for the verbatim FRS §8 messages.
+3. **Unknown routes.** The authorization fallback policy (authenticated user) also applies when no endpoint matches, so an anonymous caller gets 401 and a
+   signed-in caller gets 404. Kept as-is: anonymous callers cannot probe which routes exist.
+4. **Audit and soft-delete columns are EF Core shadow properties** (CreatedAt, UpdatedAt, UserCreated, UserModified, IsDeleted, DeletedAt), applied to every
+   entity by one convention (`ModelBuilderConventions.ApplyStandardColumns`) together with `NEWSEQUENTIALID()` and the soft-delete filter. The domain carries no
+   persistence bookkeeping, and brief §6.1 explicitly checks "shadow properties". Read models that need them use `EF.Property<T>(…)` in Persistence.
+   `ClaimAuditLog.CreatedAt` stays a real property (it is business data, FRS §9.8; D-14). Enums map to NVARCHAR(50) and decimals to (19,4) by pre-convention.
+5. **Users/Organisations tables arrive in Phase 1.** D-16 seeded users are needed for the dev token. The `InitialCreate` migration therefore holds Organisations
+   and Users only. Phase 2 adds the claims schema; because nothing is deployed yet, Phase 2 may regenerate `InitialCreate` as one migration.
+6. **Usernames are unique system-wide** (`UX_Users_Username`), not per `(OrganisationId, Username)` as ARCHITECTURE-PLAN §3 first said. Sign-in resolves the user
+   *before* the tenant is known (the tenant is what the token establishes), so the lookup is not tenant-scoped. When the tenant filter arrives (Phase 2), the
+   sign-in lookup is the documented exception (D-31 pattern).
+7. **Dev-token flow (refines D-08).** Reading the user is a MediatR query (`GetUserByUsernameQuery`; the role switcher uses `ListDemoUsersQuery`), per CLAUDE.md
+   rule 1. Only token *signing* (`ITokenService`) sits outside MediatR. An unknown or inactive username → 401. An empty username → 422 from the validator.
+8. **JWT claims.** `sub`, `name` (display name), `role` (the FRS §3 code: `handler` / `supervisor` / `manager`), `org`, plus `jti`, `iat`, `nbf`, `exp`, `iss`,
+   `aud`. HS256 only (`ValidAlgorithms`), 1-minute clock skew, inbound claim mapping off. JSON bodies use enum *names* (`"Handler"`). Policies `Handler` /
+   `Supervisor` / `Manager` admit that role and every role above it; the hierarchy is `UserRole.IsAtLeast` in the Domain, and D-09 MinimumRole reuses it.
+   A fallback policy requires authentication everywhere except `[AllowAnonymous]` endpoints (auth, health).
+9. **Signing key.** `Auth:SigningKey` (≥ 32 characters, validated at start-up). Development uses a clearly labelled local key in
+   `appsettings.Development.json`; the base `appsettings.json` has none, so a non-development host refuses to start without one. In Azure it arrives as the
+   Container Apps secret `Auth__SigningKey`, which references Key Vault (D-36). No Key Vault SDK is needed in code.
+10. **Correlation id.** It is accepted from the client only if it is 1–64 characters of `[A-Za-z0-9-_.]`; otherwise it is replaced with a new GUID, never
+    rejected. It is echoed in the response, pushed into the logging scope for the whole request, and exposed to the SPA through CORS.
+11. **Health.** `/health/live` has no dependencies, so a paused serverless database never restarts the container. `/health/ready` checks the database. Both are
+    anonymous. These are the Container Apps probes (D-36).
+12. **Logging.** Serilog. Levels come from configuration. The sink is chosen in code: a readable template in Development, compact JSON elsewhere (Log Analytics).
+    `LoggingBehavior` logs request name, outcome and duration, but never payloads (they contain personal data). 4xx outcomes are logged without a stack trace;
+    5xx with one.
+13. **Toolchain.** Everything targets `net9.0` / C# 13. `global.json` pins SDK 9.0.100 with `rollForward: latestMajor`, so a newer SDK can build locally;
+    `AnalysisLevel` is pinned to 9.0 so every SDK reports the same warnings. The authoritative build and test run uses the .NET 9 SDK (`mcr.microsoft.com/dotnet/sdk:9.0`,
+    the same image as the Dockerfile and, later, CI).
+14. **Container image.** One Dockerfile with a `runtime` target (non-root `app` user, port 8080) and a `migrator` target (EF Core migrations bundle). The
+    compose `app` profile runs migrate → API. This is also how Phase 7 runs migrations against Azure SQL.
+
+**Rationale.** Each item is small and reversible, and each closes a gap the phase could not leave open.
+**Status:** PROPOSED (2026-09-27): awaiting Vlad's review.

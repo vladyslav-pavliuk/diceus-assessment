@@ -9,7 +9,7 @@ Handler (orchestration, lookups) · DB (constraint/index/trigger) · Infra (jobs
 **Planned test** is named after the rule ID. Project prefixes: `Dom` = ClaimsModule.Domain.Tests, `App` = ClaimsModule.Application.Tests,
 `Int` = ClaimsModule.IntegrationTests (WebApplicationFactory + Testcontainers MsSql), `Web` = claims-ui unit tests (Karma/Jest), `Manual` = checklist / smoke script.
 
-**Status**: all rows are `Planned` at Phase 0. In Phase 8 each row becomes `Done` / `Partial` / `Missing`, with evidence (file:line + test).
+**Status**: all rows are `Planned` at Phase 0. `Implemented (Pn)` = built and tested in phase n (the test column then names the real tests); `Partial (Pn)` = the part named in the row is built, the rest is planned. In Phase 8 each row becomes `Done` / `Partial` / `Missing`, with evidence (file:line + test).
 
 ---
 
@@ -164,13 +164,16 @@ permitted."). The §8 table's wording (VAL-06) is used because §8 is the consol
 | API-25 | `POST /api/claims/{id}/reserves/{txnId}/retry-posting` | Failed → re-enqueue | FRS §11.3; D-08 | Application | `Int: API_25_Retry_failed_posting` | Planned |
 | API-26 | `POST /api/claims/{id}/validation-issues/{issueId}/acknowledge` | Warnings only, with note | BR-C-02; D-07 | Domain | see BR-C-02 | Planned |
 | API-27 | `GET /api/claims/{id}/documents/{docId}/url` | Fresh SAS | FRS §11.3 Tab 4; D-08 | Infra | `Int: API_27_Fresh_document_url` | Planned |
-| API-28 | `POST /api/auth/dev-token`, `GET /api/auth/users` | Signed JWT for a seeded user; config-gated | FRS §3, §11.4; D-16 | Infra | `Int: API_28_Dev_token_is_valid_bearer`; `Int: API_28_Disabled_when_flag_off` | Planned |
+| API-28 | `POST /api/auth/dev-token`, `GET /api/auth/users` | Signed JWT for a seeded user; config-gated | FRS §3, §11.4; D-16, D-38 | Infra (token), Application (user queries), API | `Int: API_28_Dev_token_is_a_valid_bearer_token`; `Int: API_28_Dev_token_carries_sub_name_role_and_org_claims_and_expires_after_8_hours`; `Int: API_28_Unknown_user_gets_401`; `Int: API_28_Endpoints_are_absent_when_dev_tokens_are_disabled`; `App: API_28_Missing_username_is_rejected` | Implemented (P1) |
 | API-29 | `GET /api/users?role=` | Handler list for filter/assign | FRS §11.1; D-29 | Application | `Int: API_29_List_handlers` | Planned |
-| API-ERR | Errors: ProblemDetails; 422 `{type,title,status,errors{field:[msgs]}}`; 404/403/409 mapping | FRS §10.4; CLAUDE.md rule 12 | API middleware | `Int: API_ERR_422_body_matches_frs_10_4`; `Int: API_ERR_Concurrency_returns_409`; `Int: API_ERR_Not_found_returns_404` | Planned |
+| API-ERR | Errors: ProblemDetails; 422 `{type,title,status,errors{field:[msgs]}}`; 404/403/409 mapping | FRS §10.4; CLAUDE.md rule 12; D-38 | API middleware | `Int: API_ERR_422_body_matches_FRS_10_4_exactly`; `Int: API_ERR_Business_rule_violation_gets_422_with_the_same_shape`; `Int: API_ERR_Unbindable_body_gets_422_with_the_same_shape`; `Int: API_ERR_Exceptions_map_to_status_codes` (404/403/409); `Int: API_ERR_Unknown_route_gets_404_problem_for_a_signed_in_caller`; `Int: API_ERR_Unhandled_exception_gets_500_without_internal_details_outside_development` | Implemented (P1) |
 | API-IDEMP | `Idempotency-Key` on writes replays the stored response | FRS §10; D-24 | API filter, DB | `Int: API_IDEMP_Repeated_key_replays_response`; `Int: API_IDEMP_Same_key_different_body_returns_422` | Planned |
-| API-AUTH | Bearer JWT on all endpoints except the dev token and Swagger | FRS §10; Brief §3.7.4 | API | `Int: API_AUTH_Missing_token_returns_401` | Planned |
-| API-CORR | `X-Correlation-Id` read or created; echoed; stamped on audit rows | FRS §14.2; CLAUDE.md rule 6 | API middleware | `Int: API_CORR_Correlation_id_is_stamped_on_audit_rows` | Planned |
-| API-DOCS | Swagger/OpenAPI populated, with a JWT scheme, reachable when deployed | Brief §4.3, §6.2 | API | `Manual: Swagger reachable on Azure URL` | Planned |
+| API-AUTH | Bearer JWT on all endpoints except the dev token, Swagger and health | FRS §10; Brief §3.7.4 | API (fallback policy) | `Int: API_AUTH_Missing_token_gets_401`; `Int: API_AUTH_Tampered_token_gets_401`; `Int: API_AUTH_Token_signed_with_another_key_gets_401`; `Int: API_AUTH_Expired_token_gets_401`; `Int: API_AUTH_Anonymous_endpoints_do_not_need_a_token`; `Int: API_AUTH_Unknown_route_gets_401_for_an_anonymous_caller` | Implemented (P1) |
+| API-CORR | `X-Correlation-Id` read or created; echoed; stamped on audit rows | FRS §14.2; CLAUDE.md rule 6; D-38 | API middleware | `Int: API_CORR_Incoming_correlation_id_is_used_and_echoed`; `Int: API_CORR_Missing_correlation_id_is_generated`; `Int: API_CORR_Unsafe_correlation_id_is_replaced`; `Int: API_CORR_Error_responses_carry_the_correlation_id`; audit stamping: `Int: API_CORR_Correlation_id_is_stamped_on_audit_rows` (Phase 2) | Partial (P1) |
+| API-DOCS | Swagger/OpenAPI populated, with a JWT scheme, reachable when deployed | Brief §4.3, §6.2 | API | `Int: API_DOCS_OpenAPI_document_declares_the_JWT_bearer_scheme`; `Manual: Swagger reachable on Azure URL` (Phase 7) | Partial (P1) |
+| API-LOG | Structured logging (Serilog; JSON outside development) with the correlation id in scope; MediatR LoggingBehavior logs request name, outcome, duration | Brief §6.2; CLAUDE.md rule 12 | API, Application | `Manual:` log line `[.. INF] <correlation-id> ...LoggingBehavior: Handled GetUserByUsernameQuery in … ms` (compose smoke, Phase 1) | Implemented (P1) |
+| OPS-01 | Health: `/health/live` (no dependencies) and `/health/ready` (database), anonymous | Container Apps probes; D-36, D-38 | API, Persistence | `Int: OPS_01_Health_endpoints_report_healthy_without_a_token` | Implemented (P1) |
+| OPS-02 | CORS for the SPA origin only (config `Cors:AllowedOrigins`); exposes X-Correlation-Id and Location | ARCHITECTURE-PLAN §7 | API | `Int: OPS_02_Preflight_from_the_SPA_origin_is_allowed`; `Int: OPS_02_Preflight_from_another_origin_is_not_allowed`; `Int: OPS_02_Correlation_and_location_headers_are_exposed_to_the_SPA` | Implemented (P1) |
 
 ---
 
@@ -240,11 +243,11 @@ permitted."). The §8 table's wording (VAL-06) is used because §8 is the consol
 
 | ID | Requirement | Source | Enforced in | Planned test | Status |
 |---|---|---|---|---|---|
-| SEC-01 | Three roles handler/supervisor/manager, hierarchical | FRS §3 | Infra (JWT), API policies | `Int: SEC_01_Role_policies_are_hierarchical` | Planned |
-| SEC-02 | Backend validates the caller's role on approval endpoints | FRS §3 | API policy + Domain | `Int: SEC_02_Handler_approve_returns_403` | Planned |
+| SEC-01 | Three roles handler/supervisor/manager, hierarchical | FRS §3 | Domain (`UserRole.IsAtLeast`), Infra (JWT), API policies | `Dom: SEC_01_Roles_are_hierarchical_handler_supervisor_manager`; `Dom: SEC_01_Role_codes_match_FRS_section_3`; `Int: SEC_01_Role_policies_are_hierarchical` | Implemented (P1) |
+| SEC-02 | Backend validates the caller's role on approval endpoints | FRS §3 | API policy + Domain | policy mechanism: `Int: SEC_02_Forbidden_role_gets_403_problem`; on the real endpoint: `Int: SEC_02_Handler_approve_returns_403` (Phase 4) | Partial (P1) |
 | SEC-03 | Approve/Reject visible only to supervisor/manager | FRS §3, §11.3; Brief §3.7.4 | UI | `Web: SEC_03_Approve_buttons_hidden_for_handler` | Planned |
 | SEC-04 | Tenant isolation: data from another org is invisible | FRS §15.1; D-12 | Persistence (global filter) | `Int: SEC_04_Cross_tenant_claim_is_not_found` | Planned |
-| SEC-05 | Test users: 2 per role | Brief §4.3; D-16 | Seed | `Int: SEC_05_Seeded_users_present` | Planned |
+| SEC-05 | Test users: 2 per role | Brief §4.3; D-16 | Seed (HasData) | `Int: SEC_05_Two_seeded_users_per_role_in_one_organisation` | Implemented (P1) |
 
 ---
 
@@ -260,13 +263,14 @@ permitted."). The §8 table's wording (VAL-06) is used because §8 is the consol
 | CONV-06 | Audit columns filled by an interceptor | FRS §15.1 | Persistence interceptor | `Int: CONV_06_Audit_columns_populated` | Planned |
 | CONV-07 | OrganisationId on every business table + global filter | FRS §15.1; D-12 | Persistence | see SEC-04 | Planned |
 | CONV-08 | RowVer on Claims and ClaimReserveComponents | FRS §15.1 | Persistence | see RSV-05/07 | Planned |
-| CONV-09 | Fluent API only (`IEntityTypeConfiguration<T>`), no schema annotations | FRS §15.2 | Persistence | Architecture test `CONV_09_No_data_annotations_in_domain` | Planned |
+| CONV-09 | Fluent API only (`IEntityTypeConfiguration<T>`), no schema annotations | FRS §15.2 | Persistence | `Int: CONV_09_Domain_uses_no_data_annotations` | Implemented (P1) |
 | CONV-10 | Seed via HasData/migrations (policies §5.5, codes §5.6, transitions, users, org) — never at startup | FRS §15.4, §5.5, §5.6; Brief §4.1 | Persistence | `Int: CONV_10_Seed_data_matches_frs_5_5_and_5_6` | Planned |
-| CONV-11 | `dotnet ef database update` builds a fresh DB from zero; app starts with no manual setup | FRS §15.4 | Persistence | `Int: CONV_11_Migrations_apply_to_empty_database` | Planned |
+| CONV-11 | `dotnet ef database update` builds a fresh DB from zero; app starts with no manual setup | FRS §15.4 | Persistence | `Int: CONV_11_Migrations_build_the_database_from_zero`; `Int: CONV_11_Model_has_no_changes_missing_from_the_migrations`; `Manual:` compose `migrate` (EF bundle) then `api` start (Phase 1) | Implemented (P1) — re-verified each phase |
 | CONV-12 | No hard-coded GUIDs in application logic | FRS §15.4 | Code review + grep | `Manual: CONV_12_grep_for_guid_literals_outside_seed` | Planned |
-| CONV-13 | Naming: tables/columns PascalCase; VerbNounCommand; Get/List…Query; kebab-case routes | FRS §15.3 | Architecture test | `CONV_13_Commands_and_queries_follow_naming` | Planned |
-| CONV-14 | Clean Architecture dependency rule | Brief §2.4; CLAUDE.md | Architecture test | `CONV_14_Layer_dependencies_are_respected` | Planned |
-| CONV-15 | FluentValidation in the MediatR pipeline; AutoMapper profiles in Application; UoW coordinates each command | Brief §2.4, §6.1 | Application | `App: CONV_15_Validation_behavior_short_circuits_handler`; architecture test for profile location | Planned |
+| CONV-13 | Naming: tables/columns PascalCase; VerbNounCommand; Get/List…Query; kebab-case routes | FRS §15.3 | Architecture test | `Int: CONV_13_Commands_are_named_VerbNounCommand`; `Int: CONV_13_Queries_are_named_GetNounQuery_or_ListNounsQuery`; `Int: CONV_13_Every_request_is_a_command_or_a_query` | Implemented (P1) — tables/routes by review |
+| CONV-14 | Clean Architecture dependency rule | Brief §2.4; CLAUDE.md | Project references + architecture tests | `Int: CONV_14_Domain_depends_on_no_other_layer_or_framework`; `Int: CONV_14_Application_does_not_depend_on_outer_layers_EF_Core_or_Azure`; `Int: CONV_14_Infrastructure_does_not_depend_on_Persistence_or_API`; `Int: CONV_14_Persistence_does_not_depend_on_Infrastructure_or_API`; `Int: CONV_14_Controllers_stay_thin_and_never_touch_persistence` | Implemented (P1) |
+| CONV-15 | FluentValidation in the MediatR pipeline; AutoMapper profiles in Application; UoW coordinates each command | Brief §2.4, §6.1; D-37 | Application | `App: CONV_15_Validation_behavior_short_circuits_handler`; `App: CONV_15_Errors_from_all_validators_are_grouped_by_property`; `App: CONV_15_AutoMapper_configuration_is_valid`; `App: CONV_15_Mapped_types_are_not_self_referencing`; `App: CONV_15_Requests_are_never_mapped`; `Int: CONV_15_AutoMapper_profiles_live_only_in_Application`; UoW: Phase 2 | Partial (P1) |
+| CONV-16 | Time only through an injected `TimeProvider`; no `DateTime.Now/UtcNow/Today`, `DateTimeOffset.Now/UtcNow` in production code | CLAUDE.md rule 9 | Architecture test (IL scan) | `Int: CONV_16_Production_code_never_reads_the_system_clock_directly` | Implemented (P1) |
 
 ---
 
@@ -329,7 +333,7 @@ permitted."). The §8 table's wording (VAL-06) is used because §8 is the consol
 | DEL-04 | AI interaction history export | Brief §4.6 | docs/ai-log exports | Planned |
 | DEL-05 | Public API URL with Swagger, public UI URL, running at the review | Brief §3.8, §4.3 | Azure | Planned |
 | DEL-06 | CI/CD: build backend, run EF migrations, build frontend, deploy both | Brief §3.8 | `.github/workflows/deploy.yml` | Planned |
-| DEL-07 | docker-compose for local dev (SQL 2022 + Azurite) | Brief §4.1 | docker-compose.yml | Planned |
+| DEL-07 | docker-compose for local dev (SQL 2022 + Azurite) | Brief §4.1 | `docker-compose.yml` (+ `app` profile: EF migrations bundle + API from the production Dockerfile); smoke-tested in Phase 1 | Implemented (P1) |
 | DEL-08 | Seed scripts/migrations for codes, reference data, policies | Brief §4.1 | Migrations | Planned |
 | DEL-09 | Test credentials: ≥1 handler, ≥1 supervisor (we provide 2 per role) | Brief §4.3; D-16 | README | Planned |
 | DEL-10 | Azure resources: Container Apps (API, scale to zero; Brief §2.3 allows it), SWA, Azure SQL serverless, Storage, Key Vault | Brief §2.3, §3.8; D-36 | infra/ + README (incl. live-review runbook: minReplicas=1) | Planned |

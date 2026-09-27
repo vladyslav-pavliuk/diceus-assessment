@@ -106,11 +106,13 @@ closed by the GL sweeper (D-15). The jobs themselves write audit rows directly t
 
 Legend: **SD** soft delete (IsDeleted, DeletedAt + filter) · **T** OrganisationId + tenant filter · **RV** RowVer · **AC** audit columns
 (CreatedAt, UpdatedAt, UserCreated, UserModified). All PKs are `UNIQUEIDENTIFIER DEFAULT NEWSEQUENTIALID()`, with values assigned in the domain (D-30).
+SD and AC columns are EF Core **shadow properties** added to every entity by one convention (`ModelBuilderConventions.ApplyStandardColumns`, D-38);
+Organisations and Users exist since Phase 1.
 
 | Table | Key columns | FKs | Indexes | SD | T | RV | AC |
 |---|---|---|---|---|---|---|---|
 | Organisations | Id, Name | — | — | ✓ | — (is the tenant) | — | ✓ |
-| Users | Id, Username, DisplayName, Role, IsActive | — | UX (OrganisationId, Username) | ✓ | ✓ | — | ✓ |
+| Users | Id, OrganisationId, Username, DisplayName, Role, IsActive | Organisations | UX Username (system-wide: sign-in precedes the tenant, D-38) | ✓ | ✓ | — | ✓ |
 | Policies | Id, PolicyNumber, ClientName, EffectiveDate DATE, ExpirationDate DATE, Status, CoverageTypes (JSON) | — | UX (OrganisationId, PolicyNumber); IX ClientName | ✓ | ✓ | — | ✓ |
 | CauseOfLossCodes | Id, Code, Name, PerilCategory, IsActive, SortOrder | — | UX (OrganisationId, Code) | ✓ | ✓ | — | ✓ |
 | ClaimStatusTransitions | Id, FromStatus, ToStatus, MinimumRole, RequiresReason, IsSystemOnly | — | UX (FromStatus, ToStatus) | — | — (global) | — | ✓ |
@@ -142,7 +144,8 @@ Seed data (HasData or migration SQL only, FRS §15.4):
 ```
 HTTP POST (Bearer JWT, X-Correlation-Id, optional Idempotency-Key)
  → CorrelationIdMiddleware        read/create id; push into the log scope; ICorrelationContext
- → ExceptionHandlingMiddleware    maps exceptions → ProblemDetails (422/404/403/409)
+ → SerilogRequestLogging          one structured line per request, with the final status code
+ → ExceptionHandlingMiddleware    maps exceptions → ProblemDetails (422/404/403/409/500)
  → Authentication/Authorization   JWT validated; [Authorize] (any role may submit)
  → IdempotencyFilter (D-24)       replay the stored response if the key was seen
  → ReservesController.Submit      binds the body → SubmitReserveTransactionCommand; ISender.Send
@@ -227,6 +230,7 @@ Not a MediatR behaviour:
 - **Local dev:** `docker-compose.yml` with SQL Server 2022 + Azurite + the API (the same Dockerfile as production). The connection string gives an account-key
   SAS, and `Storage:Provider=AzureBlob` against Azurite *or* `LocalFileSystem`.
 - **CORS:** locked to the SWA origin. **Swagger** is enabled in the deployed environment (Brief §4.3).
+- **Probes:** liveness `/health/live` (no dependencies, so a paused database never restarts the container); readiness `/health/ready` (database) (D-38).
 - **CI/CD** (GitHub Actions, `workflow_dispatch` is acceptable per Brief §3.8): build + test → `docker build` + push to ghcr.io → EF migrations bundle run against
   Azure SQL → `az containerapp update --image …:<sha>` → `ng build` → deploy the SWA. Uses OIDC federated credentials for `azure/login`.
 

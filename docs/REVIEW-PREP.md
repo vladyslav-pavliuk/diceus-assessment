@@ -76,3 +76,46 @@ and the GL journal carries both amounts. Validation rejects mixed-currency adjus
 **Why is "waive" not implemented?**
 Under D-06, the only Critical issue stored on a claim is "no claimant". §4.2 and BR-ST-02 separately require a claimant, so waiving that issue could never
 unblock anything. (D-07)
+
+## Phase 1: skeleton & cross-cutting
+**How do you prove the dependency rule holds, not just claim it?**
+Two layers. Project references make illegal references impossible to compile (Domain has none; Infrastructure and Persistence know only Application). NetArchTest
+then catches framework leakage through transitive references: Application must not touch EF Core, SqlClient, ASP.NET Core, Hangfire or Azure types, and
+controllers must not touch Persistence. (`tests/ClaimsModule.IntegrationTests/Architecture/LayerDependencyTests.cs`)
+
+**How do you enforce "no DateTime.Now"?**
+An architecture test reads the IL of every production assembly with Mono.Cecil and fails on any call to `DateTime.Now/UtcNow/Today` or `DateTimeOffset.Now/UtcNow`.
+It was mutation-checked: adding `_ = DateTimeOffset.UtcNow;` to `JwtTokenService` made it fail, naming the method. (`ClockUsageTests`, CONV-16)
+
+**Why does ValidationBehavior run validators sequentially?**
+Validators may run reference-data lookups on the request's scoped DbContext, and a DbContext does not support concurrent operations. There is also nothing to gain:
+validation is dwarfed by the command's own I/O. (`ValidationBehavior.cs`)
+
+**Why is `SuppressImplicitRequiredAttributeForNonNullableReferenceTypes` on?**
+Otherwise `[ApiController]` rejects a missing non-nullable field with its own message before MediatR runs, so the FRS §8 wording could never appear, and
+validation would effectively live in the controller layer. Now model binding only binds; FluentValidation in the pipeline decides. (D-38 item 2)
+
+**Your 422 has no traceId. How do you correlate a failure?**
+The `X-Correlation-Id` response header, which every log line of that request also carries. The body is kept to exactly FRS §10.4's four fields. (D-38 items 1, 10)
+
+**Why accept a client-supplied correlation id at all, and why not reject a bad one?**
+A client (the SPA, a gateway) can then tie its own logs to ours. The value lands in logs, audit rows and a response header, so only a short plain token
+(1–64 of `[A-Za-z0-9-_.]`) is accepted. Anything else is replaced, not rejected: a tracing header should never fail a business request. (`CorrelationIdMiddleware.cs`)
+
+**Why is AutoMapper on a version with a known high CVE?**
+CVE-2026-32933 needs a ~25,000-level self-referencing graph to be mapped. We only map DB entities to DTOs, never request input, and no mapped type references itself.
+Two tests enforce both conditions, and the suppression covers that single advisory (any other advisory still fails the build). The fixed versions are commercial.
+If a test ever fails, the answer is to move to 16.x with a licence key. (D-37 amendment)
+
+**Why are audit/soft-delete columns shadow properties?**
+They are persistence bookkeeping, not domain state. The domain stays clean, one convention guarantees every table has them, and the interceptor (Phase 2) sets
+them through the change tracker. Brief §6.1 names shadow properties explicitly. (D-38 item 4)
+
+**Why are liveness and readiness different endpoints?**
+Liveness failing makes Container Apps restart the container. If liveness checked SQL, a serverless database resuming from auto-pause (up to a minute) would cause
+pointless restarts. Readiness includes the database, so traffic waits for it instead. (D-38 item 11, D-36)
+
+**What stops the dev-token endpoint being a backdoor in production?**
+`Auth:DevTokensEnabled` (false by default; the endpoints then answer 404). Tokens are still real HS256 JWTs validated for issuer, audience, lifetime, signature and
+algorithm on every request, with the key from Key Vault. It is on in the demo deployment by decision (D-16), so reviewers can switch roles; a real system would put
+an identity provider behind the same `JwtBearer` validation, with no change to the rest of the API.

@@ -21,7 +21,7 @@ clear, conventional code over clever code.
 .NET 9 / C# 13 · ASP.NET Core Web API · MediatR 12.x · EF Core 9 · FluentValidation · AutoMapper · Hangfire
 (SQL Server storage) · SQL Server 2022 / Azure SQL · Azure Blob Storage · Angular 18+ (standalone APIs,
 signals OK) · Angular Material · Reactive Forms · GitHub Actions · Azure Container Apps (API, scale to zero) + Static Web App (see DECISIONS.md D-36).
-- Pin **MediatR to 12.x** and **AutoMapper to 14.x**, the last Apache-licensed majors, because newer majors need a
+- Pin **MediatR to 12.x** (Apache-2.0) and **AutoMapper to 14.x** (MIT), the last freely licensed majors, because newer majors need a
   commercial licence key. Verify the versions on NuGet before adding them and record the choice in DECISIONS.md.
 - For tests, use xUnit and Testcontainers (MsSql) for integration tests. Use Shouldly or FluentAssertions 7.x for
   assertions (v8+ is commercial).
