@@ -1460,7 +1460,12 @@ reviewer will probe (Q1–Q3), implemented as recommended; the rest are choices 
 **Corrections from the first Azure run (2026-09-28):** the federated-credential subject (immutable subjects, Q3) and the Storage Blob Delegator role id
 (`db58b8e5-c6ad-4a2a-8342-4190687cbf4a`; the one first written from memory did not exist). All four role ids are now checked against `az role definition list`.
 
-**Not verified (no Azure deployment was made in this phase).** The templates compile with the Bicep linter (0 warnings), the workflows pass actionlint,
+**Verified on Azure (2026-09-28, run 36446032128, after the three fixes in `docs/ai-log/phase-7.md` §7):** every job green; the migrations bundle
+and go-sqlcmd signed in as the service principal; the `TYPE = E` user was created; the Container App resolved the Key Vault reference and was ready on the
+first probe; the smoke job passed (SPA deep links, CORS, the full §7.2 flow, the document downloaded from Blob Storage through a user-delegation SAS).
+Checked by hand afterwards: Swagger UI 200, SPA security headers, anonymous API call 401, Hangfire 403 for a handler and 200 for a manager.
+
+**Before the Azure run, only this was verified (kept for the record):** The templates compile with the Bicep linter (0 warnings), the workflows pass actionlint,
 the scripts pass shellcheck, the migrations bundle builds with the workflow's exact command in `sdk:9.0`, go-sqlcmd runs the grant script with the
 workflow's exact flags, and the smoke test passes against the local stack twice (as dbo and as the restricted user). What only a real deployment proves:
 Entra token acquisition by the bundle and go-sqlcmd on a GitHub runner, `TYPE = E` user creation, the Key Vault reference, user-delegation SAS, and RBAC

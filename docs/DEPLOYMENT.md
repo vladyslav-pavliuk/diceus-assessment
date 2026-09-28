@@ -2,6 +2,17 @@
 
 How the demo environment is built and how to reproduce it (brief §3.8, §4.2 item 5). Decisions: D-36 (hosting), D-44 (this phase).
 
+## Current deployment
+
+| | URL |
+|---|---|
+| SPA | https://witty-sea-048f76a03.2.azurestaticapps.net |
+| API | https://ca-claims-api.calmtree-6dea65c8.westeurope.azurecontainerapps.io |
+| Swagger | https://ca-claims-api.calmtree-6dea65c8.westeurope.azurecontainerapps.io/swagger |
+| Hangfire (manager token) | https://ca-claims-api.calmtree-6dea65c8.westeurope.azurecontainerapps.io/hangfire |
+
+Resource group `rg-claims-demo` (westeurope). First green run: 36446032128 (2026-09-28).
+
 ## What gets deployed
 
 | Resource | Name | Tier | Role |

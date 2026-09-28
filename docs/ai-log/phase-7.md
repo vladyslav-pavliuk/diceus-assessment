@@ -124,3 +124,12 @@ Vlad ran `infra/bootstrap.sh` (all repository variables set) and then `gh workfl
    bundle, not running it. Reproduced locally with the migrator image (`--connection` only → the same error; environment variable → reaches the
    database). Fix: the step exports `ConnectionStrings__ClaimsDb` and runs the bundle without arguments. The retry loop also retried a
    non-transient failure five times; left as is (cheap), noted.
+5. **Run 36446032128: all jobs green** (ci, image, infra 3m25s, api 55s, web 1m47s, smoke 14s). Migrations applied all three, the grant script created
+   the API user and Vlad's reader, `/health/ready` answered on the first attempt, and the smoke job passed: SPA deep links, CORS (SWA admitted,
+   `https://evil.example` refused) and the §7.2 flow, with the document downloaded from `stclaimsu4wmdyz7cq3qc.blob.core.windows.net` through a
+   user-delegation SAS (CLM-2026-0000001 is that smoke-test claim). Claude then checked by hand: Swagger UI 200, the SPA bundle holds the Azure API URL,
+   SPA security headers present, anonymous API call 401, `/hangfire` 403 for a handler and 200 for a manager, `minReplicas` 0.
+
+Three deployment defects reached Azure, all Claude's (§7 items 2–4): a hard-coded OIDC subject format, a role id written from memory, and a bundle
+invocation that was built but never run the way the workflow ran it. Each passed every local check that existed, which is the honest limit of the
+pre-deployment verification in §4.
