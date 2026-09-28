@@ -28,35 +28,8 @@ export interface AssignHandlerDialogData {
     MatSelectModule,
     ErrorSummary,
   ],
-  template: `
-    <h2 mat-dialog-title>Assign handler</h2>
-    <mat-dialog-content>
-      <app-error-summary [messages]="errors()" />
-      <mat-form-field class="field">
-        <mat-label>Handler</mat-label>
-        <mat-select [formControl]="userId">
-          @for (user of users(); track user.id) {
-            <mat-option [value]="user.id">{{ user.displayName }} · {{ user.role }}</mat-option>
-          }
-        </mat-select>
-      </mat-form-field>
-    </mat-dialog-content>
-    <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close>Cancel</button>
-      <button
-        mat-flat-button
-        (click)="assign()"
-        [disabled]="userId.invalid || userId.value === data.currentHandlerId || pending()"
-      >
-        Assign
-      </button>
-    </mat-dialog-actions>
-  `,
-  styles: `
-    .field {
-      width: 100%;
-    }
-  `,
+  templateUrl: './assign-handler-dialog.html',
+  styleUrl: './assign-handler-dialog.scss',
 })
 export class AssignHandlerDialog {
   private readonly api = inject(ClaimsApiService);

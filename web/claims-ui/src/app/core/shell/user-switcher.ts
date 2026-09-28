@@ -18,66 +18,8 @@ import { NotificationService } from '../notify/notification.service';
 @Component({
   selector: 'app-user-switcher',
   imports: [MatButtonModule, MatMenuModule, MatIconModule, MatDividerModule],
-  template: `
-    <button
-      mat-button
-      class="switcher"
-      [matMenuTriggerFor]="menu"
-      (menuOpened)="loadUsers()"
-      [disabled]="switching()"
-      aria-label="Switch user"
-    >
-      <mat-icon>account_circle</mat-icon>
-      @if (auth.user(); as user) {
-        <span class="switcher__name">{{ user.displayName }}</span>
-        <span class="switcher__role">{{ user.role }}</span>
-      } @else {
-        <span class="switcher__name">Not signed in</span>
-      }
-      <mat-icon iconPositionEnd>arrow_drop_down</mat-icon>
-    </button>
-    <mat-menu #menu="matMenu" xPosition="before">
-      @if (users().length === 0) {
-        <button mat-menu-item disabled>Loading users…</button>
-      }
-      @for (group of groups(); track group.role; let last = $last) {
-        <div class="switcher__group" role="presentation">{{ group.role }}</div>
-        @for (user of group.users; track user.id) {
-          <button mat-menu-item (click)="switchTo(user)" [disabled]="user.id === auth.userId()">
-            <mat-icon>{{ user.id === auth.userId() ? 'check' : 'person' }}</mat-icon>
-            <span>{{ user.displayName }}</span>
-          </button>
-        }
-        @if (!last) {
-          <mat-divider />
-        }
-      }
-    </mat-menu>
-  `,
-  styles: `
-    .switcher {
-      color: var(--mat-sys-on-primary);
-    }
-    .switcher__name {
-      margin-left: 4px;
-    }
-    .switcher__role {
-      margin-left: 8px;
-      padding: 2px 8px;
-      border-radius: 999px;
-      background: var(--mat-sys-tertiary-fixed-dim);
-      color: var(--mat-sys-on-tertiary-fixed);
-      font: var(--mat-sys-label-small);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-    .switcher__group {
-      padding: 8px 16px 4px;
-      font: var(--mat-sys-label-small);
-      color: var(--mat-sys-on-surface-variant);
-      text-transform: uppercase;
-    }
-  `,
+  templateUrl: './user-switcher.html',
+  styleUrl: './user-switcher.scss',
 })
 export class UserSwitcher {
   protected readonly auth = inject(AuthService);

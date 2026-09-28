@@ -8,12 +8,7 @@ import { Component, computed, input } from '@angular/core';
 @Component({
   selector: 'app-amount',
   imports: [CurrencyPipe],
-  template: `<span
-    class="amount"
-    [class.amount--positive]="signed() && value() > 0"
-    [class.amount--negative]="signed() && value() < 0"
-    >{{ prefix() }}{{ value() | currency: 'USD' : 'symbol' : '1.2-2' }}</span
-  >`,
+  templateUrl: './amount.html',
 })
 export class Amount {
   readonly value = input.required<number>();

@@ -1,0 +1,8 @@
+@if (authority(); as tier) {
+  <div class="authority" [class.authority--auto]="tier === 'Auto'" role="status" aria-live="polite">
+    {{ labels[tier] }}
+  </div>
+  @if (escalated()) {
+    <div class="authority__warning" role="status">{{ aggregateWarning }}</div>
+  }
+}

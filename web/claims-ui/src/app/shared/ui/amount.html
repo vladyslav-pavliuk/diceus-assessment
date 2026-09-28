@@ -1,0 +1,6 @@
+<span
+  class="amount"
+  [class.amount--positive]="signed() && value() > 0"
+  [class.amount--negative]="signed() && value() < 0"
+  >{{ prefix() }}{{ value() | currency: 'USD' : 'symbol' : '1.2-2' }}</span
+>

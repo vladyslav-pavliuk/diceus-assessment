@@ -1,0 +1,22 @@
+.switcher {
+  color: var(--mat-sys-on-primary);
+}
+.switcher__name {
+  margin-left: 4px;
+}
+.switcher__role {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--mat-sys-tertiary-fixed-dim);
+  color: var(--mat-sys-on-tertiary-fixed);
+  font: var(--mat-sys-label-small);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.switcher__group {
+  padding: 8px 16px 4px;
+  font: var(--mat-sys-label-small);
+  color: var(--mat-sys-on-surface-variant);
+  text-transform: uppercase;
+}

@@ -57,56 +57,8 @@ export function isPolicy(value: unknown): value is Policy {
     MatIconModule,
     MatProgressSpinnerModule,
   ],
-  template: `
-    <mat-form-field class="typeahead">
-      <mat-label>{{ label() }}</mat-label>
-      <mat-icon matPrefix>policy</mat-icon>
-      <input
-        matInput
-        [formControl]="control()"
-        [matAutocomplete]="auto"
-        placeholder="Policy number or client name"
-        autocomplete="off"
-      />
-      @if (searching()) {
-        <mat-spinner matSuffix diameter="20" class="typeahead__spinner" />
-      }
-      <mat-autocomplete #auto [displayWith]="display" autoActiveFirstOption>
-        @for (policy of options(); track policy.id) {
-          <mat-option [value]="policy">
-            <span class="typeahead__number">{{ policy.policyNumber }}</span>
-            <span class="typeahead__client">{{ policy.clientName }}</span>
-            <span class="muted typeahead__dates">
-              {{ policy.effectiveDate | date: 'd MMM y' }} –
-              {{ policy.expirationDate | date: 'd MMM y' }}
-            </span>
-          </mat-option>
-        }
-        @if (noMatches()) {
-          <mat-option disabled>No policy matches “{{ lastQuery() }}”</mat-option>
-        }
-      </mat-autocomplete>
-      <mat-error>{{ error(control()) }}</mat-error>
-    </mat-form-field>
-  `,
-  styles: `
-    .typeahead {
-      width: 100%;
-    }
-    .typeahead__spinner {
-      margin-right: 12px;
-    }
-    .typeahead__number {
-      font-weight: 500;
-      margin-right: 12px;
-    }
-    .typeahead__client {
-      margin-right: 12px;
-    }
-    .typeahead__dates {
-      font: var(--mat-sys-body-small);
-    }
-  `,
+  templateUrl: './policy-typeahead.html',
+  styleUrl: './policy-typeahead.scss',
 })
 export class PolicyTypeahead implements OnInit {
   private readonly reference = inject(ReferenceApiService);
