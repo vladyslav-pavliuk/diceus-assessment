@@ -382,3 +382,58 @@ yet marked clean; or an Event Grid–triggered scanner. The upload flow stays th
 A two-step flow: `POST /documents/upload-url` returns a short-lived write-only SAS for the reserved path; the browser PUTs the file; `POST /documents/{id}/complete`
 checks the blob (size, sniffed type) and records the metadata. It removes 50 MB from the API's memory and bandwidth; the price is a pending state and a
 clean-up of uploads never completed.
+
+## Phase 6: Angular frontend
+
+**The FRS asks for "lazy-loaded feature modules". You have no NgModules. Is that a deviation?**
+No, the intent is met: each feature (claims list, FNOL, claim detail) has one route file loaded with `loadChildren`, and `ng build` lists exactly three
+named lazy chunks. Standalone route files are Angular's recommended form since v17; an NgModule would add a wrapper, not isolation (D-17, D-43 item 2).
+
+**How do you guarantee components never call HTTP directly?**
+Only `ClaimsApiService`, `ReferenceApiService` and `AuthService` import `HttpClient`; an ESLint `no-restricted-imports` rule fails `npm run lint`
+anywhere else (tests excepted). A probe file importing `HttpClient` from a shared folder was rejected during the phase.
+
+**The UI computes the authority tier and the closure checklist. Isn't that duplicating domain logic?**
+Deliberately, and only for previews. The indicator must react while the user types, which a round trip cannot do. The copies are small pure functions in
+`shared/domain`, named after the domain classes they mirror and tested at the same boundaries (10,000 / 10,000.01 / 100,000 / 100,000.01, negative
+amounts by absolute value). The API decides again on submit; if the copy ever drifted, the user would see the API's 422, not a wrong result.
+
+**Why is the Approve button hidden for a handler but only disabled for a supervisor on their own reserve?**
+Two kinds of "no". A handler can *never* approve (the endpoint policy answers 403), so the button is hidden (SEC-03, brief §3.7.4). A supervisor can
+approve in general, but not this row: self-approval or a tier above their authority. The button stays visible, disabled, with the API's own message
+("Self-approval is not permitted.") as a tooltip, which explains the rule instead of hiding it. This mirrors the 403-vs-422 split of D-25.
+
+**How does a 422 end up next to the right field?**
+The API keys each error by the request's property path (`LossDate`, `Parties[0].FirstName`, `InitialReserve.Amount`, D-40 item 4). `applyServerErrors`
+turns a key into a control path (with a small table for controls that live in a step group or have another name), sets a `server` error that the next
+edit clears, and returns every key so FNOL also lists the messages at the top of the step they belong to, and selects that step.
+
+**What happens if the user double-clicks Create, or the network drops after the server created the claim?**
+The button is disabled while the request is pending, and the request carries one Idempotency-Key per FNOL form. A retry with the same key replays the first
+201 (same claim number) instead of creating a second claim (D-24). The API releases the key after any non-2xx, so fixing a 422 and resubmitting works.
+
+**Why is the list's filter state in the URL rather than in a service?**
+A URL is shareable, survives a refresh and works with the back button, and it makes the list a pure function of the URL: every change of the query
+params loads that page, and `switchMap` drops a slower response to an older filter. The two mapping functions are unit-tested.
+
+**Why is `ClaimDetailStore` provided by the page component and not by the route?**
+A route-level provider lives in the route's environment injector, which Angular keeps after you navigate away, so an old claim and a running GL poll
+would outlive the page. Provided by the component, the store is created and destroyed with the screen.
+
+**How does the UI show the GL posting finishing, when it happens in a Hangfire job?**
+After an approval, while a row is approved but still `Pending`, the store re-reads the reserves every 3 seconds, at most 10 times, as a background request
+(no progress bar). In the demo the badge turns from Pending to Posted within a few seconds. A push channel (SignalR) would be the production answer.
+
+**How do you test "loss date cannot be in the future" without racing the clock?**
+The validator reads the time from an injected `CLOCK` token, the front end's TimeProvider. Tests pin "now" and check one millisecond after it (rejected),
+exactly now (accepted, no tolerance per D-32) and a later clock re-validating the same value.
+
+**Why does the in-force badge use UTC dates?**
+To say what the server will say. BR-C-02 compares the loss date's UTC calendar date with the policy period, inclusive (D-32). A loss at 23:30 in UTC−5 on
+the expiry date is the next day in UTC, so the server records the warning; the badge must turn amber too. There is a test for exactly that case.
+
+**Where did AI get the frontend wrong?**
+See `docs/ai-log/phase-6.md` §5. The instructive one: binding a date picker and a time picker to the same FormControl, a pattern that looks right
+but silently combines the time with *today*, because Angular writes a view change only to the model and not to sibling accessors. It was found by
+driving the real form in a browser, not by the unit tests.
+

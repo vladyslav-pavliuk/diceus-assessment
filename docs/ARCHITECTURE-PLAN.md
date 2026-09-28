@@ -337,3 +337,26 @@ duplicate `Idempotency-Key` requests (D-24: placeholder row + unique index, in-f
 
 This is above the 5–7 day timebox (Brief §8.1). Mitigations follow the Brief §8.3 priority (backend correctness → deployment → docs → frontend polish):
 deploy a walking skeleton in Phase 1, keep Phase 6 to the required elements before any polish, and keep optional items (waive, Key Vault) cuttable.
+
+## 9. Frontend (Phase 6, D-43)
+
+Angular 22, standalone components, zoneless, Angular Material 22 (M3 theme from `#1B4F72`), Reactive Forms, Vitest. Source: `web/claims-ui/src/app`.
+
+```
+core/        the only layer that talks HTTP (ESLint rule): ClaimsApiService, ReferenceApiService, AuthService;
+             interceptors (Bearer + correlation id → loading → ProblemDetails/snackbar); models mirroring the DTOs; CLOCK token
+shared/      domain/  pure mirrors of domain rules the UI previews: authority tiers, policy period, intake warnings,
+                      transitions + CC-01..04 pre-flight, reserve row actions, Add Reserve blockers
+             forms/   validators with the API's messages, 422 → control mapping, party / risk-object / policy-typeahead controls
+             ui/      status chip (FRS §11.1 colours), badges, authority indicator, dialogs, empty state, amounts
+features/    claims-list/   ┐
+             fnol-intake/   ├ one lazily loaded route file each → three chunks (D-17)
+             claim-detail/  ┘ ClaimDetailStore (provided by the page), header + transition dialog, five tabs, Add Reserve drawer
+```
+
+- **Where the rules live.** The API is authoritative for every rule. The UI mirrors the ones it must *preview* (authority tier while typing, in-force
+  badge, pre-flight checklist, which buttons a role sees) as pure functions in `shared/domain`, unit-tested against the same boundaries as the domain
+  tests. Everything else is shown from the API's 422 body.
+- **Data flow.** List: URL query params → `switchMap` → page. FNOL: one typed `FormGroup` per stepper step; derived values are `computed` over
+  `form.events`. Detail: commands go through the API services; the store then reloads what changed; a 409 reloads the claim.
+- **Identity.** A real signed JWT from `POST /api/auth/dev-token` (D-16), kept in sessionStorage per tab; the interceptor adds it only to API calls.

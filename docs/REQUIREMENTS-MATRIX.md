@@ -7,7 +7,7 @@ One row per requirement. **Source**: `FRS §x` = `docs/spec/claims-frs.md`, `Bri
 Handler (orchestration, lookups) · DB (constraint/index/trigger) · Infra (jobs, storage, auth) · API (endpoint, policy, middleware) · UI.
 
 **Planned test** is named after the rule ID. Project prefixes: `Dom` = ClaimsModule.Domain.Tests, `App` = ClaimsModule.Application.Tests,
-`Int` = ClaimsModule.IntegrationTests (WebApplicationFactory + Testcontainers MsSql), `Web` = claims-ui unit tests (Karma/Jest), `Manual` = checklist / smoke script.
+`Int` = ClaimsModule.IntegrationTests (WebApplicationFactory + Testcontainers MsSql), `Web` = claims-ui unit tests (Vitest, `npm test` in `web/claims-ui`), `Manual` = checklist / smoke script.
 
 **Status**: all rows are `Planned` at Phase 0. `Implemented (Pn)` = built and tested in phase n (the test column then names the real tests); `Partial (Pn)` = the part named in the row is built, the rest is planned. In Phase 8 each row becomes `Done` / `Partial` / `Missing`, with evidence (file:line + test).
 
@@ -129,7 +129,7 @@ permitted."). The §8 table's wording (VAL-06) is used because §8 is the consol
 | RSV-06 | At most one PendingApproval per component | D-22 (ASSUMPTION) | Domain, DB (unique filtered index) | `Dom: RSV_02_Pending_transaction_cannot_be_modified`; `Dom: RSV_06_Even_an_auto_approvable_change_waits_for_the_pending_one`; `Dom: RSV_06_A_pending_transaction_does_not_block_other_components`; `Int: RSV_06_Database_allows_one_pending_transaction_per_component` | Implemented (P2) |
 | RSV-07 | Concurrent approvals of the same txn → exactly one succeeds (409 for the other) | FRS §15.1 RowVer; PROMPTS Phase 4; ARCHITECTURE-PLAN §6.1 R1 | Domain + DB (RowVer on Claim/component) | `Int: RSV_07_Concurrent_approvals_one_wins`; `Int: RSV_07_Retract_racing_an_approval_leaves_one_outcome` (both requests forced to load before either writes) | Implemented (P4) |
 | RSV-08 | History stores previous/new balance, reason, submitter, approver, timestamps, posting status | FRS §6.6, §9.6 | Domain | `Dom: RSV_08_History_row_captures_balances_and_actors`; `Dom: RSV_08_Submission_raises_an_event_describing_the_transaction` | Implemented (P2) |
-| RSV-09 | Authority threshold preview in UI (Step 3 and the Add Reserve panel) | FRS §5.2, §11.2, §11.3 | UI | `Web: RSV_09_Authority_indicator_boundaries` | Planned |
+| RSV-09 | Authority threshold preview in UI (Step 3 and the Add Reserve panel) | FRS §5.2, §11.2, §11.3 | UI | `Web: RSV_09_Authority_indicator_boundaries`; `Web: RSV_09_Negative_amounts_use_the_absolute_value`; `Web: RSV_09_No_indicator_without_a_usable_amount`; `Web: RSV_09_Labels_are_the_FRS_§11.2_texts` | Implemented (P6) |
 
 ---
 
@@ -249,7 +249,7 @@ permitted."). The §8 table's wording (VAL-06) is used because §8 is the consol
 |---|---|---|---|---|---|
 | SEC-01 | Three roles handler/supervisor/manager, hierarchical | FRS §3 | Domain (`UserRole.IsAtLeast`), Infra (JWT), API policies | `Dom: SEC_01_Roles_are_hierarchical_handler_supervisor_manager`; `Dom: SEC_01_Role_codes_match_FRS_section_3`; `Int: SEC_01_Role_policies_are_hierarchical` | Implemented (P1) |
 | SEC-02 | Backend validates the caller's role on approval endpoints | FRS §3 | API policy + Domain | policy mechanism: `Int: SEC_02_Forbidden_role_gets_403_problem`; on the real endpoint: `Int: SEC_02_Handler_approve_returns_403` (approve and reject) | Implemented (P4) |
-| SEC-03 | Approve/Reject visible only to supervisor/manager | FRS §3, §11.3; Brief §3.7.4 | UI | `Web: SEC_03_Approve_buttons_hidden_for_handler` | Planned |
+| SEC-03 | Approve/Reject visible only to supervisor/manager | FRS §3, §11.3; Brief §3.7.4 | UI | `Web: SEC_03_Approve_buttons_hidden_for_handler`; `Web: SEC_03_Approve_buttons_shown_to_supervisor_and_manager`; `Web: BR_R_03_Self_approval_is_disabled_with_the_API_message`; `Web: BR_R_02_Supervisor_cannot_approve_a_manager_tier_transaction` | Implemented (P6) |
 | SEC-04 | Tenant isolation: data from another org is invisible | FRS §15.1; D-12 | Persistence (global filter) | `Int: SEC_04_Other_tenants_rows_are_invisible_and_cannot_be_written`; `Int: SEC_04_Without_a_tenant_nothing_is_visible_and_nothing_can_be_inserted`; HTTP: `Int: SEC_04_Cross_tenant_claim_is_not_found` | Implemented (P3) |
 | SEC-05 | Test users: 2 per role | Brief §4.3; D-16 | Seed (HasData) | `Int: SEC_05_Two_seeded_users_per_role_in_one_organisation` | Implemented (P1) |
 
@@ -284,48 +284,48 @@ permitted."). The §8 table's wording (VAL-06) is used because §8 is the consol
 
 | ID | Requirement | Source | Planned test | Status |
 |---|---|---|---|---|
-| UI-LIST-01 | Paginated table: Claim No, Policy No, Client, Loss Date, Cause, Status badge, Total Reserve | FRS §11.1; Brief §3.7.1 | `Web: UI_LIST_01_Columns_rendered` | Planned |
-| UI-LIST-02 | Badge colours: Draft grey, Open blue, UnderInvestigation orange, PendingPayment purple, Closed green, Reopened amber, Withdrawn dark grey | FRS §11.1 | `Web: UI_LIST_02_Status_badge_colours` | Planned |
-| UI-LIST-03 | Filters: status multi-select, loss date range, handler, cause | FRS §11.1; Brief §3.7.1 | `Web: UI_LIST_03_Filters_map_to_query_params` | Planned |
-| UI-LIST-04 | Row click → detail | FRS §11.1 | `Manual` | Planned |
-| UI-LIST-05 | "Log New Claim" primary button → FNOL | FRS §11.1 | `Manual` | Planned |
-| UI-LIST-06 | Total count + page-size selector | FRS §11.1 | `Manual` | Planned |
-| UI-LIST-07 | Empty state | FRS §11.1 | `Web: UI_LIST_07_Empty_state_shown` | Planned |
-| UI-FNOL-01 | 3-step stepper; each step validates independently | FRS §11.2; Brief §3.7.2 | `Web: UI_FNOL_01_Cannot_advance_with_invalid_step` | Planned |
-| UI-FNOL-02 | Policy typeahead (number/name) populating number, client, dates | FRS §11.2 | `Web: UI_FNOL_02_Typeahead_debounced_search` | Planned |
-| UI-FNOL-03 | In-force badge: green inside the period, amber otherwise | FRS §11.2 | `Web: UI_FNOL_03_In_force_badge` | Planned |
-| UI-FNOL-04 | Unknown Policy toggle | FRS §11.2 | `Web: UI_FNOL_04_Unknown_policy_disables_policy_and_reserve` | Planned |
-| UI-FNOL-05 | Loss date picker; future-date error | FRS §11.2 | `Web: UI_FNOL_05_Future_date_validator` | Planned |
-| UI-FNOL-06 | Searchable cause dropdown from the API | FRS §11.2 | `Manual` | Planned |
-| UI-FNOL-07 | Description textarea with a 20-char counter | FRS §11.2 | `Web: UI_FNOL_07_Min_length_counter` | Planned |
-| UI-FNOL-08 | Location, estimated amount (optional) | FRS §11.2 | `Manual` | Planned |
-| UI-FNOL-09 | Parties FormArray; Claimant-required warning; chips/cards with remove | FRS §11.2; Brief §3.7.2 | `Web: UI_FNOL_09_Claimant_required_validator` | Planned |
-| UI-FNOL-10 | Risk objects FormArray; advisory if none | FRS §11.2 | `Web: UI_FNOL_10_Risk_object_advisory` | Planned |
-| UI-FNOL-11 | Optional initial reserve + live authority indicator | FRS §11.2; Brief §3.7.2 | see RSV-09 | Planned |
-| UI-FNOL-12 | Review summary; Create disabled until steps 1–2 valid; confirm dialog on warnings | FRS §11.2 | `Web: UI_FNOL_12_Warning_confirmation_dialog` | Planned |
-| UI-FNOL-13 | Success → detail + snackbar with claim number | FRS §11.2; Brief §3.7.2 | `Manual` | Planned |
-| UI-FNOL-14 | Server 422 errors shown inline and at the top of the step | FRS §11.2 | `Web: UI_FNOL_14_Server_errors_mapped_to_controls` | Planned |
-| UI-DET-01 | Header: copyable claim no, status chip, policy/client, loss date/cause, handler | FRS §11.3; Brief §3.7.3 | `Manual` | Planned |
-| UI-DET-02 | Transition menu of valid next statuses; confirm dialog; Closed pre-flight checklist | FRS §11.3; Brief §3.7.3 | `Web: UI_DET_02_Menu_shows_only_valid_next_statuses` | Planned |
-| UI-DET-03 | Tab 1 Overview: loss details, severity badge, estimate, editable notes | FRS §11.3 | `Manual` | Planned |
-| UI-DET-04 | Tab 2 Parties: list with role badge/contact/active; add inline; remove disabled for last Claimant | FRS §11.3 | `Web: UI_DET_04_Remove_disabled_for_last_claimant` | Planned |
-| UI-DET-05 | Tab 3 Reserves: summary cards (current + pending, amber) | FRS §11.3 | `Manual` | Planned |
-| UI-DET-06 | History table: Date, Type, Component, Amount ±colour, Status, Submitted By, Approved By | FRS §11.3 | `Manual` | Planned |
-| UI-DET-07 | Add Reserve slide-in panel with authority indicator | FRS §11.3 | see RSV-09 | Planned |
-| UI-DET-08 | Approve/Reject on pending rows for supervisor/manager only | FRS §11.3; Brief §3.7.3 | see SEC-03 | Planned |
-| UI-DET-09 | Retract for the submitter's own pending rows | FRS §11.3 | `Web: UI_DET_09_Retract_only_for_submitter` | Planned |
-| UI-DET-10 | GL badge Pending/Posted/Failed + retry | FRS §11.3 | `Manual` | Planned |
-| UI-DET-11 | Tab 4 Documents: list, download via SAS in a new tab, upload with progress | FRS §11.3; Brief §3.7.3 | `Manual` | Planned |
-| UI-DET-12 | Tab 5 Audit: reverse-chronological, paged, event badge, user, related link; read-only | FRS §11.3; Brief §3.7.3 | `Manual` | Planned |
-| UI-DET-13 | Validation issues visible with Acknowledge (D-07) | D-07 | `Manual` | Planned |
-| UI-GEN-01 | Lazy-loaded features: claims-list, fnol-intake, claim-detail | FRS §11.4; Brief §3.7.4; D-17 | `Manual: build output shows 3 lazy chunks` | Planned |
-| UI-GEN-02 | Typed service layer only; no HttpClient in components | FRS §11; Brief §3.7 | lint rule / architecture spec | Planned |
-| UI-GEN-03 | Mock auth + role switcher; interceptor adds Bearer; header shows user and role | FRS §11.4; Brief §3.7.4 | `Web: UI_GEN_03_Interceptor_adds_bearer` | Planned |
-| UI-GEN-04 | Material theme with a custom primary palette | FRS §11.4; Brief §3.7.4 | `Manual` | Planned |
-| UI-GEN-05 | Errors → snackbars with severity (ProblemDetails aware) | FRS §11.4; Brief §3.7.4 | `Web: UI_GEN_05_Error_interceptor_shows_snackbar` | Planned |
-| UI-GEN-06 | Loading states; buttons disabled while pending | FRS §11.4; Brief §3.7.4 | `Manual` | Planned |
-| UI-GEN-07 | Reactive forms with Material error patterns | FRS §11.4; Brief §3.7.2 | covered by UI-FNOL tests | Planned |
-| UI-GEN-08 | Usable at 1280px+; no console errors | FRS §11.4; Brief §6.2 | `Manual` | Planned |
+| UI-LIST-01 | Paginated table: Claim No, Policy No, Client, Loss Date, Cause, Status badge, Total Reserve | FRS §11.1; Brief §3.7.1 | `Web: UI_LIST_01_Columns_rendered` | Implemented (P6) |
+| UI-LIST-02 | Badge colours: Draft grey, Open blue, UnderInvestigation orange, PendingPayment purple, Closed green, Reopened amber, Withdrawn dark grey | FRS §11.1 | `Web: UI_LIST_02_Status_badge_colours` | Implemented (P6) |
+| UI-LIST-03 | Filters: status multi-select, loss date range, handler, cause | FRS §11.1; Brief §3.7.1 | `Web: UI_LIST_03_Filters_map_to_query_params`; `Web: UI_LIST_03_Defaults_stay_out_of_the_URL`; `Web: UI_LIST_03_Unknown_statuses_and_bad_paging_in_the_URL_are_ignored`; manual (browser) | Implemented (P6) |
+| UI-LIST-04 | Row click → detail | FRS §11.1 | Manual (browser) | Implemented (P6) |
+| UI-LIST-05 | "Log New Claim" primary button → FNOL | FRS §11.1 | Manual (browser) | Implemented (P6) |
+| UI-LIST-06 | Total count + page-size selector | FRS §11.1 | Manual (browser) | Implemented (P6) |
+| UI-LIST-07 | Empty state | FRS §11.1 | `Web: UI_LIST_07_Empty_state_shown`; manual (filtered empty state) | Implemented (P6) |
+| UI-FNOL-01 | 3-step stepper; each step validates independently | FRS §11.2; Brief §3.7.2 | `Web: UI_FNOL_01_Cannot_advance_with_invalid_step`; `Web: UI_FNOL_01_Each_step_validates_on_its_own` | Implemented (P6) |
+| UI-FNOL-02 | Policy typeahead (number/name) populating number, client, dates | FRS §11.2 | Manual (browser: debounced search, switchMap) | Implemented (P6) |
+| UI-FNOL-03 | In-force badge: green inside the period, amber otherwise | FRS §11.2 | `Web: UI_FNOL_03_In_force_badge` (4 tests incl. `UI_FNOL_03_Compares_the_UTC_calendar_date_like_the_API`) | Implemented (P6) |
+| UI-FNOL-04 | Unknown Policy toggle | FRS §11.2 | `Web: UI_FNOL_04_Unknown_policy_disables_policy_and_reserve`; `Web: UI_FNOL_04_Switching_it_off_requires_a_policy_again` | Implemented (P6) |
+| UI-FNOL-05 | Loss date picker; future-date error | FRS §11.2 | `Web: UI_FNOL_05_Future_date_validator` (3 tests); `Web: UI_FNOL_05_Loss_date_is_required`; `Web: UI_FNOL_05_Reads_the_injected_clock_at_validation_time`; `Web: UI_FNOL_05_The_time_picker_sets_the_time_of_the_picked_day` | Implemented (P6) |
+| UI-FNOL-06 | Searchable cause dropdown from the API | FRS §11.2 | Manual (browser) | Implemented (P6) |
+| UI-FNOL-07 | Description textarea with a 20-char counter | FRS §11.2 | `Web: UI_FNOL_07_Min_length_counter` (2 tests); `Web: UI_FNOL_07_Whitespace_does_not_count` | Implemented (P6) |
+| UI-FNOL-08 | Location, estimated amount (optional) | FRS §11.2 | `Web: UI_FNOL_08_Estimated_loss_is_optional_and_not_negative` | Implemented (P6) |
+| UI-FNOL-09 | Parties FormArray; Claimant-required warning; chips/cards with remove | FRS §11.2; Brief §3.7.2 | `Web: UI_FNOL_09_Claimant_required_validator` (3 tests); `Web: UI_FNOL_09_Removing_the_only_Claimant_makes_the_step_invalid_again` | Implemented (P6) |
+| UI-FNOL-10 | Risk objects FormArray; advisory if none | FRS §11.2 | Manual (browser: advisory banner) | Implemented (P6) |
+| UI-FNOL-11 | Optional initial reserve + live authority indicator | FRS §11.2; Brief §3.7.2 | see RSV-09; `Web: UI_FNOL_11_Component_and_amount_are_both_given_or_both_empty`; `Web: BR_R_01_*` (4 tests) | Implemented (P6) |
+| UI-FNOL-12 | Review summary; Create disabled until steps 1–2 valid; confirm dialog on warnings | FRS §11.2 | `Web: UI_FNOL_12_Warning_confirmation_dialog`; `Web: UI_FNOL_12_No_warnings_for_a_complete_in_period_claim`; `Web: UI_FNOL_12_Unknown_policy_gives_the_BR_C_06_warning_and_no_period_warning` | Implemented (P6) |
+| UI-FNOL-13 | Success → detail + snackbar with claim number | FRS §11.2; Brief §3.7.2 | Manual (browser: CLM-2026-0000001 created, snackbar, navigated to detail) | Implemented (P6) |
+| UI-FNOL-14 | Server 422 errors shown inline and at the top of the step | FRS §11.2 | `Web: UI_FNOL_14_Server_errors_mapped_to_controls`; `Web: UI_FNOL_14_Keys_become_control_paths`; `Web: UI_FNOL_14_Each_key_is_shown_at_the_top_of_its_step` | Implemented (P6) |
+| UI-DET-01 | Header: copyable claim no, status chip, policy/client, loss date/cause, handler | FRS §11.3; Brief §3.7.3 | Manual (browser) | Implemented (P6) |
+| UI-DET-02 | Transition menu of valid next statuses; confirm dialog; Closed pre-flight checklist | FRS §11.3; Brief §3.7.3 | `Web: UI_DET_02_Menu_shows_only_valid_next_statuses`; `Web: UI_DET_02_Reopen_is_hidden_from_a_handler_and_shown_to_a_supervisor`; `Web: CC_01`..`CC_04` checklist (7 tests) | Implemented (P6) |
+| UI-DET-03 | Tab 1 Overview: loss details, severity badge, estimate, editable notes | FRS §11.3 | Manual (browser) | Implemented (P6) |
+| UI-DET-04 | Tab 2 Parties: list with role badge/contact/active; add inline; remove disabled for last Claimant | FRS §11.3 | `Web: UI_DET_04_Remove_disabled_for_last_claimant`; `Web: UI_DET_04_A_claimant_can_go_while_another_active_claimant_remains` | Implemented (P6) |
+| UI-DET-05 | Tab 3 Reserves: summary cards (current + pending, amber) | FRS §11.3 | Manual (browser) | Implemented (P6) |
+| UI-DET-06 | History table: Date, Type, Component, Amount ±colour, Status, Submitted By, Approved By | FRS §11.3 | Manual (browser) | Implemented (P6) |
+| UI-DET-07 | Add Reserve slide-in panel with authority indicator | FRS §11.3 | see RSV-09; `Web: D_05_*` and `Web: BR_C_06_D_22_D_26_Blockers_use_the_API_wording` | Implemented (P6) |
+| UI-DET-08 | Approve/Reject on pending rows for supervisor/manager only | FRS §11.3; Brief §3.7.3 | see SEC-03 | Implemented (P6) |
+| UI-DET-09 | Retract for the submitter's own pending rows | FRS §11.3 | `Web: UI_DET_09_Retract_only_for_submitter` | Implemented (P6) |
+| UI-DET-10 | GL badge Pending/Posted/Failed + retry | FRS §11.3 | `Web: UI_DET_10_Retry_only_for_an_approved_row_whose_posting_failed`; manual (Pending → Posted by polling) | Implemented (P6) |
+| UI-DET-11 | Tab 4 Documents: list, download via SAS in a new tab, upload with progress | FRS §11.3; Brief §3.7.3 | `Web: DOC_*` pre-check (2 tests); manual (upload + signed URL) | Implemented (P6) |
+| UI-DET-12 | Tab 5 Audit: reverse-chronological, paged, event badge, user, related link; read-only | FRS §11.3; Brief §3.7.3 | `Web: UI_DET_12_Related_entities_link_to_their_tab`; manual (browser) | Implemented (P6) |
+| UI-DET-13 | Validation issues visible with Acknowledge (D-07) | D-07 | Manual (browser) | Implemented (P6) |
+| UI-GEN-01 | Lazy-loaded features: claims-list, fnol-intake, claim-detail | FRS §11.4; Brief §3.7.4; D-17 | Manual: `ng build` lists `claims-list-routes`, `fnol-intake-routes`, `claim-detail-routes` | Implemented (P6) |
+| UI-GEN-02 | Typed service layer only; no HttpClient in components | FRS §11; Brief §3.7 | ESLint `no-restricted-imports` on `HttpClient` (`npm run lint`) | Implemented (P6) |
+| UI-GEN-03 | Mock auth + role switcher; interceptor adds Bearer; header shows user and role | FRS §11.4; Brief §3.7.4 | `Web: UI_GEN_03_Interceptor_adds_bearer`; `Web: UI_GEN_03_Other_hosts_get_no_token` | Implemented (P6) |
+| UI-GEN-04 | Material theme with a custom primary palette | FRS §11.4; Brief §3.7.4 | Manual | Implemented (P6) |
+| UI-GEN-05 | Errors → snackbars with severity (ProblemDetails aware) | FRS §11.4; Brief §3.7.4 | `Web: UI_GEN_05_Error_interceptor_shows_snackbar`; `Web: UI_GEN_05_A_401_clears_the_session` | Implemented (P6) |
+| UI-GEN-06 | Loading states; buttons disabled while pending | FRS §11.4; Brief §3.7.4 | `Web: UI_GEN_06_Loading_counter_rises_and_falls_with_the_call`; manual (buttons disabled while pending) | Implemented (P6) |
+| UI-GEN-07 | Reactive forms with Material error patterns | FRS §11.4; Brief §3.7.2 | covered by UI-FNOL tests | Implemented (P6) |
+| UI-GEN-08 | Usable at 1280px+; no console errors | FRS §11.4; Brief §6.2 | Manual (1366 px viewport; no console errors on list, FNOL, detail) | Implemented (P6) |
 
 ---
 

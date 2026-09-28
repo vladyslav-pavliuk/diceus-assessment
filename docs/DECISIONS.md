@@ -55,6 +55,7 @@ Markers used below:
 | D-40 | Phase 3 API, read-side and pipeline choices (+ two decisions by Vlad) | PROPOSED (Q1, Q2 ACCEPTED) |
 | D-41 | Phase 4 reserves, GL posting, SLA job and Hangfire choices (+ two decisions by Vlad) | PROPOSED (Q1, Q2 ACCEPTED) |
 | D-42 | Phase 5 documents: upload orchestration, sanitising, allowlist and sniffing, SAS, local fallback (+ three decisions by Vlad) | PROPOSED (Q1–Q3 ACCEPTED) |
+| D-43 | Phase 6 Angular frontend: toolchain, service layer, auth session, errors, state, UI mirrors of domain rules, scope additions (+ three open questions) | PROPOSED |
 
 ---
 
@@ -715,7 +716,7 @@ Uploading a second file with the same name would silently **overwrite** the firs
 **Recommendation.**
 - The summary DTO adds `causeOfLossCode`, `causeOfLossName`, `assignedHandlerName`, `severity` and `isSlaBreached`.
 - `status` may repeat (`?status=Open&status=Draft`).
-- The handler filter is an autocomplete over `GET /users?role=handler` that resolves to `assignedHandlerId`.
+- The handler filter is an autocomplete over `GET /users?role=handler` that resolves to `assignedHandlerId`. **Amended by D-43 (2026-09-28):** the autocomplete lists every active user (`GET /users` without `role`), because D-18 assigns the creator of any role.
 - `totalReserves` = net Σ CurrentAmount over all components, including negative Subrogation. It is a display figure only. The $10M check uses the gross figure from D-11.
 - Paging: `page` (1-based) and `pageSize` (default 25, max 100). Response `{items, totalCount, page, pageSize}`.
 - Sort: `ReportedDate desc` (ASSUMPTION).
@@ -1291,3 +1292,80 @@ One Phase 3 defect was found and fixed (item 18).
 **Rationale.** Each item is small and reversible, and each is covered by a test named after its rule, so none is a silent choice. Q1–Q3 are flagged
 because they change written text (CLAUDE.md rule 4's "every command", D-28's NFC, FRS §9.7's wording).
 **Status:** PROPOSED (2026-09-28). Q1–Q3 ACCEPTED by Vlad (2026-09-28); items 1–20 await review.
+
+## D-43 — Phase 6 Angular frontend
+**Context.** Phase 6 built `web/claims-ui` (FRS §11, brief §3.7). Vlad accepted the plan before any code was written (2026-09-28): Angular 22, primary
+colour `#1B4F72`, the handler filter over all users, and Link policy / Acknowledge / Assign handler / reserve-limit override in scope. Three points are
+judgement calls a reviewer will probe (Q1–Q3), implemented as recommended; each is a small change to reverse. The other items are choices where the FRS and
+the brief say nothing. None changes an FRS business rule: every rule the UI shows is re-checked by the API.
+
+**Decided by Vlad in the plan (2026-09-28).**
+- **Angular 22.2** (the current stable; the brief says "18+"), Angular Material 22 with the M3 `mat.theme()` API. The custom palette is generated from
+  `#1B4F72` by `ng generate @angular/material:theme-color` (`src/styles/_theme-colors.scss`). Status-badge colours are separate tokens, fixed by FRS §11.1.
+- **The handler filter lists every active user** (`GET /users` without `role`). **Amends D-29**, which said `?role=handler`: D-18 assigns the creator of
+  any role as the handler, so a supervisor's claims could not otherwise be filtered.
+- **In scope beyond the literal FRS §11.3 list:** Link policy (BR-C-06; without it an Unknown-policy claim can never take a reserve) and Acknowledge issue
+  (D-19; without it a BR-C-02 claim can never be opened), Assign handler (supervisor+, D-18) and the reserve-limit override (manager, BR-R-05). All on
+  endpoints from D-08.
+
+**Open questions (implemented as recommended).**
+- **Q1. The transition dialog's pre-flight checklist blocks the Confirm button.** For Closed (CC-01..03) and Draft → Open (BR-ST-02, D-18, D-19) the dialog
+  computes the conditions from the loaded claim (`shared/domain/transitions.ts`, a copy of `Claim.Status.cs`) and disables Confirm while a blocking one
+  fails; CC-04 only asks for the justification note. (a) Block, as built: the user sees why before asking. (b) Show the list but always allow the request,
+  and let the API's 422 speak. The risk of (a) is a mirror that drifts from the domain; it is small (four predicates, unit-tested), and a stale claim
+  is reloaded on 409. **Recommendation: (a).**
+- **Q2. "Reverse to zero" in the Add Reserve panel.** FRS §11.3 lists Component, Amount, Reason. D-05 defines Reverse (the API computes `−CurrentAmount`),
+  and it is the natural way to release a reserve before closing (CC-04). The panel offers it as a toggle once the component exists; Add/Adjust are
+  inferred and sent without `transactionType`, exactly as D-05 describes. **Recommendation: keep.**
+- **Q3. A new tab signs in automatically as `handler.alex`** (`environment.defaultUsername`), and the toolbar switcher changes user. The alternative is a
+  user-picker page before anything loads. Auto sign-in keeps the demo one click shorter; the token is still a real signed JWT from the API (D-16).
+  **Recommendation: keep.**
+
+**Choices (ASSUMPTION unless cited).**
+1. **Toolchain.** `ng new` defaults: standalone components, zoneless change detection, **Vitest** as the `ng test` runner, the 2025 file-name style
+   (`claims-list.ts`, not `claims-list.component.ts`). Forms are **Reactive Forms** as the prompt requires, not the experimental Signal Forms. Component
+   state and derived values are signals; HTTP stays `Observable`.
+2. **Lazy loading (D-17, verified).** One route file per feature, default-exported and loaded with `loadChildren`; the file imports its component, so the
+   production build lists exactly three named lazy chunks: `claims-list-routes`, `fnol-intake-routes`, `claim-detail-routes`. `claims/new` is declared
+   before `claims/:id`.
+3. **Typed service layer (FRS §11, UI-GEN-02).** `ClaimsApiService`, `ReferenceApiService` and `AuthService` are the only classes that import
+   `HttpClient`; an ESLint `no-restricted-imports` rule fails the lint anywhere else (checked with a probe file). The interfaces in `core/models` mirror
+   the Application DTOs field for field; enums are string unions with the backend's names.
+4. **Session.** The dev token and user live in **sessionStorage**, so each browser tab can be a different user (a handler submits in one tab, a supervisor
+   approves in another). Switching user reloads the current screen so every role-dependent control is rebuilt. A 401 clears the session.
+5. **Interceptors.** `authInterceptor` adds the Bearer token and a new `X-Correlation-Id` (`crypto.randomUUID()`, the GUID "D" form of D-39 Q1) to API
+   calls only, never to other hosts such as a SAS URL. `loadingInterceptor` drives the global progress bar (the typeahead and the GL poll opt out).
+   `errorInterceptor` turns every error into an `ApiError` (status, title, the 422 `errors` dictionary), shows a snackbar with a severity (422/409/413 warn,
+   others error) and rethrows, so forms can place messages and stores can reload.
+6. **422 → controls.** `applyServerErrors` maps the API's property-path keys (D-40 item 4: `Parties[0].FirstName`) onto control paths, sets a `server`
+   error (cleared by the next edit) and returns every key, so FNOL also lists the messages at the top of the step they belong to (FRS §11.2).
+7. **Idempotency-Key (D-24).** Sent on create claim (one key per FNOL form), submit reserve (one per attempt, renewed after a success) and upload (one per
+   file). The API releases a key after any non-2xx (D-40 item 12), so a corrected resubmission with the same key is fine.
+8. **State.** The claims list keeps filters and page in the **URL** (shareable, survives refresh and back); `switchMap` drops stale responses. FNOL keeps
+   its state in the typed `FormGroup`, with derived values (`computed`) over `form.events`. The detail screen's `ClaimDetailStore` is provided by the **page
+   component**, not the route: a route-level provider outlives the page. After every command the store reloads what changed; nothing is updated
+   optimistically. A 409 reloads the claim.
+9. **FNOL rules mirrored client-side, with the API's wording** (`shared/forms/validators.ts`): BR-C-01 against an injected `CLOCK` (the front end's
+   TimeProvider, no tolerance, D-32); BR-C-07 on the trimmed length (as `LossEvent` trims); BR-C-03 as a FormArray validator (the UI requires a Claimant at
+   intake although the API would accept a Draft without one, D-06); BR-R-01 per component; the three intake Warnings (D-06) for the confirm dialog.
+   The in-force badge compares the loss date's **UTC** calendar date inclusively, like the server (D-32), and uses the policy dates, not `Status` (D-33).
+10. **Loss date and time are two controls.** Angular writes a view change only to the model, so a date picker and a time picker bound to one control do not
+    see each other (found in the browser, see the AI log). `lossTime` is merged into `lossDate`; the merged value is written without re-rendering the date
+    input's text.
+11. **"Unknown policy" disables the initial reserve**, since the API would answer 422 on `PolicyId` (BR-C-06, D-40 item 5).
+12. **Role gating.** What a role can never do is hidden (Approve/Reject for a handler, SEC-03; transitions above the user's `minimumRole`; Assign for a
+    handler; the override for non-managers). What this particular row forbids is disabled with the API's own message as a tooltip (self-approval,
+    tier too low). Retract appears only on the submitter's own pending row; Retry only on an approved row whose posting failed.
+13. **GL posting feedback.** While an approved row is still `Pending`, the store re-reads the reserves every 3 s, at most 10 times, as a background
+    request; the badge turns Posted without a manual refresh.
+14. **Documents.** A client pre-check (allowlisted extension, non-empty, ≤ 50 MB) avoids a pointless upload; the API still sniffs the content (DOC-05).
+    Download opens the listed SAS URL while it has more than a minute left, otherwise fetches a fresh one (D-08), opening the tab first because browsers
+    block a `window.open` that follows an async call.
+15. **Claim notes have no client length limit** (`Claims.Notes` is NVARCHAR(MAX)).
+16. **Layout** targets 1280 px and wider (FRS §11.4): the body has `min-width: 1280px`; narrower windows scroll horizontally.
+17. **Money** is shown as USD (D-33) with `Intl`/`CurrencyPipe`. The UI never computes a stored amount; balances it shows as previews
+    ("new balance") are recomputed by the API.
+
+**Rationale.** Each item is small and reversible and is either unit-tested (95 Vitest tests named after the matrix IDs) or was exercised in the browser
+against the running API (see `docs/ai-log/phase-6.md`), so none is a silent choice.
+**Status:** PROPOSED (2026-09-28). The plan-level choices above were accepted by Vlad; Q1–Q3 and items 1–17 await review.
