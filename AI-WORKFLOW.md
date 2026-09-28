@@ -151,6 +151,7 @@ SLA runs only while a replica is up, the `minReplicas 1` runbook step).
   - Phase 6: dropping the per-screen stops (`phase-6.md` §1).
 - These were Claude's recommendations, explicitly accepted by Vlad: D-01..D-35 and D-37 (`phase-0.md` §6), D-41 Q1–Q2, and D-42..D-44
   Q1–Q3.
+- Phase 8: Vlad chose which review findings to fix (F1–F3) and approved D-45 (`phase-8.md` §7).
 - The numbered items of D-38 and D-40..D-44 are still **PROPOSED** in DECISIONS.md (the per-decision questions are accepted; the items are not).
 - **Recorded review comments from Vlad: none yet.** Every "What Vlad changed or rejected in review" section in `docs/ai-log/` is still a
   placeholder.
@@ -189,7 +190,14 @@ Every item below is recorded in `docs/ai-log/`. Most were caught by Claude's own
 - The prompt's suggested SLA flag column would have bumped `UpdatedAt` and reset the 48-hour clock it measures (D-01, `phase-0.md` §4).
 - One seeded manager could never have approved their own >$100k transaction, so there are two per role (D-16).
 
-**Found in the Phase 8 review (pending Vlad's decision):** see the Phase 8 entry in `docs/ai-log/phase-8.md`.
+**Found in the Phase 8 review of our own code** (`docs/ai-log/phase-8.md` §4). Vlad approved the fixes: "Apply F1, F2 and F3, then merge to main".
+- F1: FRS §5.4's "Policy not found" warning had not been reconciled with the 422 for an unknown `policyId`. D-40 item 6 was amended; no code
+  change.
+- F2: a submitter could *reject* their own pending reserve. It is now refused, and the submitter retracts instead (D-45, mutation-checked test).
+- F3: the Add Reserve authority preview ignored the $10M escalation, so it showed "Auto-approved" where the API would require a manager. Fixed,
+  with tests.
+
+F2 and F3 were Claude's own gaps from Phases 4 and 6, found only when the finished code was read again as a reviewer would.
 
 > **TODO (Vlad):**
 > - Choose the **two or more** examples you will walk through live. Item 1 (keys) and item 5 (a test that passed by luck) show judgement
@@ -202,7 +210,7 @@ Every item below is recorded in `docs/ai-log/`. Most were caught by Claude's own
 
 > **TODO (Vlad):** your judgement. Facts from the logs you may want to weigh:
 > - The spec analysis in Phase 0 produced 37 decisions, 19 of them new findings.
-> - There are 692 backend and 95 frontend tests, named after the rule IDs, including forced-interleaving concurrency tests and mutation checks.
+> - There are 695 backend and 100 frontend tests, named after the rule IDs, including forced-interleaving concurrency tests and mutation checks.
 > - All three Azure defects (§5 items 8–10) passed every local check and failed only against real Azure.
 > - The Phase 6 date-picker bug was invisible to the unit tests and found only in the browser.
 > - Where did AI save the most time? Where did reviewing its output cost more than writing it yourself would have?

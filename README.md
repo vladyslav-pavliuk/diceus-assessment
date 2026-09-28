@@ -88,8 +88,8 @@ dotnet test ClaimsModule.sln
 cd web/claims-ui && npx ng lint && npx ng test --watch=false && npx ng build
 ```
 
-The .NET suite has 692 tests (324 domain, 89 application, 279 integration). The integration tests need Docker: they start SQL Server 2022
-and Azurite through Testcontainers and never touch the compose database. The Angular suite has 95 Vitest tests.
+The .NET suite has 695 tests (326 domain, 89 application, 280 integration). The integration tests need Docker: they start SQL Server 2022
+and Azurite through Testcontainers and never touch the compose database. The Angular suite has 100 Vitest tests.
 
 **End-to-end smoke test** (the brief §7.2 demo flow, over HTTP):
 
@@ -214,7 +214,7 @@ offers only the valid next statuses; confirmation dialogs guard each change, and
 | Rule | What happens |
 |---|---|
 | Reserve authority is based on the single transaction's absolute amount | ≤ $10,000 is auto-approved; > $10,000 needs a supervisor or manager; > $100,000 needs a manager |
-| BR-R-03 | Self-approval gives 422 "Self-approval is not permitted." |
+| BR-R-03 | Self-approval gives 422 "Self-approval is not permitted." The submitter withdraws their own pending reserve with Retract, not Reject (D-45) |
 | BR-R-05 | Approved reserves may not exceed $10M per claim without a manager override |
 | GL posting | Every approval triggers a Hangfire job that writes GL_POSTING_SIMULATED exactly once |
 | SLA job | Every 15 minutes it flags Draft/Open claims with no update for 48 hours in the audit log, without changing their status |

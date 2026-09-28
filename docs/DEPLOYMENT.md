@@ -46,7 +46,7 @@ ci ──┬── image (ghcr.io) ─────────────┐
 
 | Job | What it does |
 |---|---|
-| `ci` | `ci.yml`: .NET build (warnings are errors) + 692 tests incl. Testcontainers; Angular lint, 95 unit tests, production build |
+| `ci` | `ci.yml`: .NET build (warnings are errors) + the full test suite (695 at Phase 8) incl. Testcontainers; Angular lint, unit tests (100), production build |
 | `image` | builds the Dockerfile's `runtime` target, pushes `ghcr.io/<owner>/claims-api:<sha>`, checks it is anonymously pullable |
 | `infra` | `main.bicep` → creates the signing key once → EF Core migrations bundle against Azure SQL → `infra/sql/grant-api-identity.sql` (runner IP allowed only for this job) |
 | `api` | `api.bicep` with the new image and `min_replicas`; waits for `/health/ready` |

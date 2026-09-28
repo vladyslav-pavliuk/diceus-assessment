@@ -65,7 +65,7 @@ Phase 8: final review. Act as a strict DICEUS reviewer using brief §6 and §6.1
 | Hangfire idempotency key strategy | ✅ | `GlIdempotencyKey.cs:13` gives `Reserve:{componentId}:Change:{seq}`. `GlPostingStore.cs:27-38, 71-77` is a single-statement compare-and-set on `Pending`. Unique indexes back it up. Tests: `BR_R_06_*` (3), `JOB_02_*` |
 | Blob storage behind an interface | ✅ | `IStorageService` (`Application/Abstractions/IStorageService.cs:9`), with Azure and local implementations chosen by `Storage:Provider` (`StorageRegistration.cs:33-36`). Tests: `BR_D_03_Provider_is_selected_from_configuration`, and Azurite/local tests of both implementations |
 
-## 4. Findings in our own code and docs (item 3), awaiting Vlad's approval; nothing changed in code
+## 4. Findings in our own code and docs (item 3); F1–F3 applied after Vlad's approval (see §7)
 
 The rules checked and found **correct**:
 - **Authority tiers:** `≤ 10,000` / `≤ 100,000` on `|amount|` (`ReserveAuthorityPolicy.cs:18,23`).
@@ -117,5 +117,40 @@ The rules checked and found **correct**:
    against the DECISIONS index and corrected before the summary.
 5. A helper shell function named `g` collided with a zsh alias. The shell failed; renamed. No effect on output.
 
-## 7. What Vlad changed or rejected in review
-_To be filled in from Vlad's review of this phase. Do not invent entries._
+## 7. Vlad's decisions after the summary
+Vlad's reply (verbatim):
+```
+Apply F1, F2 and F3, then merge to main
+```
+F5–F7 were not chosen, so they stay open.
+
+What was applied:
+- **F1 (docs only).** D-40 item 6 amended. The FRS §5.4 "Policy not found" warning is BR-C-06 (a null `policyId`, the Unknown Policy toggle).
+  A `policyId` that matches no policy stays 422. The matrix row API-01 now cites it.
+- **F2 → D-45 (ACCEPTED).**
+  - Domain: `Claim.RejectReserveTransaction` refuses the submitter with 422 "Self-rejection is not permitted. Use Retract to withdraw your own
+    pending reserve." under `ReserveApproval`. A supervisor self-rejecting above $100k gets both reasons, as for approval. The new message is
+    in `DomainMessages`.
+  - UI: `reserveRowActions` disables Reject on the user's own row with the same message.
+  - Tests: `Dom: D_45_Self_rejection_is_refused_and_points_to_retract`, `Dom: D_45_Supervisor_self_rejecting_above_100000_gets_both_reasons`,
+    `Int: D_45_Self_rejection_returns_422_and_the_submitter_retracts_instead`, `Web: D_45_Self_rejection_is_disabled_and_Retract_is_offered`.
+  - Mutation check: with the guard removed, both domain tests fail; with it restored, both pass.
+  - D-25's list of 422 cases was cross-referenced. The matrix gains row RSV-10.
+- **F3.** `requiredAuthority(amount, context?)` and `exceedsAggregateLimit` in `shared/domain/authority.ts` mirror
+  `Claim.WouldExceedAggregateLimit`: cost components only, increases only, `>`, and the override lifts it. `AuthorityIndicator` takes an
+  optional `aggregate` input and shows the FRS §8 warning when the transaction escalates. The Add Reserve panel passes the claim's approved
+  aggregate, the limit and the override flag from GET /reserves. FNOL is unchanged, because nothing is approved at intake. Four
+  `Web: BR_R_05_*` tests were added, and the matrix RSV-09 row updated.
+- **Housekeeping.** The new guard shifted line numbers in `Claim.Reserves.cs` and `reserve-actions.ts`. The evidence script was re-run and
+  the nine affected matrix cells and the REVIEW-PREP references were updated. The script started at matrix §2, so §1 stayed untouched.
+  REVIEW-PREP Q12/Q13 and rehearsal task 4 were updated; task 4's escalation half is now built, so the task became a history-table change.
+- **Verification.**
+  - `dotnet build`: 0 warnings.
+  - `dotnet test`: **695/695** (326 domain, 89 application, 280 integration).
+  - `ng lint` was clean, `ng test`: **100/100**, and `ng build` succeeded.
+  - All test names in the matrix resolve (480).
+- `phase-8-review` merged into `main`.
+
+One slip during the fixes: the first patch of the shifted matrix references matched the same ID in the §1 mapping table and stopped on
+an assertion before writing anything. It was re-run starting at §2. This is the third time that table has caught a script
+(phase-2 §6 item 10, phase-3 §6 item 11), which is why every matrix script now starts at §2.

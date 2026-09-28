@@ -350,7 +350,7 @@ flowchart LR
   plain database user with reader/writer rights plus `claims_app`, and owns `[HangFire]`. Blob storage has shared keys disabled, so SAS URLs
   are user-delegation SAS. The JWT key is a Key Vault reference. GitHub signs in to Azure with an OIDC federated credential (D-44).
 - **Pipeline** (`.github/workflows/deploy.yml`, manual). In order:
-  1. `ci.yml`: build, 692 .NET tests, Angular lint/test/build.
+  1. `ci.yml`: build, .NET tests, Angular lint/test/build.
   2. Push the image to ghcr.io.
   3. `infra/main.bicep`.
   4. The signing key, once.

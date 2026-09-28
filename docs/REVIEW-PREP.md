@@ -139,7 +139,9 @@ Test: `Int: BR_A_01_Db_trigger_blocks_raw_update_and_delete`.
 - `CanApprove` is hierarchical, so a manager can approve a supervisor-tier transaction.
 - Boundaries are tested at 10,000 / 10,000.01 / 100,000 / 100,000.01, both signs (`Dom: BR_R_02_Tier_boundaries`,
   `tests/ClaimsModule.Domain.Tests/Reserves/ReserveAuthorityTests.cs:21`).
-- The UI mirrors it in `web/claims-ui/src/app/shared/domain/authority.ts:11-21` (`Web: RSV_09_*`).
+- The UI mirrors it in `web/claims-ui/src/app/shared/domain/authority.ts:49` (`Web: RSV_09_*`). In the Add Reserve panel the preview also
+  applies the $10M escalation (`exceedsAggregateLimit`, `:30`). That was Phase 8 finding F3: before the fix, a $5k increase on a claim at
+  $9,998,000 previewed "Auto-approved", while the API sent it to a manager.
 
 **13. How do you stop self-approval? When is it 403 and when 422?**
 - The aggregate collects every violation (`src/ClaimsModule.Domain/Claims/Claim.Reserves.cs:121-137`):
@@ -147,6 +149,9 @@ Test: `Int: BR_A_01_Db_trigger_blocks_raw_update_and_delete`.
   - role below the tier → "Your role does not have authority to approve this reserve amount.";
   - the $10M limit re-checked.
 - All three are 422 with the FRS §8 messages.
+- **Reject** follows the same rule (D-45, Phase 8): the submitter gets 422 "Self-rejection is not permitted. Use Retract to withdraw your own
+  pending reserve." (`Claim.Reserves.cs:156-159`). Rejected always means another person's decision; the submitter's own withdrawal is
+  Cancelled (retract).
 - A handler calling approve at all gets **403** from the endpoint policy (`ReservesController.cs:61`): that role can *never* approve.
   422 is used when it depends on the data (D-25).
 - Tests: `Int: BR_R_03_Self_approval_returns_422_with_exact_message`, `Int: SEC_02_Handler_approve_returns_403`,
@@ -157,8 +162,8 @@ Test: `Int: BR_A_01_Db_trigger_blocks_raw_update_and_delete`.
 - **At submission:** a transaction that would take approved reserves over $10M, with no override, is escalated to Manager and returns the
   FRS warning (`Claim.Reserves.cs:83-84, 106`).
 - **At approval:** the limit is checked again, because other approvals may have moved the total (`:131-135`).
-- **The override:** only a Manager can set it, with a reason (`:191-210`; the endpoint is Manager-only, `ClaimsController.cs:128-129`).
-- The limit itself: `WouldExceedAggregateLimit` (`:313-317`). Exactly $10M is allowed; a decrease never trips it.
+- **The override:** only a Manager can set it, with a reason (`:197-216`; the endpoint is Manager-only, `ClaimsController.cs:128-129`).
+- The limit itself: `WouldExceedAggregateLimit` (`:319-323`). Exactly $10M is allowed; a decrease never trips it.
 - Tests: `Dom: BR_R_05_*` (8), `Int: BR_R_05_Crossing_10M_warns_escalates_and_waits_for_the_override`.
 
 **15. Walk me through the claim state machine.**
@@ -196,7 +201,7 @@ Test: `Int: BR_A_01_Db_trigger_blocks_raw_update_and_delete`.
   Each failed run rolls back, so the row stays Pending.
 - **The last attempt** (`:61-80`) sets `Failed` with the same compare-and-set on `Pending`, writes GL_POSTING_FAILED in a new unit of work,
   and rethrows so the dashboard shows the job Failed.
-- **Recovery:** `POST …/retry-posting` puts it back to Pending, audited and re-enqueued (`Claim.Reserves.cs:218-231`).
+- **Recovery:** `POST …/retry-posting` puts it back to Pending, audited and re-enqueued (`Claim.Reserves.cs:224-237`).
 - **Lost enqueue** (crash between commit and enqueue): `GlPostingSweeperJob` re-enqueues approved rows still Pending after 5 minutes. The
   ReserveHistory row *is* the outbox (D-15).
 - Tests: `Int: JOB_06_*`, `Int: JOB_11_Sweeper_enqueues_stranded_postings`, `Int: API_25_Retry_failed_posting`.
@@ -255,7 +260,7 @@ Test: `Int: BR_A_01_Db_trigger_blocks_raw_update_and_delete`.
 - Tests: `Web: UI_FNOL_*`.
 
 **23. How is the UI gated by role, and how do you guarantee no component calls HTTP directly?**
-- `web/claims-ui/src/app/shared/domain/reserve-actions.ts:39-62` decides which buttons a row shows:
+- `web/claims-ui/src/app/shared/domain/reserve-actions.ts:42-68` decides which buttons a row shows:
   - Approve/Reject only for supervisor+ on pending rows, disabled with the API message for self-approval or too little authority;
   - Retract only for the submitter;
   - Retry only for a Failed posting.
@@ -341,16 +346,18 @@ Check that the fixed query count still holds (`API_02_List_runs_a_fixed_number_o
 
 ### Task 4: modify a frontend component
 
-*"Show the required authority on every pending row of the reserve history, and include the $10M escalation in the Add Reserve preview."*
-This is also Phase 8 finding F3.
+*"In the reserve history, show the required authority on every pending row, and flag the transactions that crossed the $10M limit."*
+The DTO already carries `requiredAuthority` and `exceedsAggregateLimit` (`web/claims-ui/src/app/core/models/reserve.models.ts`).
 
 | Step | File |
 |---|---|
-| New column in the history table (the DTO already has `requiredAuthority`) | `web/claims-ui/src/app/features/claim-detail/tabs/reserves-tab.html` (column defs at lines 101–161), `reserves-tab.ts` (column list) |
-| Escalation: `requiredAuthority(amount, { approvedAggregate, limit, overrideSet, component })` returns Manager when the approved total would cross $10M | `web/claims-ui/src/app/shared/domain/authority.ts`, `shared/ui/authority-indicator.ts` (new inputs), `features/claim-detail/tabs/add-reserve-panel.html` (line 69) |
-| Tests | `web/claims-ui/src/app/shared/domain/authority.spec.ts` (`RSV_09_*`) |
+| New "Authority" column: tier badge on pending rows, "—" otherwise | `web/claims-ui/src/app/features/claim-detail/tabs/reserves-tab.html` (column defs at lines 101–161), `reserves-tab.ts` (column list) |
+| A "$10M" warning badge when `exceedsAggregateLimit`, with the FRS §8 text as a tooltip (`AGGREGATE_LIMIT_WARNING`) | `reserves-tab.html`, `web/claims-ui/src/app/shared/domain/authority.ts`, `shared/ui/badge-tones.ts` |
+| Pure helper + test (e.g. `authorityBadge(row)` → tone and label) | `web/claims-ui/src/app/shared/domain/reserve-actions.ts` + `.spec.ts` |
 
-The mirror must match `Claim.Reserves.cs` `WouldExceedAggregateLimit` (line 313): cost components only, increases only, `>` not `≥`.
+For reference, the escalation-aware Add Reserve preview built for Phase 8 finding F3 is in `shared/domain/authority.ts` (`exceedsAggregateLimit`),
+`shared/ui/authority-indicator.ts` (the `aggregate` input) and `add-reserve-panel.ts` (`aggregate`). It mirrors `Claim.Reserves.cs`
+`WouldExceedAggregateLimit`: cost components only, increases only, `>` not `≥`.
 
 ### Task 5: multi-currency reserves (a design sketch, not a full build)
 

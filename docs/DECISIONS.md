@@ -57,6 +57,7 @@ Markers used below:
 | D-42 | Phase 5 documents: upload orchestration, sanitising, allowlist and sniffing, SAS, local fallback (+ three decisions by Vlad) | PROPOSED (Q1–Q3 ACCEPTED) |
 | D-43 | Phase 6 Angular frontend: toolchain, service layer, auth session, errors, state, UI mirrors of domain rules, scope additions (+ three decisions by Vlad) | PROPOSED (Q1–Q3 ACCEPTED) |
 | D-44 | Phase 7 Azure deployment and CI/CD: Bicep, passwordless SQL, least-privilege API database user, OIDC pipeline, smoke test (+ three decisions by Vlad) | PROPOSED (Q1–Q3 ACCEPTED) |
+| D-45 | No self-rejection of a reserve transaction: the submitter retracts instead (Phase 8 finding F2) | ACCEPTED |
 
 ---
 
@@ -638,6 +639,7 @@ messages. BR-R-03 says 422 for self-approval. CLAUDE.md rule 12 maps `Forbidden 
   - A supervisor approving more than $100k → "Your role does not have authority to approve this reserve amount."
   - Self-approval → "Self-approval is not permitted."
   - A non-submitter retracting → "Only the submitter may retract a pending reserve." (ASSUMPTION: the wording is mine).
+  - Self-rejection → "Self-rejection is not permitted. Use Retract to withdraw your own pending reserve." (added by D-45, Phase 8).
   - Reopen by a handler → 403. It is a role-only rule: BR-ST-04 plus D-09 MinimumRole.
 
 **Rationale.** 403 means "you are not allowed this action at all". 422 means "this action is not valid for this particular data". The FRS's own messages
@@ -1057,6 +1059,11 @@ nothing, or refinements of earlier decisions. None changes an FRS business rule.
 5. **Initial reserve at FNOL.** It is always an Add transaction, submitted through the same domain method as Phase 4. The FNOL form has no reason
    field, so a blank reason becomes "Initial reserve at FNOL.". An initial reserve without a policy returns 422 on `PolicyId` (BR-C-06).
 6. **Unknown ids.** An unknown id in the URL gives 404. An unknown id in the body gives 422 ("Policy was not found.", "User was not found.").
+   **Amended in Phase 8 (finding F1, ACCEPTED by Vlad 2026-09-28):** FRS §5.4 gives "Policy not found" as a *Warning* example. That warning is
+   BR-C-06 "No policy linked": the intake is created with `PolicyId = null` (the FNOL "Unknown policy" toggle), and the Draft gets the warning
+   issue. A `policyId` that matches no policy is a different case: the client sent a reference that does not exist, which is a malformed
+   request. Persisting it as a warning with the id silently dropped would hide client bugs, so it stays **422** on `PolicyId`
+   (`CreateClaimCommandValidator.cs:37-40`; `Int: API_01_Unknown_policy_id_returns_422`). No code change.
 7. **Responses.**
    - Create: 201 with a Location header and `ClaimCreatedDto` (id, number, status, validation issues, initial reserve with its warnings).
    - Status: 200 with `{claimId, previousStatus, status}`.
@@ -1475,3 +1482,24 @@ propagation timing (each step that depends on it retries).
 **Rationale.** Every credential is either an Entra token or a single Key Vault secret nobody handles; the API has the least database and storage rights
 the features need; the pipeline is re-runnable end to end; and each manual step is a one-time act of an owner that no pipeline can do for itself.
 **Status:** PROPOSED (2026-09-28). Q1–Q3 ACCEPTED by Vlad (2026-09-28); items 1–17 await review.
+
+## D-45 — Self-rejection of a reserve transaction (Phase 8 finding F2)
+**Context.** BR-R-03 / FRS §6.3 forbid only self-*approval*. FRS §6.4 gives the submitter a separate way to withdraw a pending transaction:
+retract (→ Cancelled, RESERVE_RETRACTED). Until Phase 8 the aggregate let a submitter with supervisor+ authority *reject* their own pending
+transaction. That had the same financial effect as a retract, but it recorded RESERVE_REJECTED by the submitter: a "second-person decision"
+that no second person made. The FRS says nothing about it (NOT SPECIFIED).
+
+**Options.**
+- (a) Keep it (FRS-literal) and document it.
+- (b) Refuse self-rejection with 422, and point to Retract.
+
+**Decision.** (b). `Claim.RejectReserveTransaction` adds "Self-rejection is not permitted. Use Retract to withdraw your own pending reserve."
+under `ReserveApproval` (ASSUMPTION wording). Like self-approval it is data-dependent, so 422, not 403 (D-25). A supervisor self-rejecting
+above $100k gets both reasons, as for approval. The UI disables Reject on the user's own row with the same message; Retract stays available.
+Tests: `Dom: D_45_Self_rejection_is_refused_and_points_to_retract`, `Dom: D_45_Supervisor_self_rejecting_above_100000_gets_both_reasons`
+(mutation-checked: both fail without the guard), `Int: D_45_Self_rejection_returns_422_and_the_submitter_retracts_instead`,
+`Web: D_45_Self_rejection_is_disabled_and_Retract_is_offered`.
+
+**Rationale.** Approve and Reject are the two outcomes of the four-eyes decision, so the same "not your own" rule applies to both. The audit log
+then says exactly who decided and why: Rejected always means another person's decision, and Cancelled means the submitter withdrew it.
+**Status:** ACCEPTED (Vlad, 2026-09-28: "Apply F1, F2 and F3").
