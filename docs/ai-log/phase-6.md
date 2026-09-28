@@ -123,7 +123,17 @@ option, not in the FRS §11.3 field list) and **Q3** (auto sign-in as `handler.a
 decided by Vlad in the plan.
 
 ## 6. Open items for Vlad
-- Review D-43 Q1–Q3 and items 1–17 (PROPOSED).
+- ~~Decide D-43 Q1–Q3.~~ Done, see §7. Review D-43 items 1–17 (PROPOSED).
 - `.claude/launch.json` (the dev-server entry the desktop app's browser pane uses) is left uncommitted: decide whether it belongs in the repo.
 - Phase 7: set `environment.ts` `apiBaseUrl` to the Container App URL at build time; add the Static Web App origin to `Cors:AllowedOrigins`.
 - The local `sqlserver-data` volume still holds the stale Phase 1 database.
+
+## 7. Vlad's decisions after the summary
+Vlad's reply (verbatim):
+```
+Accept Q1, Q2 and Q3, merge to main
+```
+Applied: D-43 Q1 (the pre-flight checklist blocks Confirm), Q2 ("Reverse to zero" in the Add Reserve panel) and Q3 (auto sign-in as `handler.alex`)
+marked ACCEPTED. No code change was needed: all three were already implemented as recommended. The `phase-6-frontend` branch was merged into `main`.
+`.claude/launch.json` stays uncommitted (not decided).
+

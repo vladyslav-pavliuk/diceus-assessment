@@ -55,7 +55,7 @@ Markers used below:
 | D-40 | Phase 3 API, read-side and pipeline choices (+ two decisions by Vlad) | PROPOSED (Q1, Q2 ACCEPTED) |
 | D-41 | Phase 4 reserves, GL posting, SLA job and Hangfire choices (+ two decisions by Vlad) | PROPOSED (Q1, Q2 ACCEPTED) |
 | D-42 | Phase 5 documents: upload orchestration, sanitising, allowlist and sniffing, SAS, local fallback (+ three decisions by Vlad) | PROPOSED (Q1–Q3 ACCEPTED) |
-| D-43 | Phase 6 Angular frontend: toolchain, service layer, auth session, errors, state, UI mirrors of domain rules, scope additions (+ three open questions) | PROPOSED |
+| D-43 | Phase 6 Angular frontend: toolchain, service layer, auth session, errors, state, UI mirrors of domain rules, scope additions (+ three decisions by Vlad) | PROPOSED (Q1–Q3 ACCEPTED) |
 
 ---
 
@@ -1308,18 +1308,20 @@ the brief say nothing. None changes an FRS business rule: every rule the UI show
   (D-19; without it a BR-C-02 claim can never be opened), Assign handler (supervisor+, D-18) and the reserve-limit override (manager, BR-R-05). All on
   endpoints from D-08.
 
-**Open questions (implemented as recommended).**
+**Open questions (implemented as recommended; all three ACCEPTED by Vlad on 2026-09-28).**
 - **Q1. The transition dialog's pre-flight checklist blocks the Confirm button.** For Closed (CC-01..03) and Draft → Open (BR-ST-02, D-18, D-19) the dialog
   computes the conditions from the loaded claim (`shared/domain/transitions.ts`, a copy of `Claim.Status.cs`) and disables Confirm while a blocking one
   fails; CC-04 only asks for the justification note. (a) Block, as built: the user sees why before asking. (b) Show the list but always allow the request,
   and let the API's 422 speak. The risk of (a) is a mirror that drifts from the domain; it is small (four predicates, unit-tested), and a stale claim
   is reloaded on 409. **Recommendation: (a).**
+  **Decision (Vlad, 2026-09-28): (a).**
 - **Q2. "Reverse to zero" in the Add Reserve panel.** FRS §11.3 lists Component, Amount, Reason. D-05 defines Reverse (the API computes `−CurrentAmount`),
   and it is the natural way to release a reserve before closing (CC-04). The panel offers it as a toggle once the component exists; Add/Adjust are
   inferred and sent without `transactionType`, exactly as D-05 describes. **Recommendation: keep.**
+  **Decision (Vlad, 2026-09-28): keep.**
 - **Q3. A new tab signs in automatically as `handler.alex`** (`environment.defaultUsername`), and the toolbar switcher changes user. The alternative is a
   user-picker page before anything loads. Auto sign-in keeps the demo one click shorter; the token is still a real signed JWT from the API (D-16).
-  **Recommendation: keep.**
+  **Recommendation: keep.** **Decision (Vlad, 2026-09-28): keep.**
 
 **Choices (ASSUMPTION unless cited).**
 1. **Toolchain.** `ng new` defaults: standalone components, zoneless change detection, **Vitest** as the `ng test` runner, the 2025 file-name style
@@ -1368,4 +1370,4 @@ the brief say nothing. None changes an FRS business rule: every rule the UI show
 
 **Rationale.** Each item is small and reversible and is either unit-tested (95 Vitest tests named after the matrix IDs) or was exercised in the browser
 against the running API (see `docs/ai-log/phase-6.md`), so none is a silent choice.
-**Status:** PROPOSED (2026-09-28). The plan-level choices above were accepted by Vlad; Q1–Q3 and items 1–17 await review.
+**Status:** PROPOSED (2026-09-28). The plan-level choices and Q1–Q3 were accepted by Vlad (2026-09-28); items 1–17 await review.
