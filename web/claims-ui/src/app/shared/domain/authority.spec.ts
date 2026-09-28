@@ -1,4 +1,9 @@
-import { AUTHORITY_LABELS, requiredAuthority } from './authority';
+import {
+  AggregateContext,
+  AUTHORITY_LABELS,
+  exceedsAggregateLimit,
+  requiredAuthority,
+} from './authority';
 
 // RSV-09: the live authority indicator (FRS §11.2 step 3, §11.3 Add Reserve panel). The tiers mirror
 // ReserveAuthorityPolicy in the Domain (FRS §6.3, BR-R-02): ≤ $10,000 auto, ≤ $100,000 supervisor,
@@ -39,5 +44,39 @@ describe('RSV-09 authority indicator', () => {
       Supervisor: '⚠ Supervisor approval required',
       Manager: '⚠ Manager approval required',
     });
+  });
+});
+
+// BR-R-05 in the Add Reserve preview (Phase 8 finding F3): mirrors Claim.WouldExceedAggregateLimit.
+describe('RSV-09 / BR-R-05 aggregate escalation in the preview', () => {
+  const nearLimit: AggregateContext = {
+    component: 'Indemnity',
+    approvedAggregate: 9_998_000,
+    aggregateLimit: 10_000_000,
+    overrideSet: false,
+  };
+
+  it('BR_R_05_A_small_increase_that_crosses_10M_previews_Manager', () => {
+    expect(requiredAuthority(5_000)).toBe('Auto');
+    expect(requiredAuthority(5_000, nearLimit)).toBe('Manager');
+    expect(exceedsAggregateLimit(5_000, nearLimit)).toBe(true);
+  });
+
+  it('BR_R_05_Exactly_10M_keeps_the_normal_tier', () => {
+    expect(requiredAuthority(2_000, nearLimit)).toBe('Auto');
+    expect(requiredAuthority(2_000.01, nearLimit)).toBe('Manager');
+  });
+
+  it('BR_R_05_Override_decreases_and_subrogation_keep_the_normal_tier', () => {
+    expect(requiredAuthority(5_000, { ...nearLimit, overrideSet: true })).toBe('Auto');
+    expect(requiredAuthority(-50_000, nearLimit)).toBe('Supervisor');
+    expect(requiredAuthority(5_000, { ...nearLimit, component: 'SubrogationRecoverable' })).toBe(
+      'Auto',
+    );
+  });
+
+  it('BR_R_05_No_amount_means_no_indicator_even_near_the_limit', () => {
+    expect(requiredAuthority(null, nearLimit)).toBeNull();
+    expect(exceedsAggregateLimit(null, nearLimit)).toBe(false);
   });
 });

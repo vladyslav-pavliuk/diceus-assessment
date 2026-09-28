@@ -45,6 +45,15 @@ describe('SEC-03 / UI-DET-08 approve and reject are role-gated', () => {
     );
   });
 
+  it('D_45_Self_rejection_is_disabled_and_Retract_is_offered', () => {
+    const own = row({ submittedByUserId: supervisor.id });
+    const actions = reserveRowActions(own, supervisor, false);
+    expect(actions.rejectBlockedReason).toBe(
+      'Self-rejection is not permitted. Use Retract to withdraw your own pending reserve.',
+    );
+    expect(actions.showRetract).toBe(true);
+  });
+
   it('BR_R_02_Supervisor_cannot_approve_a_manager_tier_transaction', () => {
     const large = row({ amount: 250_000, requiredAuthority: 'Manager' });
     const actions = reserveRowActions(large, supervisor, false);

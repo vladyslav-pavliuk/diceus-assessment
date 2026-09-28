@@ -32,6 +32,7 @@ import {
   inferTransactionType,
   submissionBlocker,
 } from '../../../shared/domain/reserve-submission';
+import { AggregateContext } from '../../../shared/domain/authority';
 import { isReadOnlyStatus } from '../../../shared/domain/reserve-actions';
 import { applyServerErrors } from '../../../shared/forms/server-errors';
 import {
@@ -123,6 +124,19 @@ export class AddReservePanel {
   protected readonly amount = computed(() =>
     effectiveAmount(this.transactionType(), toNumber(this.value().amount), this.existing()),
   );
+  /** BR-R-05: lets the authority preview show the escalation to Manager, as the API will. */
+  protected readonly aggregate = computed<AggregateContext | null>(() => {
+    const component = this.value().component;
+    const reserves = this.reserves();
+    return component
+      ? {
+          component,
+          approvedAggregate: reserves.approvedAggregate,
+          aggregateLimit: reserves.aggregateLimit,
+          overrideSet: reserves.reserveLimitOverride,
+        }
+      : null;
+  });
   protected readonly projectedBalance = computed(() => {
     const amount = this.amount();
     return amount == null ? null : (this.existing()?.currentAmount ?? 0) + amount;
