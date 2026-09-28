@@ -49,6 +49,22 @@ yes, push it
 add this fix to the phase-refinement log
 ```
 
+### Prompts 6–8: the fix not visible, AI-WORKFLOW.md, deploy
+
+```
+yes, push it
+```
+
+```
+I still don't see fixed button problem. mdc-button mat-mdc-button-base mdc-button--unelevated mat-mdc-unelevated-button mat-unthemed is still stick to the upper area.
+```
+
+(with a screenshot identical to the first one)
+
+```
+yes please, but before that, update AI-workflow with the examples of most valuable things you generated incorrect or suboptimal output and I corrected you. and please auto finish all my TODOs based on our conversations.
+```
+
 ## 2. What was generated: backend
 
 - **Unused code.** Found in three ways: a one-off analyzer build with IDE0005/IDE0051/IDE0052/IDE0059/IDE0060/IDE0035/CA1823 raised to warnings;
@@ -104,6 +120,22 @@ add this fix to the phase-refinement log
 - **Fix:** `margin-top: 12px` on the shared `.tab__actions` rule in `tabs.scss`, so both rows are fixed. After hot reload the measured gap was 12 px,
   and a screenshot confirmed it. Pre-existing since `fd3a78a` (Phase 6), not caused by this refactor.
 - **Delivery:** `fix/tab-actions-spacing` → `main` (`4cbb1ed`), branch deleted. The push waited for Vlad's explicit "yes, push it".
+- **"Still not fixed".** Vlad still saw the button touching the field. After a full reload, the only local dev server (serving this checkout) showed
+  the 12 px gap. The deployed Static Web App's bundle still had the old rule (`.tab__actions{…gap:8px;margin-bottom:8px}`): the last Deploy run
+  was 16:58 UTC, before the fix, and pushing `main` runs CI only. The fix was correct; Claude's report had not said that it was live only locally.
+  Vlad approved a deploy, to run after the AI-WORKFLOW update.
+
+## 5a. AI-WORKFLOW.md completed
+
+- Vlad asked Claude to fill in every `TODO (Vlad)` block. The Phase 8 header had said Claude must not. That instruction is superseded by the request,
+  and the header now says who wrote the blocks and from which sources.
+- Filled in from the logs, the git history and this conversation, with sources cited: tools (§1); how the context was prepared and how the prompts
+  changed (§2.4); a verbatim refinement prompt and the picks for the live walkthrough (§3); what was designed, reviewed by eye, accepted on tests, and
+  hand-written (none, per git) (§4); **§5.1, seven corrections that came from Vlad, V1–V7**; the assessment (§6).
+- Checked against the logs before committing: the first draft gave an invented reason for dropping the Phase 6 per-screen stops ("once the backend
+  contract was stable"). It was replaced with Vlad's actual words from `phase-6.md` §1.
+- Still open: **DEL-04, the raw session exports** (11 sessions). They need a secret review, and the app allows six exports per hour. DEL-03 is
+  now Done in the requirements matrix.
 
 ## 6. Verification
 
@@ -122,7 +154,11 @@ add this fix to the phase-refinement log
    `[DisableConcurrentExecution]` attribute by hand.
 3. **Trimmed one comment too far.** In `party-form.ts`, "the name rules read the type: re-check them whenever it changes" was first cut to "the name
    rules read the type", which loses the point. Restored before committing.
-4. **Missed the spacing bug.** The frontend pass checked builds, tests and lint but no rendered screens, so the button touching the field above it
+4. **Reported a fix without saying it was local only.** "The Link policy and Cancel buttons now have space above them" was true on the dev server and
+   not on the deployed site, which Vlad was looking at. The deploy step was only mentioned after he reported it still broken.
+5. **Invented a reason in the AI-WORKFLOW draft.** "Per-screen stops were dropped once the backend contract was stable" was not in any log; corrected
+   to Vlad's quoted reason before committing.
+6. **Missed the spacing bug.** The frontend pass checked builds, tests and lint but no rendered screens, so the button touching the field above it
    was found by Vlad, not by the AI.
 
 ## 8. What Vlad changed or rejected
@@ -130,3 +166,5 @@ add this fix to the phase-refinement log
 - After reviewing the backend refactor, Vlad accepted it as delivered (no changes) and asked for it to be merged and pushed.
 - For the frontend, Vlad set the direction: templates in separate files, and the same comment policy as the backend.
 - Vlad found the Link policy spacing issue by eye and asked for a top margin; the fix went in as asked.
+- Vlad caught that the fix was not visible where he looked (the deployed site), which exposed the unstated local-only verification.
+- Vlad overrode the Phase 8 rule that Claude must not write the AI-WORKFLOW judgement sections, and asked for them to be completed.
