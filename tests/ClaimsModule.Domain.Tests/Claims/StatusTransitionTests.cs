@@ -1,6 +1,7 @@
 using ClaimsModule.Domain.Claims;
 using ClaimsModule.Domain.Claims.Events;
 using ClaimsModule.Domain.Common;
+using ClaimsModule.Domain.Documents;
 using ClaimsModule.Domain.Reserves;
 using ClaimsModule.Domain.Users;
 using static ClaimsModule.Domain.Tests.TestData;
@@ -361,7 +362,9 @@ public sealed class StatusTransitionTests
                 nameof(Claim.LinkPolicy) => () => claim.LinkPolicy(InForcePolicy(), Handler, Now),
                 nameof(Claim.UpdateNotes) => () => claim.UpdateNotes("New note", Handler),
                 nameof(Claim.ChangeSeverity) => () => claim.ChangeSeverity(ClaimSeverity.Critical, Handler),
-                nameof(Claim.AddDocument) => () => claim.AddDocument(SequentialGuid.NewGuid(), ClaimsModule.Domain.Documents.DocumentType.Invoice, "a.pdf", "p/a.pdf", "application/pdf", 10, null, Handler, Now),
+                nameof(Claim.AddDocument) => () => claim.AddDocument(
+                    DocumentBlobPath.For(Guid.NewGuid(), claim.Id, SequentialGuid.NewGuid(), SanitisedFileName.From("a.pdf")),
+                    DocumentType.Invoice, 10, null, Handler, Now),
                 nameof(Claim.SetReserveLimitOverride) => () => claim.SetReserveLimitOverride(true, "Reason", Manager, Now),
                 _ => throw new ArgumentOutOfRangeException(nameof(action)),
             };

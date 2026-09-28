@@ -36,5 +36,9 @@ public static class ErrorKeys
     public const string ValidationIssue = "ValidationIssue";
     public const string Note = "Note";
     public const string Document = "Document";
-    public const string FileName = "FileName";
+
+    // Document upload (D-42): keyed by the multipart form fields, so the UI can put each message next to its control.
+    public const string File = "File";
+    public const string DocumentType = "DocumentType";
+    public const string Notes = "Notes";
 }

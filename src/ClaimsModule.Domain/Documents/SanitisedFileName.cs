@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using ClaimsModule.Domain.Claims;
 using ClaimsModule.Domain.Common;
@@ -5,14 +6,23 @@ using ClaimsModule.Domain.Common;
 namespace ClaimsModule.Domain.Documents;
 
 /// <summary>
-/// A file name that is safe to use as the last segment of a blob path (BR-D-01, D-28):
-/// directory components are stripped (so "../../x" cannot escape the claim's folder), control and
-/// reserved characters are removed or replaced, Unicode is normalised to NFC, Windows device names
-/// are neutralised, and the length is capped at 200 characters with the extension kept.
+/// A file name that is safe to use as the last segment of a blob path (BR-D-01, D-28, D-42):
+/// <list type="number">
+/// <item>unpaired UTF-16 surrogates are dropped (they would make normalisation throw);</item>
+/// <item>Unicode is normalised to NFKC, so compatibility look-alikes become the plain characters they imitate
+/// (fullwidth "．．／" becomes "../", "‥" becomes "..", "ﬁ" becomes "fi") <em>before</em> anything is checked;</item>
+/// <item>directory components are stripped, so "../../x" or "C:\x" cannot escape the claim's folder;</item>
+/// <item>control, invisible-format (bidi overrides, zero-width) and line/paragraph separator characters are removed;</item>
+/// <item>reserved characters and the slash look-alikes NFKC keeps ("∕", "⁄", "⧸", "⧹", "∖") become "_";</item>
+/// <item>trailing dots and spaces go, Windows device names are neutralised, and the length is capped at 200
+/// characters with the extension kept.</item>
+/// </list>
 /// </summary>
 public sealed record SanitisedFileName
 {
     public const int MaxLength = 200;
+
+    public const string InvalidMessage = "The file name is empty or invalid.";
 
     private static readonly HashSet<string> ReservedDeviceNames = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -25,9 +35,19 @@ public sealed record SanitisedFileName
 
     public string Value { get; }
 
+    /// <summary>The extension including the dot (".pdf"), or empty when the name has none.</summary>
+    public string Extension
+    {
+        get
+        {
+            var dot = Value.LastIndexOf('.');
+            return dot > 0 ? Value[dot..] : string.Empty;
+        }
+    }
+
     public static SanitisedFileName From(string? originalFileName)
     {
-        var name = (originalFileName ?? string.Empty).Normalize(NormalizationForm.FormC);
+        var name = DropUnpairedSurrogates(originalFileName ?? string.Empty).Normalize(NormalizationForm.FormKC);
 
         // Keep only the last path segment, whichever separator the client used.
         var lastSeparator = name.LastIndexOfAny(['/', '\\']);
@@ -39,12 +59,12 @@ public sealed record SanitisedFileName
         var builder = new StringBuilder(name.Length);
         foreach (var character in name)
         {
-            if (char.IsControl(character))
+            if (IsInvisible(character))
             {
                 continue;
             }
 
-            builder.Append(character is '<' or '>' or ':' or '"' or '|' or '?' or '*' ? '_' : character);
+            builder.Append(IsReservedOrSlashLookalike(character) ? '_' : character);
         }
 
         // Windows ignores trailing dots and spaces, so "a.pdf." and "a.pdf" would collide.
@@ -52,7 +72,7 @@ public sealed record SanitisedFileName
 
         if (name.Length == 0 || name.All(character => character == '.'))
         {
-            throw new BusinessRuleViolationException(ErrorKeys.FileName, "The file name is empty or invalid.");
+            throw new BusinessRuleViolationException(ErrorKeys.File, InvalidMessage);
         }
 
         var dot = name.LastIndexOf('.');
@@ -66,6 +86,40 @@ public sealed record SanitisedFileName
     }
 
     public override string ToString() => Value;
+
+    private static string DropUnpairedSurrogates(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+        for (var index = 0; index < value.Length; index++)
+        {
+            var character = value[index];
+            if (char.IsHighSurrogate(character) && index + 1 < value.Length && char.IsLowSurrogate(value[index + 1]))
+            {
+                builder.Append(character).Append(value[++index]);
+            }
+            else if (!char.IsSurrogate(character))
+            {
+                builder.Append(character);
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>Characters that print nothing or reorder what is printed: C0/C1 controls, format characters, line and paragraph separators.</summary>
+    private static bool IsInvisible(char character) =>
+        char.GetUnicodeCategory(character) is UnicodeCategory.Control
+            or UnicodeCategory.Format
+            or UnicodeCategory.LineSeparator
+            or UnicodeCategory.ParagraphSeparator;
+
+    private static bool IsReservedOrSlashLookalike(char character) =>
+        character is '<' or '>' or ':' or '"' or '|' or '?' or '*'
+            or '\u2215' // DIVISION SLASH
+            or '\u2044' // FRACTION SLASH
+            or '\u29F8' // BIG SOLIDUS
+            or '\u29F9' // BIG REVERSE SOLIDUS
+            or '\u2216'; // SET MINUS
 
     private static string Truncate(string name)
     {

@@ -1,4 +1,5 @@
 using ClaimsModule.Domain.Common;
+using ClaimsModule.Domain.Documents;
 using ClaimsModule.Domain.Reserves;
 
 namespace ClaimsModule.Domain.Claims.Events;
@@ -62,4 +63,6 @@ public sealed record GlPostingRetryRequested(Guid ClaimId, Guid TransactionId, s
 
 public sealed record ReserveRetracted(Guid ClaimId, Guid TransactionId, decimal Amount) : IDomainEvent;
 
-public sealed record DocumentUploaded(Guid ClaimId, Guid DocumentId, string DocumentName) : IDomainEvent;
+/// <summary>FRS §13: audited as DOCUMENT_UPLOADED with RelatedEntityId = documentId.</summary>
+public sealed record DocumentUploaded(
+    Guid ClaimId, Guid DocumentId, string DocumentName, DocumentType DocumentType, string ContentType, long FileSizeBytes) : IDomainEvent;
