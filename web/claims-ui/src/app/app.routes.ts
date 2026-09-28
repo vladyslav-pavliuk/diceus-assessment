@@ -13,5 +13,9 @@ export const routes: Routes = [
     path: 'claims/new',
     loadChildren: () => import('./features/fnol-intake/fnol-intake.routes'),
   },
+  {
+    path: 'claims/:id',
+    loadChildren: () => import('./features/claim-detail/claim-detail.routes'),
+  },
   { path: '**', redirectTo: 'claims' },
 ];

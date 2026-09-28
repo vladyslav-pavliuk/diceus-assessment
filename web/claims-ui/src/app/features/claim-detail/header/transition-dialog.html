@@ -1,0 +1,77 @@
+<h2 mat-dialog-title>Move claim to {{ targetLabel }}</h2>
+<mat-dialog-content>
+  <app-error-summary [messages]="serverErrors()" title="The status could not be changed:" />
+
+  @if (target === 'Reopened') {
+    <p>The claim is reopened and returns to <strong>Open</strong> straight away (BR-ST-04).</p>
+  }
+
+  @if (checklist.length > 0) {
+    <div class="checklist" role="list" aria-label="Pre-flight checklist">
+      <div class="checklist__title">Pre-flight checklist</div>
+      @for (item of checklist; track $index) {
+        <div
+          class="checklist__item"
+          role="listitem"
+          [class.checklist__item--ok]="item.satisfied"
+          [class.checklist__item--fail]="!item.satisfied && item.blocking"
+          [class.checklist__item--warn]="!item.satisfied && !item.blocking"
+        >
+          <mat-icon>{{
+            item.satisfied ? 'check_circle' : item.blocking ? 'cancel' : 'error_outline'
+          }}</mat-icon>
+          <span class="checklist__code">{{ item.code }}</span>
+          <span>{{ item.label }}</span>
+        </div>
+      }
+      @if (blocked) {
+        <div class="checklist__hint">Resolve the items marked ✗ before changing the status.</div>
+      }
+    </div>
+  }
+
+  @if (data.transition.requiresReason || target !== 'Closed') {
+    <mat-form-field class="field">
+      <mat-label
+        >{{ reasonLabel() }}{{ data.transition.requiresReason ? '' : ' (optional)' }}</mat-label
+      >
+      <textarea
+        matInput
+        [formControl]="reason"
+        rows="2"
+        [required]="data.transition.requiresReason"
+      ></textarea>
+      <mat-error>
+        @if (reason.hasError('maxlength')) {
+          At most 500 characters.
+        } @else {
+          A reason is required to move a claim to {{ target }}.
+        }
+      </mat-error>
+    </mat-form-field>
+  }
+
+  @if (needsJustification) {
+    <div class="banner banner--warning">
+      <mat-icon>warning_amber</mat-icon>
+      <span>
+        The claim has open reserves totalling <app-amount [value]="openReserves" />. Explain why it
+        can be closed with reserves outstanding (CC-04).
+      </span>
+    </div>
+    <mat-form-field class="field">
+      <mat-label>Justification note</mat-label>
+      <textarea matInput [formControl]="justification" rows="3" required></textarea>
+      <mat-error>A justification note is required to close a claim with open reserves.</mat-error>
+    </mat-form-field>
+  }
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close [disabled]="pending()">Cancel</button>
+  <button mat-flat-button (click)="confirm()" [disabled]="blocked || pending()">
+    @if (pending()) {
+      <mat-spinner diameter="18" class="inline-spinner" />
+    }
+    Move to {{ targetLabel }}
+  </button>
+</mat-dialog-actions>

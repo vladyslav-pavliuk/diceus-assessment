@@ -1,0 +1,76 @@
+<div class="tab">
+  <h3 class="tab__heading">
+    Audit log
+    <span class="muted audit__note">Append-only: entries cannot be edited or deleted.</span>
+  </h3>
+
+  @if (page(); as current) {
+    @if (current.items.length === 0) {
+      <app-empty-state icon="history" title="No audit entries" />
+    } @else {
+      <ol class="audit">
+        @for (entry of entries(); track entry.id) {
+          <li class="audit__entry">
+            <div class="audit__time">{{ entry.createdAt | date: 'd MMM y, HH:mm:ss' }}</div>
+            <div class="audit__main">
+              <div class="audit__line">
+                <app-badge [tone]="tone(entry.eventType)">{{ entry.eventType }}</app-badge>
+                <span class="audit__description">{{ entry.description }}</span>
+              </div>
+              <div class="audit__meta muted">
+                <span
+                  ><mat-icon>{{ entry.createdByUserId ? 'person' : 'smart_toy' }}</mat-icon
+                  >{{ entry.createdByName ?? 'System' }}</span
+                >
+                @if (relatedTab(entry.relatedEntityType); as tab) {
+                  <a
+                    [routerLink]="[]"
+                    [queryParams]="{ tab: tab === 'overview' ? null : tab }"
+                    queryParamsHandling="merge"
+                  >
+                    {{ entry.relatedEntityType }}
+                  </a>
+                } @else if (entry.relatedEntityType) {
+                  <span>{{ entry.relatedEntityType }}</span>
+                }
+                @if (entry.oldValue || entry.newValue) {
+                  <button mat-button class="audit__toggle" (click)="toggle(entry)">
+                    {{ expanded().has(entry.id) ? 'Hide details' : 'Details' }}
+                  </button>
+                }
+              </div>
+              @if (expanded().has(entry.id)) {
+                <div class="audit__values">
+                  <div>
+                    <div class="audit__label">Old value</div>
+                    <pre>{{ pretty(entry.oldValue) }}</pre>
+                  </div>
+                  <div>
+                    <div class="audit__label">New value</div>
+                    <pre>{{ pretty(entry.newValue) }}</pre>
+                  </div>
+                </div>
+                @if (entry.correlationId) {
+                  <div class="muted audit__correlation">
+                    Correlation id {{ entry.correlationId }}
+                  </div>
+                }
+              }
+            </div>
+          </li>
+        }
+      </ol>
+      <mat-paginator
+        [length]="current.totalCount"
+        [pageIndex]="pageIndex()"
+        [pageSize]="pageSize"
+        [hidePageSize]="true"
+        showFirstLastButtons
+        (page)="onPage($event)"
+        aria-label="Audit log pages"
+      />
+    }
+  } @else {
+    <div class="muted audit__loading" aria-busy="true">Loading audit log…</div>
+  }
+</div>

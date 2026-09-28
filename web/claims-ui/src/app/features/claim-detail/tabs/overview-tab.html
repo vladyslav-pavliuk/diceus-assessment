@@ -1,0 +1,166 @@
+<div class="tab">
+  <div class="tab__grid">
+    <section class="tab__section">
+      <h3 class="tab__heading">Loss event</h3>
+      <dl class="facts">
+        <div>
+          <dt>Loss date</dt>
+          <dd>{{ claim().lossEvent.lossDate | date: 'd MMM y, HH:mm' }}</dd>
+        </div>
+        <div>
+          <dt>Cause of loss</dt>
+          <dd>
+            {{ claim().lossEvent.causeOfLossName ?? claim().lossEvent.causeOfLossCode }}
+            @if (claim().lossEvent.perilCategory) {
+              <span class="muted">· {{ claim().lossEvent.perilCategory }}</span>
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>Location</dt>
+          <dd>{{ claim().lossEvent.lossLocation || '—' }}</dd>
+        </div>
+        <div>
+          <dt>Estimated loss</dt>
+          <dd>
+            @if (claim().lossEvent.estimatedLossAmount !== null) {
+              {{ claim().lossEvent.estimatedLossAmount | currency: 'USD' }}
+            } @else {
+              —
+            }
+          </dd>
+        </div>
+        <div class="facts__wide">
+          <dt>Description</dt>
+          <dd class="prewrap">{{ claim().lossEvent.lossDescription }}</dd>
+        </div>
+        <div>
+          <dt>Reported</dt>
+          <dd>{{ claim().lossEvent.reportDate | date: 'd MMM y, HH:mm' }}</dd>
+        </div>
+        <div>
+          <dt>Severity</dt>
+          <dd class="severity">
+            <app-badge [tone]="severityTones[claim().severity]">{{ claim().severity }}</app-badge>
+            <mat-form-field class="severity__select" subscriptSizing="dynamic">
+              <mat-select
+                [formControl]="severity"
+                (selectionChange)="saveSeverity($event.value)"
+                aria-label="Change severity"
+              >
+                @for (option of severities; track option) {
+                  <mat-option [value]="option">{{ option }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            @if (savingSeverity()) {
+              <mat-spinner diameter="18" />
+            }
+          </dd>
+        </div>
+      </dl>
+
+      <h3 class="tab__heading">Claim notes</h3>
+      <mat-form-field class="full-width">
+        <mat-label>Notes</mat-label>
+        <textarea
+          matInput
+          [formControl]="notes"
+          rows="5"
+          placeholder="Working notes for this claim"
+        ></textarea>
+      </mat-form-field>
+      @if (notesChanged()) {
+        <div class="tab__actions">
+          <button mat-button (click)="discardNotes()" [disabled]="savingNotes()">Discard</button>
+          <button mat-flat-button (click)="saveNotes()" [disabled]="savingNotes()">
+            @if (savingNotes()) {
+              <mat-spinner diameter="18" class="inline-spinner" />
+            }
+            Save notes
+          </button>
+        </div>
+      }
+    </section>
+
+    <aside class="tab__section">
+      <h3 class="tab__heading">Policy</h3>
+      @if (claim().policyId && !changingPolicy()) {
+        <div class="policy-summary">
+          <div>
+            <div class="policy-summary__number">{{ claim().policyNumber }}</div>
+            <div class="muted">{{ claim().clientName }}</div>
+          </div>
+          @if (!store.isReadOnly()) {
+            <button mat-button (click)="changingPolicy.set(true)">Change</button>
+          }
+        </div>
+      } @else if (!store.isReadOnly()) {
+        @if (!claim().policyId) {
+          <div class="banner banner--warning">
+            <mat-icon>link_off</mat-icon>
+            <span>No policy linked. Policy must be associated before reserves can be set.</span>
+          </div>
+        }
+        <app-policy-typeahead [control]="policy" label="Find policy to link" />
+        <div class="tab__actions">
+          @if (changingPolicy()) {
+            <button mat-button (click)="changingPolicy.set(false)" [disabled]="linking()">
+              Cancel
+            </button>
+          }
+          <button mat-flat-button (click)="linkPolicy()" [disabled]="linking()">
+            @if (linking()) {
+              <mat-spinner diameter="18" class="inline-spinner" />
+            }
+            Link policy
+          </button>
+        </div>
+      } @else {
+        <p class="muted">Unknown policy</p>
+      }
+
+      <h3 class="tab__heading">Validation issues</h3>
+      @if (claim().validationIssues.length === 0) {
+        <p class="muted">No validation issues.</p>
+      }
+      @for (issue of openIssues(); track issue.id) {
+        <div class="issue">
+          <app-badge [tone]="issueTones[issue.severity]">{{ issue.severity }}</app-badge>
+          <div class="issue__body">
+            <div>{{ issue.message }}</div>
+            <div class="muted issue__meta">
+              {{ issue.ruleCode }} · raised {{ issue.raisedAt | date: 'd MMM y, HH:mm' }}
+            </div>
+          </div>
+          @if (issue.severity === 'Warning' && !store.isReadOnly()) {
+            <button
+              mat-stroked-button
+              (click)="acknowledge(issue)"
+              [disabled]="acknowledging() === issue.id"
+            >
+              Acknowledge
+            </button>
+          }
+        </div>
+      }
+      @for (issue of closedIssues(); track issue.id) {
+        <div class="issue issue--closed">
+          <app-badge tone="neutral">{{ issue.status }}</app-badge>
+          <div class="issue__body">
+            <div>{{ issue.message }}</div>
+            <div class="muted issue__meta">
+              {{ issue.ruleCode }}
+              @if (issue.resolvedAt) {
+                · {{ issue.resolvedAt | date: 'd MMM y, HH:mm' }}
+              }
+              @if (issue.resolutionNote) {
+                · “{{ issue.resolutionNote }}”
+              }
+            </div>
+          </div>
+        </div>
+      }
+    </aside>
+  </div>
+</div>

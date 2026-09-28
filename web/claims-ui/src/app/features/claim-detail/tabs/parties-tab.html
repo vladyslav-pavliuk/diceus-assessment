@@ -1,0 +1,112 @@
+<div class="tab">
+  <h3 class="tab__heading">
+    Parties
+    <span class="spacer"></span>
+    @if (!store.isReadOnly() && !addingParty()) {
+      <button mat-stroked-button (click)="addingParty.set(true)">
+        <mat-icon>person_add</mat-icon>
+        Add party
+      </button>
+    }
+  </h3>
+
+  @if (addingParty()) {
+    <app-error-summary [messages]="partyErrors()" />
+    <app-party-form
+      [pending]="savingParty()"
+      (submitted)="addParty($event)"
+      (cancelled)="addingParty.set(false); partyErrors.set([])"
+    />
+    <br />
+  }
+
+  <div class="cards">
+    @for (party of parties(); track party.id) {
+      <div class="party" [class.party--inactive]="!party.isActive">
+        <div class="party__body">
+          <div class="party__name">
+            <app-badge [tone]="party.partyRole === 'Claimant' ? 'info' : 'neutral'">{{
+              label(party.partyRole)
+            }}</app-badge>
+            {{ party.displayName }}
+            @if (!party.isActive) {
+              <app-badge tone="neutral">Inactive</app-badge>
+            }
+          </div>
+          <div class="party__line">
+            <mat-icon>{{ party.partyType === 'Company' ? 'business' : 'person' }}</mat-icon
+            >{{ party.partyType }}
+          </div>
+          @if (party.email) {
+            <div class="party__line"><mat-icon>mail</mat-icon>{{ party.email }}</div>
+          }
+          @if (party.phone) {
+            <div class="party__line"><mat-icon>call</mat-icon>{{ party.phone }}</div>
+          }
+        </div>
+        @if (party.isActive && !store.isReadOnly()) {
+          <span [matTooltip]="removeTooltip(party)">
+            <button
+              mat-icon-button
+              (click)="removeParty(party)"
+              [disabled]="!canRemove(party) || removing() === party.id"
+              [attr.aria-label]="'Remove ' + party.displayName"
+            >
+              <mat-icon>person_remove</mat-icon>
+            </button>
+          </span>
+        }
+      </div>
+    }
+  </div>
+
+  <h3 class="tab__heading">
+    Risk objects
+    <span class="spacer"></span>
+    @if (!store.isReadOnly() && !addingRiskObject()) {
+      <button mat-stroked-button (click)="addingRiskObject.set(true)">
+        <mat-icon>add</mat-icon>
+        Add risk object
+      </button>
+    }
+  </h3>
+
+  @if (addingRiskObject()) {
+    <app-error-summary [messages]="riskObjectErrors()" />
+    <app-risk-object-form
+      [pending]="savingRiskObject()"
+      (submitted)="addRiskObject($event)"
+      (cancelled)="addingRiskObject.set(false); riskObjectErrors.set([])"
+    />
+    <br />
+  }
+
+  @if (claim().riskObjects.length === 0) {
+    <div class="banner banner--info">
+      <mat-icon>info</mat-icon>
+      <span>No risk objects linked.</span>
+    </div>
+  } @else {
+    <div class="cards">
+      @for (riskObject of claim().riskObjects; track riskObject.id) {
+        <div class="party">
+          <div class="party__body">
+            <div class="party__name">
+              <app-badge>{{ riskObject.assetType }}</app-badge>
+              {{ riskObject.assetDescription }}
+              @if (riskObject.isPrimary) {
+                <app-badge tone="accent">Primary</app-badge>
+              }
+            </div>
+            @if (riskObject.damageDescription) {
+              <div class="party__line">{{ riskObject.damageDescription }}</div>
+            }
+            @if (riskObject.assetReference) {
+              <div class="party__line">Ref. {{ riskObject.assetReference }}</div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

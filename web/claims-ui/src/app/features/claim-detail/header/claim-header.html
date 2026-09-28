@@ -1,0 +1,94 @@
+<section class="header card">
+  <div class="header__top">
+    <a mat-icon-button routerLink="/claims" aria-label="Back to claims" matTooltip="Back to claims">
+      <mat-icon>arrow_back</mat-icon>
+    </a>
+    <h1 class="header__number">{{ claim().claimNumber }}</h1>
+    <button
+      mat-icon-button
+      (click)="copyNumber()"
+      matTooltip="Copy claim number"
+      aria-label="Copy claim number"
+    >
+      <mat-icon>content_copy</mat-icon>
+    </button>
+    <app-status-chip [status]="claim().status" />
+    <app-badge [tone]="severityTones[claim().severity]">{{ claim().severity }}</app-badge>
+    @if (claim().isSlaBreached) {
+      <app-badge tone="danger" matTooltip="Not updated for more than 48 hours (FRS §12.2)">
+        <mat-icon class="header__badge-icon">schedule</mat-icon> SLA breached
+      </app-badge>
+    }
+    <span class="spacer"></span>
+
+    @if (transitions().length > 0) {
+      <button mat-flat-button [matMenuTriggerFor]="statusMenu">
+        <mat-icon>swap_horiz</mat-icon>
+        Change status
+        <mat-icon iconPositionEnd>arrow_drop_down</mat-icon>
+      </button>
+      <mat-menu #statusMenu="matMenu" xPosition="before">
+        @for (transition of transitions(); track transition.toStatus) {
+          <button mat-menu-item (click)="openTransition(transition)">
+            <mat-icon>arrow_forward</mat-icon>
+            <span>{{ label(transition.toStatus) }}</span>
+          </button>
+        }
+      </mat-menu>
+    } @else {
+      <button
+        mat-stroked-button
+        disabled
+        matTooltip="No status change is available to your role from this status"
+      >
+        No status changes
+      </button>
+    }
+  </div>
+
+  <dl class="header__facts">
+    <div>
+      <dt>Policy</dt>
+      <dd>
+        @if (claim().policyNumber) {
+          {{ claim().policyNumber }}
+        } @else {
+          <span class="muted">Unknown policy</span>
+        }
+      </dd>
+    </div>
+    <div>
+      <dt>Client</dt>
+      <dd>{{ claim().clientName ?? '—' }}</dd>
+    </div>
+    <div>
+      <dt>Loss date</dt>
+      <dd>{{ claim().lossEvent.lossDate | date: 'd MMM y, HH:mm' }}</dd>
+    </div>
+    <div>
+      <dt>Cause of loss</dt>
+      <dd>{{ claim().lossEvent.causeOfLossName ?? claim().lossEvent.causeOfLossCode }}</dd>
+    </div>
+    <div>
+      <dt>Assigned handler</dt>
+      <dd class="header__handler">
+        {{ claim().assignedHandlerName ?? 'Unassigned' }}
+        @if (canAssign()) {
+          <button
+            mat-icon-button
+            class="header__small-button"
+            (click)="openAssign()"
+            matTooltip="Reassign"
+            aria-label="Reassign handler"
+          >
+            <mat-icon>edit</mat-icon>
+          </button>
+        }
+      </dd>
+    </div>
+    <div>
+      <dt>Reported</dt>
+      <dd>{{ claim().reportedDate | date: 'd MMM y' }}</dd>
+    </div>
+  </dl>
+</section>

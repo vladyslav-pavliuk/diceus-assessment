@@ -1,0 +1,115 @@
+.drawer-container {
+  min-height: 680px;
+  background: transparent;
+  // The closed drawer waits off-canvas to the right. With overflow: hidden, restoring focus after a
+  // dialog could scroll the container sideways and shift the whole tab; clip cannot be scrolled.
+  overflow: clip;
+}
+
+.drawer {
+  width: 420px;
+  border-left: 1px solid var(--mat-sys-outline-variant);
+}
+
+.reserves__title {
+  margin: 0 !important;
+}
+
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.summary-card {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mat-sys-surface);
+}
+
+.summary-card--pending {
+  background: var(--app-warning-bg);
+  border-color: var(--app-warning-border);
+}
+
+.summary-card--empty {
+  background: var(--mat-sys-surface-container-low);
+}
+
+.summary-card__title {
+  font: var(--mat-sys-label-large);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.summary-card__amount {
+  margin: 6px 0 2px;
+  font: var(--mat-sys-headline-small);
+}
+
+.summary-card__label {
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.summary-card__pending {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font: var(--mat-sys-label-medium);
+  color: var(--app-warning-fg);
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.aggregate {
+  margin-bottom: 8px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--mat-sys-surface-container-low);
+}
+
+.aggregate__text {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font: var(--mat-sys-body-medium);
+}
+
+.aggregate__override {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-height: 8px;
+  margin-top: 4px;
+}
+
+.row-note {
+  font: var(--mat-sys-body-small);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row--pending {
+  background: color-mix(in srgb, var(--app-warning-bg) 55%, transparent);
+}
+
+.compact {
+  --mat-button-filled-container-height: 32px;
+  --mat-button-outlined-container-height: 32px;
+  --mat-button-text-container-height: 32px;
+}
+
+.loading-block {
+  padding: 40px;
+  text-align: center;
+  color: var(--mat-sys-on-surface-variant);
+}

@@ -1,0 +1,87 @@
+<form class="panel" [formGroup]="form" (ngSubmit)="submit()">
+  <header class="panel__header">
+    <h2>Add reserve</h2>
+    <button mat-icon-button type="button" (click)="closed.emit()" aria-label="Close panel">
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
+
+  <app-error-summary [messages]="serverErrors()" title="The reserve was not saved:" />
+
+  <mat-form-field>
+    <mat-label>Component</mat-label>
+    <mat-select formControlName="component" required>
+      @for (component of components; track component) {
+        <mat-option [value]="component">{{ label(component) }}</mat-option>
+      }
+    </mat-select>
+    <mat-error>{{ error(form.controls.component) }}</mat-error>
+  </mat-form-field>
+
+  @if (existing(); as current) {
+    <div class="panel__current">
+      <span class="muted">Current balance</span>
+      <app-amount [value]="current.currentAmount" />
+    </div>
+    <mat-button-toggle-group
+      formControlName="mode"
+      class="panel__mode"
+      aria-label="Transaction type"
+    >
+      <mat-button-toggle value="Change">Adjust by amount</mat-button-toggle>
+      <mat-button-toggle value="Reverse" [disabled]="current.currentAmount === 0"
+        >Reverse to zero</mat-button-toggle
+      >
+    </mat-button-toggle-group>
+  }
+
+  @if (blocker(); as reason) {
+    <div class="banner banner--warning">
+      <mat-icon>block</mat-icon>
+      <span>{{ reason }}</span>
+    </div>
+  }
+
+  @if (transactionType() !== 'Reverse') {
+    <mat-form-field>
+      <mat-label>{{
+        transactionType() === 'Add' ? 'Opening amount' : 'Change (+ increase / − decrease)'
+      }}</mat-label>
+      <span matTextPrefix>$&nbsp;</span>
+      <input matInput type="number" step="0.01" formControlName="amount" required />
+      <mat-error>{{ error(form.controls.amount) }}</mat-error>
+    </mat-form-field>
+  }
+
+  <div class="panel__summary">
+    <div>
+      <span class="muted">Transaction type</span>
+      <strong>{{ transactionType() }}</strong>
+    </div>
+    @if (projectedBalance() !== null) {
+      <div>
+        <span class="muted">New balance</span>
+        <app-amount [value]="projectedBalance()!" />
+      </div>
+    }
+  </div>
+
+  <app-authority-indicator [amount]="amount()" />
+
+  <mat-form-field class="panel__reason">
+    <mat-label>Reason</mat-label>
+    <textarea matInput formControlName="changeReason" rows="3" required></textarea>
+    <mat-hint align="end">{{ form.controls.changeReason.value.length }} / 500</mat-hint>
+    <mat-error>{{ error(form.controls.changeReason) }}</mat-error>
+  </mat-form-field>
+
+  <footer class="panel__footer">
+    <button mat-button type="button" (click)="closed.emit()" [disabled]="pending()">Cancel</button>
+    <button mat-flat-button type="submit" [disabled]="pending() || blocker() !== null">
+      @if (pending()) {
+        <mat-spinner diameter="18" class="inline-spinner" />
+      }
+      Submit reserve
+    </button>
+  </footer>
+</form>
