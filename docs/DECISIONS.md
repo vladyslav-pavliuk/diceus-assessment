@@ -53,6 +53,7 @@ Markers used below:
 | D-38 | Phase 1 cross-cutting choices (errors, auth, shadow columns, health, toolchain) | PROPOSED |
 | D-39 | Phase 2 domain and schema choices (+ two open questions) | ACCEPTED |
 | D-40 | Phase 3 API, read-side and pipeline choices (+ two decisions by Vlad) | PROPOSED (Q1, Q2 ACCEPTED) |
+| D-41 | Phase 4 reserves, GL posting, SLA job and Hangfire choices (+ two open questions) | PROPOSED |
 
 ---
 
@@ -879,7 +880,10 @@ NetArchTest.Rules. Versions are pinned in `Directory.Packages.props`. The exact 
 | Testcontainers.MsSql | 4.15.0 | MIT | |
 | Microsoft.NET.Test.Sdk 17.14.1, coverlet.collector 6.0.4, Microsoft.Extensions.TimeProvider.Testing 9.10.0 | | MIT | |
 | dotnet-ef (local tool, `dotnet-tools.json`) | 9.0.20 | MIT | |
-| Hangfire 1.8.x, Azure.Storage.Blobs 12.x, Azure.Identity 1.x | — | LGPL-3.0 / MIT / MIT | added in Phases 4–5 |
+| Hangfire.Core, Hangfire.NetCore, Hangfire.SqlServer, Hangfire.AspNetCore | 1.8.25 | LGPL-3.0 (LICENSE.md in the package) | added in Phase 4 (D-41); used unmodified as a library |
+| Newtonsoft.Json (transitive pin) | 13.0.4 | MIT | Hangfire.Core asks for ≥ 11.0.1; versions below 13.0.1 carry GHSA-5crp-9r3c-p9vr (high), which the NuGet audit fails on |
+| Microsoft.Extensions.Hosting.Abstractions | 9.0.20 | MIT | Infrastructure's hosted service; pinned so Hangfire.NetCore's 3.0.0 floor is not used |
+| Azure.Storage.Blobs 12.x, Azure.Identity 1.x | — | MIT / MIT | added in Phase 5 |
 
 **Amendment (2026-09-27): AutoMapper 14.0.0 has CVE-2026-32933 / GHSA-rvv3-g6hj-g44x (high).** Mapping a deeply self-referencing object graph
 (about 25,000 levels) overflows the stack and kills the process. Affected: every version below 15.1.1 (and 16.0.0–16.1.0). **No 14.x patch exists**; the
@@ -1087,4 +1091,102 @@ nothing, or refinements of earlier decisions. None changes an FRS business rule.
 
 **Rationale.** Each item is small and reversible, and each is covered by a test named after its rule, so none is a silent choice.
 **Status:** PROPOSED (2026-09-28). Q1 and Q2 were decided by Vlad; items 1–17 await review.
+
+## D-41 — Phase 4 reserves, GL posting, SLA job and Hangfire choices
+**Context.** Phase 4 built the reserve commands and endpoints, the GL posting job, the sweeper, the SLA job, the idempotency clean-up
+job and the Hangfire dashboard. The race conditions they defend against are written up in ARCHITECTURE-PLAN §6.1 (R1–R13), before the
+code, as the prompt required. Two points depart from text that was already written down (CLAUDE.md and D-35), so they are open questions
+for Vlad (Q1, Q2). The other items are choices where the FRS and the brief say nothing, or refinements of earlier decisions. None changes an
+FRS business rule.
+
+**Open questions (implemented as recommended; each is a small change to reverse).**
+- **Q1. The GL job's compare-and-set predicate.** CLAUDE.md says `… SET PostingStatus='Posted' WHERE Id=@id AND PostingStatus<>'Posted'`.
+  - (a) As written: `<> 'Posted'`. A **Failed** row can then be posted by any stray copy of the job (a sweeper duplicate, a dashboard requeue, a
+    late retry of an old job), silently, with no GL_POSTING_RETRIED row, and it races the user's retry (ARCHITECTURE-PLAN §6.1 R9).
+  - (b) `= 'Pending' AND ApprovalStatus IN ('Approved','AutoApproved')`, plus `ClaimId` and `IdempotencyKey` matching the job arguments.
+    A Failed posting is posted again only after the audited retry endpoint puts it back to Pending; a job can only ever act on the exact,
+    approved change it was created for.
+  - **Recommendation: (b), implemented.** It is still one conditional UPDATE and still "audit only if exactly 1 row changed", so every
+    guarantee of (a) holds; it only narrows what the job may touch. `JOB_02_A_failed_posting_is_not_posted_by_a_stray_job` fails under (a)
+    (mutation-checked). If accepted, the CLAUDE.md line and REQUIREMENTS-MATRIX JOB-02 should say `= 'Pending'`.
+- **Q2. The exhausted-retries path (amends D-35).** D-35 said: attempts from config (`Jobs:GlPosting:MaxAttempts`), and on the last attempt
+  "catch, set Failed, write GL_POSTING_FAILED, swallow".
+  - The attempt count is a **constant** (`PostGLReserveChangeJob.RetryAttempts = 3`, delays 10 s / 30 s / 60 s, so four runs in about
+    two minutes), because `[AutomaticRetry]` takes only constants; making it configurable needs a custom global filter, which is more
+    plumbing than the demo value is worth.
+  - On the last attempt the job records Failed + GL_POSTING_FAILED in a **new** unit of work (the failed attempt's transaction has rolled back),
+    then **rethrows**, so Hangfire also shows the job as Failed (dashboard, logs) instead of Succeeded. The business state is the same either way.
+  - **Recommendation: accept both.** `Jobs:GlPosting:SimulateFailure` from D-35 is kept.
+
+**Choices (ASSUMPTION unless cited).**
+1. **Jobs are thin; the work is an Application command.** `PostGLReserveChangeJob`, `SlaMonitoringJob`, `GlPostingSweeperJob` open a DI scope
+   per organisation (`JobScopes`: tenant from D-31, a new correlation id per run), then send `PostGlReserveChangeCommand`,
+   `MarkGlPostingFailedCommand`, `DetectSlaBreachesCommand` or `RequeueStrandedGlPostingsCommand`. The pipeline (logging, unit of work)
+   is the same as for HTTP commands, and the compare-and-set plus the audit row share the unit of work's transaction. Infrastructure has no
+   reference to Persistence or EF Core (architecture test).
+2. **The GL job never touches the claim row** (ARCHITECTURE-PLAN §6.1 R10). It uses `ExecuteUpdate`, which bypasses the change tracker, so the
+   claim is not "touched": a system posting neither resets the SLA clock nor makes a user's concurrent edit fail with 409. The ReserveHistory
+   row's UpdatedAt/UserModified (null = system) are set explicitly in the UPDATE.
+3. **`PostingStatus` is an EF concurrency token** (model only, no schema change). A tracked update of a ReserveHistory row (retry, reject,
+   approve) adds `AND PostingStatus = @original`, so every writer of that column is a compare-and-set (R9).
+4. **Database backstop for BR-R-06:** unique filtered index `UX_ClaimAuditLog_RelatedEntityId_GlPostingSimulated` (`WHERE EventType =
+   'GL_POSTING_SIMULATED'`), migration `AddGlPostingAuditBackstop`. The existing `UX_ReserveHistory_IdempotencyKey` guarantees one row per
+   key, not one posting entry per row; this index makes a second posting entry impossible even for a buggy writer.
+5. **A duplicate key at commit is a 409.** The unit of work maps SQL errors 2601/2627 to `ConflictException` (409), like a RowVer
+   mismatch: both mean another request changed the claim first (M2). The 409 title is now generic ("conflicts with the current state of
+   the resource"). Observed in the mutation check: in the same-component race EF issues the UPDATEs first, so the RowVer trips before any
+   INSERT; the mapping is exercised by the backstop test and guards future ordering changes and the other unique indexes.
+6. **Ledger seam:** `IGeneralLedger` (Application) with `SimulatedGeneralLedger` (Infrastructure) that logs the journal. It is called after
+   the compare-and-set and before the audit row, inside the transaction; a failure rolls the whole unit back to Pending (R7). A real ledger
+   would receive the idempotency key so a repeated call cannot post twice, which is what the key is for. (Holding a row lock across a real
+   network call is a production concern; see REVIEW-PREP.)
+7. **Journal lines:** an increase is "DR Change in Outstanding Reserves / CR Outstanding Loss Reserves" (FRS §6.5, verbatim); a decrease
+   reverses the accounts and posts the absolute amount, because a journal line never carries a negative amount. SubrogationRecoverable uses the
+   same accounts (NOT SPECIFIED). `GlJournalEntry` in the Domain.
+8. **`PostingJobId` is written by the job that posts** (or fails), not at enqueue: several jobs can exist for one transaction (retry, sweeper),
+   and the one that posted is the one worth recording. `IBackgroundJobScheduler.EnqueueGlPosting` returns the id for logging only.
+9. **GL retry** (`RetryGlPostingCommand`, D-08): any role; only an approved transaction whose posting is Failed (422 otherwise); allowed on
+   Closed/Withdrawn claims too, because it completes the accounting of a change approved before the claim closed (exception to D-26).
+   Audit GL_POSTING_RETRIED before commit; enqueue after commit. The endpoint answers **202 Accepted**.
+10. **Sweeper (D-15):** every 5 minutes, per organisation, approved rows still Pending with `ApprovedAt < now − 5 min`, at most 100 per run,
+    oldest first. The grace period covers the normal enqueue plus the job's own retries.
+11. **SLA job (D-01, FRS §12.2):** per organisation; `COALESCE(UpdatedAt, CreatedAt) < now − 48h` (strict: exactly 48h is not a breach);
+    a new entry when the last one is at least 24h old (inclusive: "24+ hours"); NewValue `{status, lastUpdatedAt, hoursSinceUpdate}`;
+    description verbatim. `[DisableConcurrentExecution]` (a distributed lock in Hangfire's SQL storage) prevents overlapping runs from
+    double-recording (R11). Rules and thresholds live in `Domain/Claims/SlaPolicy`.
+12. **Recurring jobs have no automatic retry** (`Attempts = 0`): the next occurrence applies the same state-based rule, and a failed run stays
+    visible in the dashboard. Schedules (UTC): SLA `*/15 * * * *`, sweeper `*/5 * * * *`, idempotency clean-up `0 3 * * *`.
+13. **Idempotency clean-up** (D-24 retention 24h): a daily job that calls `IIdempotencyStore.PurgeAsync` directly. It is housekeeping of an
+    HTTP-layer table, not a business action, so there is no command and no audit row (same reasoning as token issuance in D-08).
+14. **Hangfire hosting.** Storage in the application database, schema `[HangFire]`, created and upgraded by Hangfire itself on first use
+    (`PrepareSchemaIfNecessary`), not by EF migrations; the database user therefore needs DDL rights on the first start (revisit in Phase 7
+    with the `claims_app` role of D-39 item 15). The `JobStorage` is registered in DI before `AddHangfire`, so every Hangfire service uses it
+    rather than the process-wide `JobStorage.Current`. `Jobs:RunServer` (default true) lets the tests run without a server. Recurring jobs are
+    registered by a hosted service at start-up (`AddOrUpdate` is idempotent). While Container Apps has scaled to zero nothing runs (D-36).
+15. **Dashboard:** `/hangfire`, **Manager role** through the normal authorization pipeline (`RequireAuthorization`), and **read-only**
+    (`IsReadOnlyFunc`): no requeue or delete buttons, so the only way to post a failed posting again is the audited retry endpoint, and there
+    are no cookie-authenticated POSTs (no CSRF surface). A browser cannot send a Bearer header when it navigates, so under `/hangfire` only, the
+    first visit may carry `?access_token=` (the hand-off ASP.NET Core documents for SignalR); once valid, the token is kept in an HttpOnly,
+    Secure, SameSite=Strict cookie scoped to `/hangfire` and expiring with the token. Elsewhere neither the query string nor the cookie is a
+    credential (tested). Request logging records the path without the query string.
+16. **Reserve endpoints.** POST `/reserves` → 201 with `{component, transaction, warnings}` and no Location (there is no single-transaction
+    GET, as for parties, D-40 item 7). The PUT alias (D-04) → 200 with the same body. approve / reject / retract → 200 with the transaction.
+    `reserve-limit-override` → 204. GET `/reserves` → components in FRS §6.2 order, every transaction newest first with submitter / approver /
+    rejecter names, `totalReserves` (net, D-29), `approvedAggregate` (cost components, D-11), `aggregateLimit`, `reserveLimitOverride`. Three
+    SQL queries, whatever the history size.
+17. **Validator vs aggregate for reserve amounts.** The validator checks what the request alone decides: component defined; explicit Add
+    → BR-R-01; explicit Adjust → non-zero; Reverse → no amount; omitted type → an amount is present; 4 decimals; reason present and ≤ 500.
+    Whether an omitted type means Add or Adjust depends on the claim, so the sign rule for that case is the aggregate's. Both layers key their
+    errors with the FRS §8 names (`ReserveAmount`, `ReserveComponent`) or the domain keys (`ChangeReason`, `TransactionType`, `PolicyId`),
+    so one field always has one key, whichever layer caught it. (The FNOL initial reserve keeps its `InitialReserve.*` keys, D-40 item 4.)
+18. **Approve by a handler:** 403 at the endpoint (Supervisor policy, D-25). The aggregate still refuses it with the FRS §8 message (422) if the
+    policy were ever removed; that domain behaviour is unchanged from Phase 2 and tested there.
+19. **Test hosts.** The HTTP tests run on the API host with no Hangfire server; jobs are asserted in the real Hangfire storage. The job tests run
+    on a second host with its own database and a `FakeTimeProvider`, and call the jobs directly with a chosen attempt. One test starts a real
+    `BackgroundJobServer` to prove the whole path (enqueue → activation from DI → posting). The concurrency tests use a before-commit hook that
+    holds each racing request until all have loaded the claim, so the worst interleaving is forced rather than hoped for.
+
+**Rationale.** Each item is small and reversible, and each is covered by a test named after its rule (or, for items 14 and 15, by the
+container smoke run recorded in `docs/ai-log/phase-4.md`), so none is a silent choice.
+**Status:** PROPOSED (2026-09-28). Q1 and Q2 need Vlad's decision; items 1–19 await review.
 

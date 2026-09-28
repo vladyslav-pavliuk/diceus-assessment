@@ -41,8 +41,9 @@ amount, balance, sequence and key columns. (D-22)
 
 ## Hangfire
 **How is the GL job idempotent under concurrent execution?**
-It never checks and then acts. One transaction runs a conditional `UPDATE … WHERE PostingStatus <> 'Posted'` and writes the audit row only if exactly 1 row
-changed. A concurrent duplicate blocks on the row lock, then updates 0 rows. A unique index on the idempotency key is the backstop. (ARCHITECTURE-PLAN §6)
+It never checks and then acts. One transaction runs a conditional `UPDATE … WHERE PostingStatus = 'Pending'` (and approved, and all three job
+arguments match) and writes the audit row only if exactly 1 row changed. A concurrent duplicate blocks on the row lock, then updates 0 rows. The
+backstop is a unique filtered index: at most one GL_POSTING_SIMULATED audit row per reserve transaction. (ARCHITECTURE-PLAN §6.1 R6, D-41)
 
 **What if the process dies between commit and enqueue?**
 The row still says `PostingStatus = Pending`. A 5-minute sweeper re-enqueues such rows, and the job's idempotency makes a double enqueue harmless. The
@@ -235,3 +236,81 @@ failure of that request.
 
 **Why does a transition return 403 for a handler reopening, but 422 for a missing reason?**
 The role can never make that move, whatever the data, so it is 403 (D-25). A missing reason is fixable input, so it is 422.
+
+## Phase 4: reserves, GL posting, SLA job, Hangfire
+**Walk me through the races you defend against.** (ARCHITECTURE-PLAN §6.1, written before the code)
+Four mechanisms. (1) Every change inside a claim touches the claim row, so two commands on one claim conflict on its RowVer → 409. (2) Unique indexes
+(ChangeSequence per component, idempotency key, one pending transaction per component) are the last word, and a duplicate key at commit is also a 409.
+(3) Background writers only ever compare-and-set in one UPDATE. (4) Side effects happen after commit, and the sweeper covers a lost enqueue. Then the
+table: same transaction approved twice (R1), same component adjusted twice (R2), write skew across components on the $10M limit (R3), crash between
+commit and enqueue (R4), job before commit or after rollback (R5), GL job twice or concurrently (R6), partial failure inside a run (R7), the last failure
+racing a success (R8), a manual retry racing a stray job (R9), the job racing a user on the claim (R10), overlapping SLA runs (R11).
+
+**Two supervisors click Approve on the same reserve at the same moment. What happens, and how do you know?**
+Both load the pending transaction and pass every check. The first commit updates the transaction, the component (RowVer) and the claim (RowVer). The
+second's UPDATE waits for that lock, then matches 0 rows on the RowVer → `DbUpdateConcurrencyException` → 409. Its audit row rolls back with it, and it
+enqueued nothing because enqueueing happens after commit. The test does not hope for a collision: a before-commit hook holds each request until both have
+loaded the claim, so the worst interleaving is forced every run (`RSV_07_Concurrent_approvals_one_wins`).
+
+**Approvals on different components touch different rows. How can two $6M approvals not both pass the $10M check?**
+That is write skew, and the component RowVer cannot see it. Every command that changes anything in the aggregate also marks the claim row modified (the
+audit-columns interceptor), so both approvals update `Claims` and the second conflicts. Its retry re-reads the claim and gets the 422 "Total reserves will
+exceed $10,000,000". The mutation check: removing that one line of the interceptor makes `BR_R_05_Concurrent_approvals_cannot_jointly_exceed_limit` fail
+(both approvals succeed, the claim ends at $12M), while the same-component race still passes on the component RowVer.
+
+**Prove the GL job is safe when two copies run at once.**
+`BR_R_06_Job_run_concurrently_writes_one_gl_audit_entry`: run A claims the row, then its ledger call is paused inside the transaction. Run B starts, and
+the test waits until `sys.dm_exec_requests` shows B blocked by A's lock. Only then is A released. A posts; B's UPDATE re-evaluates `PostingStatus = 'Pending'`
+against the committed row and changes 0 rows. One ledger call, one audit row. Dropping the `Pending` predicate makes four tests fail.
+
+**Does that still hold on Azure SQL, where READ_COMMITTED_SNAPSHOT is on?**
+Yes. RCSI changes what plain SELECTs read, not how an UPDATE qualifies rows: the UPDATE takes an exclusive lock, and after waiting it evaluates the WHERE
+clause against the latest committed row. Only SNAPSHOT isolation would work on a stale version, and it fails with an update-conflict error instead of
+double-posting. The tests run on SQL Server's default (locking READ COMMITTED); the argument covers RCSI.
+
+**Why `= 'Pending'` and not `<> 'Posted'` as CLAUDE.md says?** (D-41 Q1, open)
+With `<> 'Posted'`, a Failed posting can be posted by any stray copy of the job, silently and without GL_POSTING_RETRIED, and that races the user's retry.
+With `= 'Pending'`, Failed is terminal until the audited retry puts it back to Pending. Same single statement, same "1 row" rule; it only narrows what the
+job may touch.
+
+**What happens when the ledger keeps failing?**
+Hangfire retries three times (10 s, 30 s, 60 s). Each failed run rolls its transaction back, so the row stays Pending and nothing is audited. The fourth run
+knows it is the last (Hangfire's RetryCount job parameter), records `Failed` + GL_POSTING_FAILED with the reason in a new unit of work, and rethrows so
+the dashboard shows the job as Failed too. A user then presses retry: Failed → Pending, audited, re-enqueued, 202. Demonstrated in the container with
+`Jobs__GlPosting__SimulateFailure=true`.
+
+**Why does the ledger call sit inside the database transaction? Isn't that a smell?**
+For the simulation it is the simplest correct shape: claim the row, post, audit, commit, and any failure rolls everything back. With a real ledger I would
+not hold a row lock across a network call. I would pass the idempotency key to the ledger (that is what `Reserve:{id}:Change:{seq}` is for, so a repeated call
+cannot post twice), and move to "claim the row as Posting → call the ledger outside the transaction → mark Posted", with the sweeper recovering rows stuck
+in Posting.
+
+**Why doesn't the GL job update the claim like every other change does?**
+It uses `ExecuteUpdate` on its own ReserveHistory row, which bypasses the change tracker, so the claim is not touched. A system posting should not reset the
+SLA clock ("not updated in 48 hours" means by people), and it should not make a handler's concurrent edit fail with 409. `JOB_05` asserts the claim's
+RowVer and UpdatedAt do not move.
+
+**How does a background job know which tenant it is in?**
+It has no user, so the tenant filter would hide everything. The GL job looks up its claim's organisation in `TenantDirectory`, the only place that uses
+`IgnoreQueryFilters()` (and re-applies the soft-delete condition by hand, D-31); the recurring jobs loop over organisations. Each step then runs in its own DI
+scope with the tenant and a fresh correlation id set, exactly like a request, and sends an Application command through the normal pipeline.
+
+**How is the SLA job tested without waiting two days?**
+The job tests run on a second API host with its own database and a `FakeTimeProvider`. The tests create claims, move the clock 48 hours and one second
+(exactly 48 hours is not a breach: "older than"), run the job, move 24 hours (24 hours is enough: "24+ hours"), run it again. The claim row's Status,
+UpdatedAt and RowVer are asserted unchanged.
+
+**Why is the Hangfire dashboard read-only?**
+Two reasons. Requeueing a failed GL job from the dashboard would bypass the audited retry (and would do nothing anyway, because the job only posts Pending
+rows). And a dashboard authenticated by a cookie with POST buttons is a CSRF surface; with no POSTs there is none.
+
+**How does a manager's browser get into the dashboard when the API uses Bearer tokens?**
+Only under `/hangfire`: the first visit may carry `?access_token=` (the hand-off ASP.NET Core documents for SignalR). Once validated, the token is stored in an
+HttpOnly, Secure, SameSite=Strict cookie scoped to `/hangfire` that expires with the token, and the Manager policy is enforced by the normal authorization
+pipeline. Everywhere else, neither the query string nor the cookie counts (tested).
+
+**What would you change for production?**
+A real ledger client with the key (above); Hangfire's schema installed by the deployment rather than by the app at start-up (the app then needs no DDL rights);
+per-tenant error isolation in the recurring jobs (today one tenant's failure stops the run, and the next run retries); batching the SLA insert for very large
+books; and an alert on GL_POSTING_FAILED.
+
