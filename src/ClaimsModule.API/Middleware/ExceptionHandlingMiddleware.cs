@@ -56,7 +56,7 @@ internal sealed class ExceptionHandlingMiddleware(
             StatusCodes.Status403Forbidden, "You do not have permission to perform this action.", forbidden.Message),
 
         ConflictException conflict => ApiProblems.Create(
-            StatusCodes.Status409Conflict, "The request conflicts with one still in progress.", conflict.Message),
+            StatusCodes.Status409Conflict, "The request conflicts with the current state of the resource.", conflict.Message),
 
         DbUpdateConcurrencyException => ApiProblems.Create(
             StatusCodes.Status409Conflict,

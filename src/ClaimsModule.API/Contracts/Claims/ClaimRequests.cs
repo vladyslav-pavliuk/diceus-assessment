@@ -1,4 +1,5 @@
 using ClaimsModule.Domain.Claims;
+using ClaimsModule.Domain.Reserves;
 
 namespace ClaimsModule.API.Contracts.Claims;
 
@@ -20,3 +21,16 @@ public sealed record UpdateClaimDetailsRequest(string? Notes, ClaimSeverity? Sev
 
 /// <summary>POST /api/claims/{id}/validation-issues/{issueId}/acknowledge (D-07).</summary>
 public sealed record AcknowledgeValidationIssueRequest(string? Note);
+
+/// <summary>PUT /api/claims/{id}/reserve-limit-override (BR-R-05, D-08).</summary>
+public sealed record SetReserveLimitOverrideRequest(bool? Enabled, string? Reason);
+
+/// <summary>POST /api/claims/{id}/reserves (FRS §10.2): <c>transactionType</c> may be omitted (D-05).</summary>
+public sealed record SubmitReserveRequest(
+    ReserveComponentType? Component, decimal? Amount, string? ChangeReason, ReserveTransactionType? TransactionType);
+
+/// <summary>PUT /api/claims/{id}/reserves/{componentId} (brief §3.3.3, D-04): the component's new balance.</summary>
+public sealed record AdjustReserveRequest(decimal? NewAmount, string? ChangeReason);
+
+/// <summary>POST /api/claims/{id}/reserves/{txnId}/reject (FRS §10.2).</summary>
+public sealed record RejectReserveRequest(string? RejectionReason);

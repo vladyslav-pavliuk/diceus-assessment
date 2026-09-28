@@ -4,6 +4,7 @@ using ClaimsModule.Application.Claims;
 using ClaimsModule.Application.Claims.Commands.AssignClaimHandler;
 using ClaimsModule.Application.Claims.Commands.CreateClaim;
 using ClaimsModule.Application.Claims.Commands.LinkPolicy;
+using ClaimsModule.Application.Claims.Commands.SetReserveLimitOverride;
 using ClaimsModule.Application.Claims.Commands.TransitionClaimStatus;
 using ClaimsModule.Application.Claims.Commands.UpdateClaimDetails;
 using ClaimsModule.Application.Claims.Commands.ValidateClaim;
@@ -118,6 +119,20 @@ public sealed class ClaimsController(ISender sender) : ControllerBase
     public async Task<IActionResult> UpdateDetails(Guid id, UpdateClaimDetailsRequest request, CancellationToken cancellationToken)
     {
         await sender.Send(new UpdateClaimDetailsCommand(id, request.Notes, request.Severity), cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Allows (or stops allowing) approved reserves above $10,000,000 on this claim: managers only (BR-R-05, FRS §3, D-08).
+    /// </summary>
+    [HttpPut("{id:guid}/reserve-limit-override")]
+    [Authorize(Policy = AuthorizationPolicies.Manager)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<HttpValidationProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> SetReserveLimitOverride(Guid id, SetReserveLimitOverrideRequest request, CancellationToken cancellationToken)
+    {
+        await sender.Send(new SetReserveLimitOverrideCommand(id, request.Enabled, request.Reason), cancellationToken);
         return NoContent();
     }
 }

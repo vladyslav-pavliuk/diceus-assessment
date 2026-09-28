@@ -1,8 +1,10 @@
 using ClaimsModule.API;
+using ClaimsModule.API.Auth;
 using ClaimsModule.API.Middleware;
 using ClaimsModule.Application;
 using ClaimsModule.Infrastructure;
 using ClaimsModule.Persistence;
+using Hangfire;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Serilog;
 using Serilog.Formatting.Compact;
@@ -52,6 +54,19 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Hangfire dashboard (D-41): managers only, through the normal authorization pipeline (the token may arrive as
+// ?access_token= once, then as a cookie; see DashboardTokenHandoff). Read-only: no requeue or delete buttons, so
+// the only way to post a failed GL posting again is the audited retry endpoint, and cookie-authenticated POSTs
+// (a CSRF surface) do not exist.
+app.MapHangfireDashboard(DashboardTokenHandoff.Path, new DashboardOptions
+{
+    Authorization = [],
+    IsReadOnlyFunc = _ => true,
+    DashboardTitle = "Claims Module jobs",
+    DisplayStorageConnectionString = false,
+    AppPath = null,
+}).RequireAuthorization(AuthorizationPolicies.Manager);
 
 // Liveness has no dependencies, so a paused serverless database never restarts the container.
 // Readiness includes the database.

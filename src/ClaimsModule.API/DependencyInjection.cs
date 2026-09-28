@@ -91,6 +91,13 @@ internal static class DependencyInjection
 
                 // Keep the short JWT claim names (sub, name, role, org) instead of the WS-* URIs.
                 jwt.MapInboundClaims = false;
+
+                // The Hangfire dashboard also accepts the token from ?access_token= / its cookie (D-41).
+                jwt.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = DashboardTokenHandoff.OnMessageReceived,
+                    OnTokenValidated = DashboardTokenHandoff.OnTokenValidated,
+                };
                 jwt.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
