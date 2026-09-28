@@ -894,7 +894,7 @@ No Azure deployment was made in this phase. Verified locally: Bicep lint (0 warn
 exact flags, and the smoke test against the local stack as dbo and as the restricted user. Only a real run proves token acquisition on the runner, `TYPE = E`
 user creation, the Key Vault reference, user-delegation SAS and RBAC propagation timing. (D-44, "Not verified")
 
-### Phase 9: backend refactor
+### Refinement phase: backend and frontend clean-up
 
 **`ClaimAuditTrail` shows as unused in the IDE. Is it dead code?**
 No. `AddDomainEventHandlers` registers every class that implements `IBeforeCommitHandler<T>` or `IAfterCommitHandler<T>` by assembly scan, so nothing
@@ -911,3 +911,11 @@ errors) and all 695 tests passed.
 **What rule decides whether a comment stays?**
 It stays if it says *why*: a race, a transaction boundary, a security choice, or a decision (D-xx) or rule ID a reviewer would ask about. It goes
 if it repeats the name, the route or the code.
+
+**Why templates in separate files, when Angular allows inline ones?**
+One convention for the whole app: markup in `.html`, styles in `.scss`, logic in `.ts`. It gives better editor support in templates, cleaner diffs,
+and a reviewer always knows where to look. 13 components were inline; now none are.
+
+**The frontend repeats backend rules (authority tiers, closure checklist). Isn't that duplication?**
+Deliberately, and only to preview: each copy names the backend rule it mirrors (`Mirrors Claim.WouldExceedAggregateLimit`) and shows the API's own message.
+The API re-checks everything, so a drifted copy can only mislabel a button, never allow a forbidden change.
