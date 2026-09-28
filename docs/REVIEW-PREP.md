@@ -437,3 +437,82 @@ See `docs/ai-log/phase-6.md` §5. The instructive one: binding a date picker and
 but silently combines the time with *today*, because Angular writes a view change only to the model and not to sibling accessors. It was found by
 driving the real form in a browser, not by the unit tests.
 
+
+## Phase 7: Azure and CI/CD
+
+**The brief lists App Service. Why is the API on Container Apps?**
+Brief §2.3 allows either; §3.8's list is a minimum. Hangfire polls SQL for as long as a server runs, so an always-on App Service keeps a serverless database awake
+and spends the free allowance in days. Container Apps scales to zero, the polling stops, and the database pauses 15 minutes later (D-36). For the review,
+`minReplicas = 1`. (D-44, `docs/DEPLOYMENT.md`)
+
+**Where are the secrets?**
+There is one: the JWT signing key, in Key Vault. The pipeline generates it once with `openssl` and never prints it; the Container App reads it through a Key
+Vault reference with its managed identity. SQL has no password (Entra-only authentication, the API connects as its managed identity), Storage has shared keys
+disabled (user-delegation SAS), GitHub stores no secret (OIDC federated credential; the SWA deployment token is read at run time and masked). (D-44 Q1, items 4, 13)
+
+**Why a user-assigned identity rather than system-assigned?**
+Ordering. A system-assigned identity is born with the Container App, so its Key Vault role cannot exist before the first revision tries to resolve the secret
+reference. A user-assigned identity and its role assignments are created first, in `main.bicep`, and the app just references it. (D-44 item 2)
+
+**Why both Storage Blob Data Contributor and Storage Blob Delegator?**
+Different scopes. Data Contributor is assigned on the `claim-documents` container only, so the API cannot touch any other container. Signing a SAS needs a
+*user delegation key*, which is an account-level operation that a container-scoped role cannot grant; Delegator grants exactly that action and no data access.
+(D-44 item 3)
+
+**What can the API do to the database?**
+Read and write rows. It is not dbo: it has `db_datareader`, `db_datawriter`, the `claims_app` role (DENY UPDATE, DELETE on ClaimAuditLog), `CREATE TABLE` and
+ownership of the `[HangFire]` schema, so Hangfire can install its own tables there and nowhere else. It cannot alter `dbo`, drop or disable the audit trigger,
+or update an audit row even with raw SQL. Checked locally with an equivalent user: Msg 229 on the UPDATE, 1088/3701 on the trigger, 2760 on a dbo table, and the
+full smoke test still passes. (D-44 Q2, `infra/sql/grant-api-identity.sql`)
+
+**How does the pipeline create a database user for a managed identity?**
+The deployment service principal is the SQL server's Entra admin. After the migrations it runs the grant script with go-sqlcmd. The user is created
+`WITH SID = <client id>, TYPE = E`: `FROM EXTERNAL PROVIDER` would make the server look the name up in Microsoft Graph, which for a service-principal admin
+needs Directory Readers on the server. The script is idempotent. (D-44 item 7)
+
+**How do migrations reach a database that is not open to the internet?**
+The `infra` job adds a firewall rule for its own runner IP, runs the self-contained EF Core migrations bundle signed in as the service principal
+(`Authentication=Active Directory Default` uses the `az` session from `azure/login`), and deletes the rule in an `always()` step. The API reaches SQL through
+the "Allow Azure services" rule and still needs a token for a database user. Production: VNet integration + private endpoint, and the bundle run as a
+Container Apps job inside the VNet. (D-44 items 5–6)
+
+**Migrations run before the new code. What if a migration breaks the running version?**
+Order is migrate → new revision, so each migration must work with the code already running (expand/contract: add a column, deploy, backfill, then drop in a
+later release). The demo has no live traffic during a deploy, so this is a stated rule, not engineered tooling. (D-44 item 6)
+
+**What if the deployment fails halfway?**
+Every step is re-runnable: Bicep is declarative, the signing key is created only if missing, migrations are idempotent (`__EFMigrationsHistory`), the grant
+script is idempotent, and `activeRevisionsMode: Single` keeps the old revision serving until the new one is ready. Re-run the failed jobs.
+
+**How does the SPA know the API URL?**
+It is a build-time constant: `environment.ts` reads `API_BASE_URL`, `angular.json` defaults it to localhost, and the workflow builds with
+`ng build --define "API_BASE_URL='https://…'"`. The URL is known before the API is deployed (`<app name>.<environment default domain>`), so the SPA builds in
+parallel with the API. A runtime `config.json` would allow build-once-deploy-anywhere; with one environment it is not worth the extra request. (D-44 item 11)
+
+**How is CORS locked down, and how do you know?**
+The API admits exactly one origin, `Cors__AllowedOrigins__0 = https://<swa>.azurestaticapps.net`. The smoke job sends a preflight from that origin
+(`Access-Control-Allow-Origin` echoed) and from `https://evil.example` (no header). Bearer tokens, not cookies, so no credentials mode. (D-44 item 9, 15)
+
+**What does the smoke test prove?**
+The brief §7.2 demo flow over HTTP against the deployed API: FNOL → Open → a $25,000 reserve as a handler (PendingApproval, Supervisor) → the handler's
+own approve refused (403) → a supervisor approves → the Hangfire GL job posts it (polled) → a PDF uploads, and its SAS URL returns the same bytes with
+no Authorization header (managed identity + Delegator) → the audit log holds CLAIM_CREATED, STATUS_CHANGED, RESERVE_CREATED, RESERVE_APPROVED,
+GL_POSTING_SIMULATED and DOCUMENT_UPLOADED. It waits out a cold start first. (`scripts/smoke-test.sh`)
+
+**Why is there no approval gate before production?**
+GitHub environments are not available for private repositories on the Free plan. The federated credential trusts only `refs/heads/main`, so a workflow
+run from any other branch cannot sign in. With a public repository or a paid plan: `environment: production` with a required reviewer. (D-44 Q3)
+
+**Why ghcr.io and not ACR?**
+Free, and the image holds no secrets (all configuration comes from the environment and Key Vault), so it can be public and Container Apps pulls without a
+registry credential. The price is one manual step: a new package is private and GitHub has no API to change that. The workflow checks an anonymous pull and
+fails with the fix. ACR Basic (~USD 5/month, pull with the managed identity) is the fallback for a private image. (D-36, D-44 item 10)
+
+**Actions are pinned to tags, not SHAs. Is that safe?**
+Major tags are readable and receive fixes; a SHA pin protects against a compromised tag being moved. For a production pipeline, pin SHAs and let Dependabot
+update them. Stated as a trade-off in D-44 item 14.
+
+**What did you not verify?**
+No Azure deployment was made in this phase. Verified locally: Bicep lint (0 warnings), actionlint, shellcheck, the bundle and go-sqlcmd with the workflow's
+exact flags, and the smoke test against the local stack as dbo and as the restricted user. Only a real run proves token acquisition on the runner, `TYPE = E`
+user creation, the Key Vault reference, user-delegation SAS and RBAC propagation timing. (D-44, "Not verified")
