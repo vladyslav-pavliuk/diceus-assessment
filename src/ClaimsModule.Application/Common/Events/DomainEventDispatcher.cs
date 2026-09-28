@@ -7,9 +7,8 @@ using Microsoft.Extensions.Logging;
 namespace ClaimsModule.Application.Common.Events;
 
 /// <summary>
-/// Resolves the handlers of each event's runtime type from the request scope and runs them in order.
-/// Two explicit handler interfaces are used instead of MediatR notifications, because MediatR has no
-/// notion of "before" and "after" commit, and the phase is the important fact about a handler (D-40).
+/// Explicit handler interfaces rather than MediatR notifications, because MediatR has no notion of before and
+/// after commit, and the phase is the important fact about a handler (D-40).
 /// </summary>
 internal sealed class DomainEventDispatcher(IServiceProvider services, ILogger<DomainEventDispatcher> logger) : IDomainEventDispatcher
 {
@@ -39,9 +38,8 @@ internal sealed class DomainEventDispatcher(IServiceProvider services, ILogger<D
                 }
                 catch (Exception exception) when (exception is not OperationCanceledException)
                 {
-                    // The transaction is committed; failing the request now would make the client retry a
-                    // change that already happened. Each handler is independent, so the others still run.
-                    // The GL sweeper re-enqueues stranded postings (D-15).
+                    // Already committed: failing the request would make the client retry a change that
+                    // happened. The GL sweeper re-enqueues stranded postings (D-15).
                     logger.LogError(
                         exception, "After-commit handler {Handler} failed for {DomainEvent}", handler.GetType().Name, domainEvent.GetType().Name);
                 }

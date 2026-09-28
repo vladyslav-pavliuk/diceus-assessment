@@ -5,7 +5,7 @@ using MediatR;
 
 namespace ClaimsModule.Application.Users.Queries.GetUserByUsername;
 
-/// <summary>Finds an active seeded user for the dev-token sign-in (D-16). Returns null when there is none.</summary>
+/// <summary>Active users only, for the dev-token sign-in (D-16).</summary>
 public sealed record GetUserByUsernameQuery(string Username) : IQuery<UserDto?>;
 
 internal sealed class GetUserByUsernameQueryHandler(IUserRepository users, IMapper mapper)

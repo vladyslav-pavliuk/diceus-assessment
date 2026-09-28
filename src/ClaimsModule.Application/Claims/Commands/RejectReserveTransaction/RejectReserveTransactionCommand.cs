@@ -10,11 +10,6 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Commands.RejectReserveTransaction;
 
-/// <summary>
-/// POST /api/claims/{id}/reserves/{txnId}/reject (FRS §6.4 step 9, §10.2): supervisors and managers, with
-/// the same authority as approving (D-39 item 8). The row stays in history as Rejected (BR-R-04) and its
-/// posting is Cancelled. Audit: RESERVE_REJECTED with the reason.
-/// </summary>
 public sealed record RejectReserveTransactionCommand(Guid ClaimId, Guid TransactionId, string? RejectionReason)
     : ICommand<ReserveTransactionDto>;
 
@@ -22,7 +17,7 @@ internal sealed class RejectReserveTransactionCommandValidator : AbstractValidat
 {
     public RejectReserveTransactionCommandValidator()
     {
-        // NVARCHAR(MAX) "free text" (FRS §9.6), so only presence is checked.
+        // Free text in NVARCHAR(MAX) (FRS §9.6), so only presence is checked.
         RuleFor(command => command.RejectionReason)
             .NotEmpty().WithMessage(DomainMessages.RejectionReasonRequired);
     }

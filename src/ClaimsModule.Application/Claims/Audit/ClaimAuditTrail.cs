@@ -8,9 +8,8 @@ using ClaimsModule.Domain.Claims.Events;
 namespace ClaimsModule.Application.Claims.Audit;
 
 /// <summary>
-/// Turns every domain event of the Claim aggregate into ClaimAuditLog rows, before commit and in the
-/// same transaction as the change (CLAUDE.md rule 5, FRS §14.1, BR-A-02). One handler per event, so
-/// this file reads like the §14.1 table. OldValue/NewValue are JSON (FRS §9.8).
+/// Writes an audit row for every domain event, in the same transaction as the change (BR-A-02). Registered by the
+/// assembly scan in DependencyInjection, so nothing references it by name.
 /// </summary>
 internal sealed class ClaimAuditTrail(IAuditLogService auditLog) :
     IBeforeCommitHandler<ClaimCreated>,
@@ -47,18 +46,16 @@ internal sealed class ClaimAuditTrail(IAuditLogService auditLog) :
         e.ClaimId, AuditEventTypes.ClaimCreated, $"Claim {e.ClaimNumber} created.",
         newValue: new { e.ClaimNumber });
 
-    /// <summary>FRS §14.1: OldValue = previous status, NewValue = new status.</summary>
     public Task HandleAsync(ClaimStatusChanged e, CancellationToken cancellationToken) => Record(
         e.ClaimId, AuditEventTypes.StatusChanged, $"Status changed from {e.From} to {e.To}.",
         oldValue: new { Status = e.From },
         newValue: new { Status = e.To, e.Reason });
 
-    /// <summary>FRS §14.1: NewValue includes the closure reason; the CC-04 justification goes with it (D-26).</summary>
+    /// <summary>The CC-04 justification goes with the closure reason (D-26).</summary>
     public Task HandleAsync(ClaimClosed e, CancellationToken cancellationToken) => Record(
         e.ClaimId, AuditEventTypes.ClaimClosed, "Claim closed.",
         newValue: new { e.ClosureReason, e.Justification, e.OpenReserveTotal });
 
-    /// <summary>FRS §14.1: NewValue includes the reopen reason.</summary>
     public Task HandleAsync(ClaimReopened e, CancellationToken cancellationToken) => Record(
         e.ClaimId, AuditEventTypes.ClaimReopened, "Claim reopened.",
         newValue: new { e.Reason });
@@ -144,7 +141,7 @@ internal sealed class ClaimAuditTrail(IAuditLogService auditLog) :
         newValue: new { ApprovalStatus = "Approved", e.Amount, e.IdempotencyKey },
         relatedEntityId: e.TransactionId, relatedEntityType: ReserveTransactionEntity);
 
-    /// <summary>FRS §14.1: "OldValue includes rejection reason" (kept literally; NewValue has it too).</summary>
+    /// <summary>FRS §14.1 puts the rejection reason in OldValue; NewValue has it too.</summary>
     public Task HandleAsync(ReserveRejected e, CancellationToken cancellationToken) => Record(
         e.ClaimId, AuditEventTypes.ReserveRejected, $"Reserve change of {Money(e.Amount)} rejected: {e.Reason}",
         oldValue: new { ApprovalStatus = "PendingApproval", RejectionReason = e.Reason },
@@ -157,14 +154,12 @@ internal sealed class ClaimAuditTrail(IAuditLogService auditLog) :
         newValue: new { ApprovalStatus = "Cancelled" },
         relatedEntityId: e.TransactionId, relatedEntityType: ReserveTransactionEntity);
 
-    /// <summary>D-08: a user put a failed GL posting back to Pending; the job is enqueued after commit.</summary>
     public Task HandleAsync(GlPostingRetryRequested e, CancellationToken cancellationToken) => Record(
         e.ClaimId, AuditEventTypes.GlPostingRetried, $"GL posting of the reserve change of {Money(e.Amount)} retried.",
         oldValue: new { PostingStatus = "Failed" },
         newValue: new { PostingStatus = "Pending", e.IdempotencyKey },
         relatedEntityId: e.TransactionId, relatedEntityType: ReserveTransactionEntity);
 
-    /// <summary>FRS §13: RelatedEntityId = documentId.</summary>
     public Task HandleAsync(DocumentUploaded e, CancellationToken cancellationToken) => Record(
         e.ClaimId, AuditEventTypes.DocumentUploaded, $"Document {e.DocumentName} uploaded.",
         newValue: new { e.DocumentName, e.DocumentType, e.ContentType, e.FileSizeBytes },

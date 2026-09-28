@@ -5,12 +5,8 @@ using MediatR;
 namespace ClaimsModule.Application.Common.Behaviors;
 
 /// <summary>
-/// Innermost pipeline behaviour: runs every command handler as one unit of work (CLAUDE.md rule 4).
-/// The handler only changes aggregates; <see cref="IUnitOfWork"/> dispatches the before-commit events
-/// (audit rows), saves, commits, and then dispatches the after-commit events. Queries pass straight
-/// through: they never open a transaction.
-/// Validation runs before this behaviour, so an invalid request never opens a transaction.
-/// A command marked <see cref="IHandlesOwnUnitOfWork"/> runs its unit of work itself (D-42).
+/// Wraps every command in one unit of work; queries pass through. A command marked
+/// <see cref="IHandlesOwnUnitOfWork"/> runs its unit of work itself (D-42).
 /// </summary>
 internal sealed class UnitOfWorkBehavior<TRequest, TResponse>(IUnitOfWork unitOfWork) : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
@@ -22,7 +18,7 @@ internal sealed class UnitOfWorkBehavior<TRequest, TResponse>(IUnitOfWork unitOf
             return next(cancellationToken);
         }
 
-        // A transient database failure replays the whole unit, including the handler (ARCHITECTURE-PLAN §4).
+        // A transient database failure replays the whole unit, including the handler.
         return unitOfWork.ExecuteInTransactionAsync(token => next(token), cancellationToken);
     }
 }

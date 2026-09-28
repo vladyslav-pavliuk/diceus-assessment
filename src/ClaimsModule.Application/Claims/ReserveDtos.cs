@@ -2,9 +2,7 @@ using ClaimsModule.Domain.Reserves;
 
 namespace ClaimsModule.Application.Claims;
 
-// Read models of the reserve endpoints (FRS §10.2, §11.3 Tab 3).
 
-/// <summary>A reserve summary card (FRS §11.3 Tab 3): current balance and the amount awaiting approval (D-11, D-21).</summary>
 public sealed record ReserveComponentSummaryDto
 {
     public required Guid Id { get; init; }
@@ -20,7 +18,6 @@ public sealed record ReserveComponentSummaryDto
     public required ReserveComponentStatus Status { get; init; }
 }
 
-/// <summary>One ReserveHistory row (FRS §9.6), as returned by the reserve commands.</summary>
 public sealed record ReserveTransactionDto(
     Guid Id,
     Guid ReserveComponentId,
@@ -42,30 +39,23 @@ public sealed record ReserveTransactionDto(
     DateTimeOffset? RejectedAt,
     string? RejectionReason);
 
-/// <summary>
-/// A submitted reserve transaction (POST /claims/{id}/reserves, the PUT alias, and the FNOL initial
-/// reserve): the component, the new row with its approval status, and non-blocking warnings (BR-R-05).
-/// </summary>
+/// <summary>Warnings are non-blocking (BR-R-05).</summary>
 public sealed record ReserveSubmittedDto(ReserveComponentType Component, ReserveTransactionDto Transaction, IReadOnlyList<string> Warnings);
 
-/// <summary>
-/// GET /api/claims/{id}/reserves (FRS §10.2): the balance per component and the full transaction history,
-/// plus the BR-R-05 figures the Reserves tab needs (D-11).
-/// </summary>
 public sealed record ClaimReservesDto
 {
     public required Guid ClaimId { get; init; }
 
-    /// <summary>In FRS §6.2 order: Indemnity, Expense, ALAE, SubrogationRecoverable.</summary>
+    /// <summary>In FRS §6.2 order.</summary>
     public required IReadOnlyList<ReserveComponentSummaryDto> Components { get; init; }
 
-    /// <summary>Every transaction of the claim, newest first, whatever its status.</summary>
+    /// <summary>Newest first, every status.</summary>
     public required IReadOnlyList<ReserveHistoryEntryDto> Transactions { get; init; }
 
-    /// <summary>Net Σ CurrentAmount over all components, SubrogationRecoverable included (D-29).</summary>
+    /// <summary>Net of all components, subrogation included (D-29).</summary>
     public required decimal TotalReserves { get; init; }
 
-    /// <summary>Σ CurrentAmount of the cost components: the figure the $10,000,000 limit applies to (BR-R-05, D-11).</summary>
+    /// <summary>Cost components only: the figure the $10,000,000 limit applies to (BR-R-05, D-11).</summary>
     public required decimal ApprovedAggregate { get; init; }
 
     public required decimal AggregateLimit { get; init; }
@@ -73,7 +63,6 @@ public sealed record ClaimReservesDto
     public required bool ReserveLimitOverride { get; init; }
 }
 
-/// <summary>A row of the Reserves tab history table (FRS §11.3): the transaction with its component, date and the people involved.</summary>
 public sealed record ReserveHistoryEntryDto
 {
     public required Guid Id { get; init; }

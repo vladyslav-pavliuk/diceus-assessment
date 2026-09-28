@@ -13,10 +13,8 @@ using MediatR;
 namespace ClaimsModule.Application.Claims.Commands.AdjustReserve;
 
 /// <summary>
-/// PUT /api/claims/{id}/reserves/{componentId} (brief §3.3.3 "Adjust reserve amount", D-04): sets a
-/// component to an absolute <paramref name="NewAmount"/>. The handler turns it into the delta
-/// NewAmount − CurrentAmount and submits an Adjust transaction through the same domain method as POST,
-/// so authority, the balance rule and the $10M check are identical. A zero delta is rejected (D-04).
+/// Sets an absolute <paramref name="NewAmount"/>, turned into a delta and submitted as an Adjust through the same
+/// domain method as a POST, so the authority and limit rules are identical (D-04).
 /// </summary>
 public sealed record AdjustReserveCommand(Guid ClaimId, Guid ReserveComponentId, decimal? NewAmount, string? ChangeReason)
     : ICommand<ReserveSubmittedDto>;
@@ -50,8 +48,7 @@ internal sealed class AdjustReserveCommandHandler(
         var component = claim.ReserveComponents.SingleOrDefault(candidate => candidate.Id == request.ReserveComponentId)
             ?? throw new NotFoundException("Reserve component", request.ReserveComponentId);
 
-        // CurrentAmount comes from the aggregate loaded in this unit of work; the component's RowVer makes the
-        // commit fail (409) if another change took effect in between, so the delta is never computed on stale data.
+        // The component's RowVer turns a concurrent change into a 409, so the delta is never based on stale data.
         var delta = request.NewAmount!.Value - component.CurrentAmount;
 
         var submitted = claim.SubmitReserveTransaction(

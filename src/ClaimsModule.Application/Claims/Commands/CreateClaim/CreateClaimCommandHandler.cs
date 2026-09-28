@@ -12,11 +12,7 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Commands.CreateClaim;
 
-/// <summary>
-/// Orchestrates FNOL. The UnitOfWorkBehavior has already opened the transaction, so the claim number
-/// drawn here commits or rolls back with the claim (gap-free, D-10), and the audit rows raised by the
-/// aggregate are written in the same transaction (CLAUDE.md rule 5).
-/// </summary>
+/// <summary>Runs inside the unit of work, so the claim number commits or rolls back with the claim (D-10).</summary>
 internal sealed class CreateClaimCommandHandler(
     IClaimRepository claims,
     IPolicyRepository policies,
@@ -56,8 +52,7 @@ internal sealed class CreateClaimCommandHandler(
             actor,
             now);
 
-        // FRS §5.2 step 3: the same domain method as POST /claims/{id}/reserves (Phase 4), so authority
-        // tiers, the $10M check and auto-approval behave identically at intake.
+        // The same domain method as a later reserve submission, so the authority and limit rules are identical.
         ReserveSubmittedDto? initialReserve = null;
         if (request.InitialReserve is { } reserve)
         {

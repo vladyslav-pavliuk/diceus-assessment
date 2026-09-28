@@ -1,9 +1,6 @@
 namespace ClaimsModule.Application.Common.Validation;
 
-/// <summary>
-/// Messages for request-shape rules the FRS does not word (ASSUMPTION, D-40). Business-rule wording,
-/// including every FRS §8 message, lives in <see cref="Domain.Claims.DomainMessages"/>.
-/// </summary>
+/// <summary>Request-shape messages (D-40). Business-rule wording lives in <see cref="Domain.Claims.DomainMessages"/>.</summary>
 internal static class RequestMessages
 {
     public const string PolicyNotFound = "Policy was not found.";

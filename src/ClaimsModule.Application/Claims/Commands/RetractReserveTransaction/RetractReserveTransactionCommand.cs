@@ -9,11 +9,6 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Commands.RetractReserveTransaction;
 
-/// <summary>
-/// POST /api/claims/{id}/reserves/{txnId}/retract (FRS §6.4 rule box, §10.2): only the submitter, only while
-/// pending (422 otherwise, D-25). The row becomes Cancelled and a new transaction may be submitted on the
-/// component. Audit: RESERVE_RETRACTED.
-/// </summary>
 public sealed record RetractReserveTransactionCommand(Guid ClaimId, Guid TransactionId) : ICommand<ReserveTransactionDto>;
 
 internal sealed class RetractReserveTransactionCommandHandler(IClaimRepository claims, ICurrentUser currentUser, IMapper mapper)

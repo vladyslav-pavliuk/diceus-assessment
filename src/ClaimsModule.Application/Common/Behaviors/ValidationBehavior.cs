@@ -4,12 +4,7 @@ using ValidationException = ClaimsModule.Application.Common.Exceptions.Validatio
 
 namespace ClaimsModule.Application.Common.Behaviors;
 
-/// <summary>
-/// Runs every FluentValidation validator registered for the request before the handler, and
-/// short-circuits with a <see cref="ValidationException"/> (HTTP 422, FRS §10.4) when any rule
-/// fails. Validation therefore lives in the pipeline, not in controllers (CLAUDE.md rule 2), and
-/// runs before a command opens its transaction.
-/// </summary>
+/// <summary>Runs before the unit of work, so an invalid command never opens a transaction.</summary>
 internal sealed class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidator<TRequest>> validators)
     : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull

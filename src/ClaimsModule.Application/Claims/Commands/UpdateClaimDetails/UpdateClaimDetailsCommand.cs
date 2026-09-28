@@ -9,11 +9,7 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Commands.UpdateClaimDetails;
 
-/// <summary>
-/// PATCH /api/claims/{id} (D-08): the editable claim notes (FRS §11.3 Tab 1) and the severity (FRS §9.1,
-/// D-33). A null field is left unchanged; an empty <see cref="Notes"/> string clears the notes (D-40).
-/// Audit: CLAIM_UPDATED per changed field.
-/// </summary>
+/// <summary>A null field is left unchanged; an empty <see cref="Notes"/> clears the notes (D-40).</summary>
 public sealed record UpdateClaimDetailsCommand(Guid ClaimId, string? Notes, ClaimSeverity? Severity) : ICommand;
 
 internal sealed class UpdateClaimDetailsCommandValidator : AbstractValidator<UpdateClaimDetailsCommand>

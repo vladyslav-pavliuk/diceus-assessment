@@ -7,18 +7,15 @@ using Microsoft.Extensions.Logging;
 namespace ClaimsModule.Application.Claims.Commands.RequeueStrandedGlPostings;
 
 /// <summary>
-/// The body of GlPostingSweeperJob (D-15), for the current tenant: re-enqueues the GL job for approved
-/// transactions still Pending some minutes after approval. Their enqueue may have been lost between COMMIT
-/// and the after-commit enqueue (a crash, Hangfire storage briefly unavailable; ARCHITECTURE-PLAN §6.1 R4).
-/// ReserveHistory itself is the outbox: PostingStatus = Pending already says "needs posting". A duplicate enqueue
-/// is harmless, because the job is idempotent (R6). Returns how many jobs were enqueued.
+/// Recovers enqueues lost between commit and the after-commit handler (D-15). ReserveHistory is the outbox, since
+/// PostingStatus = Pending already means "needs posting", and a duplicate enqueue is harmless because the job is idempotent.
 /// </summary>
 public sealed record RequeueStrandedGlPostingsCommand : ICommand<int>
 {
-    /// <summary>Long enough for the normal after-commit enqueue and the job's own retries (10 + 30 + 60 s) to have finished.</summary>
+    /// <summary>Outlasts the normal enqueue plus the job's own retries (10 + 30 + 60 s).</summary>
     public static readonly TimeSpan GracePeriod = TimeSpan.FromMinutes(5);
 
-    /// <summary>A bound per run and tenant; the next run picks up the rest.</summary>
+    /// <summary>Per run and tenant; the next run picks up the rest.</summary>
     public const int MaxPerRun = 100;
 }
 

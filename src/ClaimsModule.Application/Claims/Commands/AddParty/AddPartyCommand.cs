@@ -11,10 +11,7 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Commands.AddParty;
 
-/// <summary>
-/// POST /api/claims/{id}/parties (FRS §10.1). Several parties of one role are allowed (BR-P-02). Adding
-/// an active Claimant resolves the BR-C-03 issue in the same transaction (D-07). Audit: PARTY_ADDED.
-/// </summary>
+/// <summary>Adding an active Claimant resolves the BR-C-03 issue in the same transaction (D-07).</summary>
 public sealed record AddPartyCommand(
     Guid ClaimId,
     PartyRole? Role,

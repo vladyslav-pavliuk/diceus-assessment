@@ -5,10 +5,7 @@ using FluentValidation;
 
 namespace ClaimsModule.Application.Claims.Inputs;
 
-/// <summary>
-/// The fields of a damaged asset (FRS §9.4). Shared by FNOL (a list) and "Add risk object" (one at the
-/// top level of the body), so both are validated by the same rules.
-/// </summary>
+/// <summary>Shared by FNOL and Add Risk Object so both use the same rules.</summary>
 public interface IRiskObjectFields
 {
     AssetType? AssetType { get; }
@@ -22,7 +19,6 @@ public interface IRiskObjectFields
     bool IsPrimary { get; }
 }
 
-/// <summary>A damaged asset entered at intake (FRS §5.2 step 2).</summary>
 public sealed record RiskObjectInput(
     AssetType? AssetType,
     string? AssetDescription,
@@ -32,7 +28,7 @@ public sealed record RiskObjectInput(
 
 internal static class RiskObjectFieldsExtensions
 {
-    /// <summary>Call only after validation: the asset type is then defined.</summary>
+    /// <summary>Call only after validation.</summary>
     public static RiskObjectDetails ToRiskObjectDetails(this IRiskObjectFields riskObject) =>
         new(riskObject.AssetType!.Value, riskObject.AssetDescription!, riskObject.DamageDescription, riskObject.AssetReference, riskObject.IsPrimary);
 }

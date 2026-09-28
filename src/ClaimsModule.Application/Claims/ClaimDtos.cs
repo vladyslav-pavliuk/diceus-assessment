@@ -4,11 +4,9 @@ using ClaimsModule.Domain.ReferenceData;
 
 namespace ClaimsModule.Application.Claims;
 
-// Read models of the claims API. Small child DTOs are positional records mapped by AutoMapper (in
-// memory and with ProjectTo); the claim rows are built by hand-written SQL projections in Persistence,
-// because they read shadow columns and subqueries (D-40).
+// Child DTOs are mapped by AutoMapper; the claim rows are hand-written projections in Persistence, because they
+// read shadow columns and subqueries (D-40).
 
-/// <summary>A row of GET /api/claims (FRS §10.1 + D-29 additions).</summary>
 public sealed record ClaimSummaryDto
 {
     public required Guid Id { get; init; }
@@ -35,16 +33,15 @@ public sealed record ClaimSummaryDto
 
     public required string? AssignedHandlerName { get; init; }
 
-    /// <summary>Net Σ CurrentAmount over all components, Subrogation included; a display figure (D-29).</summary>
+    /// <summary>Net of all components, subrogation included; a display figure only (D-29).</summary>
     public required decimal TotalReserves { get; init; }
 
-    /// <summary>An SLA_BREACH_DETECTED entry exists that is newer than the claim's last update (D-01).</summary>
+    /// <summary>A breach entry is newer than the claim's last update (D-01).</summary>
     public required bool IsSlaBreached { get; init; }
 
     public required DateTimeOffset ReportedDate { get; init; }
 }
 
-/// <summary>GET /api/claims/{id} (FRS §10.1): the claim with its children and its most recent audit entries.</summary>
 public sealed record ClaimDetailDto
 {
     public required Guid Id { get; init; }
@@ -102,10 +99,7 @@ public sealed record ClaimDetailDto
     public required IReadOnlyList<AuditEntryDto> RecentAuditEntries { get; init; }
 }
 
-/// <summary>
-/// The loss event (FRS §9.2). <see cref="PerilCategory"/> is the brief's "ClaimType" (D-13), derived
-/// from the cause of loss code.
-/// </summary>
+/// <summary><see cref="PerilCategory"/> is the brief's "ClaimType", derived from the cause of loss code (D-13).</summary>
 public sealed record LossEventDto
 {
     public required DateTimeOffset LossDate { get; init; }
@@ -160,7 +154,7 @@ public sealed record ValidationIssueDto(
     Guid? ResolvedByUserId,
     string? ResolutionNote);
 
-/// <summary>Document metadata (FRS §9.7), as listed in the claim detail. The download URL comes from the documents endpoints (<see cref="DocumentDto"/>).</summary>
+/// <summary>No download URL: that comes from the documents endpoints (<see cref="DocumentDto"/>).</summary>
 public sealed record ClaimDocumentDto(
     Guid Id,
     DocumentType DocumentType,
@@ -171,10 +165,7 @@ public sealed record ClaimDocumentDto(
     Guid? UploadedByUserId,
     string? Notes);
 
-/// <summary>
-/// One ClaimAuditLog row (FRS §9.8). OldValue/NewValue are the stored JSON text. A null
-/// <see cref="CreatedByUserId"/> is the system actor (D-33).
-/// </summary>
+/// <summary>OldValue and NewValue are the stored JSON text. A null <see cref="CreatedByUserId"/> is a background job (D-33).</summary>
 public sealed record AuditEntryDto
 {
     public required Guid Id { get; init; }

@@ -4,10 +4,7 @@ using ClaimsModule.Domain.Reserves;
 
 namespace ClaimsModule.Application.Claims;
 
-/// <summary>
-/// Entity → DTO maps for the claim's children. Used in memory by command handlers and with ProjectTo
-/// by the Persistence read models, so every member expression must be translatable to SQL.
-/// </summary>
+/// <summary>Also used with ProjectTo, so every member expression must translate to SQL.</summary>
 internal sealed class ClaimMappingProfile : Profile
 {
     public ClaimMappingProfile()

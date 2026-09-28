@@ -9,7 +9,6 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Queries.GetClaimAudit;
 
-/// <summary>GET /api/claims/{id}/audit (FRS §10.1, §11.3 Tab 5): the append-only log, newest first, paged (D-33).</summary>
 public sealed record GetClaimAuditQuery(Guid ClaimId, int Page = 1, int PageSize = ClaimQueryLimits.DefaultAuditPageSize)
     : IQuery<PagedResult<AuditEntryDto>>;
 

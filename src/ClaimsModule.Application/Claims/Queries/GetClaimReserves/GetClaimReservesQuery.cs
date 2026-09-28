@@ -6,7 +6,6 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Queries.GetClaimReserves;
 
-/// <summary>GET /api/claims/{id}/reserves (FRS §10.2, brief §3.3.3): the balance per component and the full transaction history.</summary>
 public sealed record GetClaimReservesQuery(Guid ClaimId) : IQuery<ClaimReservesDto>;
 
 internal sealed class GetClaimReservesQueryHandler(IClaimQueries claims) : IRequestHandler<GetClaimReservesQuery, ClaimReservesDto>

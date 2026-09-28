@@ -15,9 +15,8 @@ using Microsoft.Extensions.Logging;
 namespace ClaimsModule.Application.Claims.Commands.UploadClaimDocument;
 
 /// <summary>
-/// POST /api/claims/{id}/documents (FRS §10.1, §13): a multipart upload. <see cref="Content"/> must be seekable (the API
-/// passes the buffered form file). <see cref="DocumentType"/> defaults to Other, because the FRS §11.3 upload button is
-/// only a file picker (D-42). Audit: DOCUMENT_UPLOADED with RelatedEntityId = documentId.
+/// <see cref="Content"/> must be seekable. <see cref="DocumentType"/> defaults to Other, because the FRS upload button is
+/// only a file picker (D-42).
 /// </summary>
 public sealed record UploadClaimDocumentCommand(
     Guid ClaimId,
@@ -27,7 +26,7 @@ public sealed record UploadClaimDocumentCommand(
     DocumentType? DocumentType,
     string? Notes) : ICommand<DocumentDto>, IHandlesOwnUnitOfWork;
 
-/// <summary>Request shape only. The type allowlist, the content sniffing and the claim's state are checked by the handler and the domain.</summary>
+/// <summary>Shape only: the allowlist, content sniffing and claim state are checked by the handler and the domain.</summary>
 internal sealed class UploadClaimDocumentCommandValidator : AbstractValidator<UploadClaimDocumentCommand>
 {
     public const string FileRequiredMessage = "A file is required.";
@@ -58,16 +57,9 @@ internal sealed class UploadClaimDocumentCommandValidator : AbstractValidator<Up
 }
 
 /// <summary>
-/// Blob first, metadata second (D-42). Network I/O never runs inside the database transaction, and an execution-strategy
-/// replay of the transaction never uploads twice (the request stream can be read once, the document id is fixed before the upload).
-/// <list type="number">
-/// <item>Sanitise the name, resolve the format from the allowlist, sniff the content: nothing is stored for a bad file.</item>
-/// <item>Refuse early when the claim is missing, in another organisation or read-only (the aggregate re-checks at step 4).</item>
-/// <item>Upload to <c>{org}/{claim}/{documentId}_{name}</c>.</item>
-/// <item>One unit of work: load the claim, <see cref="Claim.AddDocument"/>, audit DOCUMENT_UPLOADED, commit.</item>
-/// <item>If step 4 fails, delete the blob, unless the row exists after all (a commit whose outcome was unknown): a missing
-/// blob would lose data, an orphan blob only wastes space.</item>
-/// </list>
+/// Blob first, metadata second (D-42), so network I/O never runs inside the transaction and a replayed transaction never
+/// uploads twice. If the commit fails, the blob is deleted unless the row exists after all: a missing blob would lose data,
+/// an orphan blob only wastes space.
 /// </summary>
 internal sealed class UploadClaimDocumentCommandHandler(
     IClaimQueries claimQueries,

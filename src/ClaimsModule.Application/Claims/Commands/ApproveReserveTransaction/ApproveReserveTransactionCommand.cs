@@ -9,13 +9,7 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Commands.ApproveReserveTransaction;
 
-/// <summary>
-/// POST /api/claims/{id}/reserves/{txnId}/approve (FRS §6.4 step 8, §10.2). The endpoint admits supervisors
-/// and managers (403 otherwise, D-25); the aggregate then re-checks, with the caller from the validated token,
-/// that the approver is not the submitter (BR-R-03), has the authority for this amount (BR-R-02) and that the
-/// $10M limit still holds (BR-R-05). Audit: RESERVE_APPROVED; the GL job is enqueued after commit.
-/// Two approvers at once: one wins, the other gets 409 (ARCHITECTURE-PLAN §6.1 R1).
-/// </summary>
+/// <summary>Of two concurrent approvers, one wins and the other gets a 409.</summary>
 public sealed record ApproveReserveTransactionCommand(Guid ClaimId, Guid TransactionId) : ICommand<ReserveTransactionDto>;
 
 internal sealed class ApproveReserveTransactionCommandHandler(

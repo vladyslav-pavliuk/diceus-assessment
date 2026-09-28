@@ -11,11 +11,7 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Commands.AcknowledgeValidationIssue;
 
-/// <summary>
-/// POST /api/claims/{id}/validation-issues/{issueId}/acknowledge (D-07, D-08): a user accepts a Warning
-/// with a note. Acknowledging BR-C-02 unblocks Draft → Open (D-19). Criticals cannot be acknowledged.
-/// Audit: VALIDATION_ISSUE_ACKNOWLEDGED.
-/// </summary>
+/// <summary>Accepts a Warning with a note (D-07). Acknowledging BR-C-02 unblocks Draft → Open (D-19).</summary>
 public sealed record AcknowledgeValidationIssueCommand(Guid ClaimId, Guid IssueId, string? Note) : ICommand<ValidationIssueDto>;
 
 internal sealed class AcknowledgeValidationIssueCommandValidator : AbstractValidator<AcknowledgeValidationIssueCommand>

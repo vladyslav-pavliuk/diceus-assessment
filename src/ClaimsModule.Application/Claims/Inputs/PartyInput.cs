@@ -6,10 +6,8 @@ using FluentValidation;
 namespace ClaimsModule.Application.Claims.Inputs;
 
 /// <summary>
-/// The fields of a party (FRS §9.3). Shared by FNOL (a list of parties) and "Add party" (one party
-/// at the top level of the body), so both are validated by the same rules.
-/// Enums are nullable: an unknown or missing value arrives as null or undefined and is reported by
-/// the validator with a message, instead of failing JSON binding (D-40).
+/// Shared by FNOL and Add Party so both use the same rules. Enums are nullable, so a missing or unknown value is a
+/// validation message rather than a JSON binding failure (D-40).
 /// </summary>
 public interface IPartyFields
 {
@@ -30,7 +28,6 @@ public interface IPartyFields
     string? Notes { get; }
 }
 
-/// <summary>A party entered at intake (FRS §5.2 step 2) or through POST /claims/{id}/parties.</summary>
 public sealed record PartyInput(
     PartyRole? Role,
     PartyType? Type,
@@ -43,15 +40,12 @@ public sealed record PartyInput(
 
 internal static class PartyFieldsExtensions
 {
-    /// <summary>Call only after validation: role and type are then defined.</summary>
+    /// <summary>Call only after validation.</summary>
     public static PartyDetails ToPartyDetails(this IPartyFields party) =>
         new(party.Role!.Value, party.Type!.Value, party.FirstName, party.LastName, party.CompanyName, party.Email, party.Phone, party.Notes);
 }
 
-/// <summary>
-/// Request-shape rules for a party (BR-P-02 roles, FRS §9.3 names per party type and column sizes).
-/// The entity re-checks the same rules with the same messages (defence in depth).
-/// </summary>
+/// <summary>The entity re-checks the same rules with the same messages.</summary>
 internal sealed class PartyFieldsValidator<T> : AbstractValidator<T>
     where T : IPartyFields
 {

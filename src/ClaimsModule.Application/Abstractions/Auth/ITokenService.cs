@@ -2,10 +2,7 @@ using ClaimsModule.Application.Users;
 
 namespace ClaimsModule.Application.Abstractions.Auth;
 
-/// <summary>
-/// Issues signed access tokens for the mock authentication (D-16). Token issuance is
-/// infrastructure, not a business command, so it does not go through MediatR (D-08).
-/// </summary>
+/// <summary>Mock authentication (D-16). Infrastructure rather than a business command, so not MediatR (D-08).</summary>
 public interface ITokenService
 {
     IssuedToken IssueToken(UserDto user);
