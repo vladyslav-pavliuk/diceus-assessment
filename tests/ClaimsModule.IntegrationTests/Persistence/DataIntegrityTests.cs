@@ -17,6 +17,12 @@ namespace ClaimsModule.IntegrationTests.Persistence;
 [Collection(ApiCollection.Name)]
 public sealed class DataIntegrityTests(ApiFixture fixture)
 {
+    /// <summary>
+    /// Creating a claim writes its own audit rows (Phase 3), so the tests that record an entry by hand find
+    /// it by this description.
+    /// </summary>
+    private const string ManualEntry = "Recorded by the test.";
+
     private readonly TestDatabase _database = new(fixture);
 
     [Fact]
@@ -169,7 +175,7 @@ public sealed class DataIntegrityTests(ApiFixture fixture)
                 _ =>
                 {
                     scope.ServiceProvider.GetRequiredService<IAuditLogService>().Record(
-                        new AuditEntry(created.Id, AuditEventTypes.ClaimCreated, "Claim created.", NewValue: "{\"claimNumber\":\"x\"}"));
+                        new AuditEntry(created.Id, AuditEventTypes.ClaimCreated, ManualEntry, NewValue: "{\"claimNumber\":\"x\"}"));
                     return Task.FromResult(0);
                 },
                 CancellationToken.None);
@@ -189,13 +195,13 @@ public sealed class DataIntegrityTests(ApiFixture fixture)
 
         await using var scope = await _database.TenantScopeAsync();
         var dbContext = scope.ServiceProvider.GetRequiredService<ClaimsDbContext>();
-        var entry = await dbContext.ClaimAuditLog.SingleAsync(candidate => candidate.ClaimId == created.Id);
+        var entry = await dbContext.ClaimAuditLog.SingleAsync(candidate => candidate.ClaimId == created.Id && candidate.Description == ManualEntry);
 
         dbContext.Entry(entry).Property(nameof(ClaimAuditLog.Description)).CurrentValue = "Rewritten history";
         (await Should.ThrowAsync<InvalidOperationException>(() => dbContext.SaveChangesAsync())).Message.ShouldContain("append-only");
 
         dbContext.ChangeTracker.Clear();
-        dbContext.ClaimAuditLog.Remove(await dbContext.ClaimAuditLog.SingleAsync(candidate => candidate.ClaimId == created.Id));
+        dbContext.ClaimAuditLog.Remove(await dbContext.ClaimAuditLog.SingleAsync(candidate => candidate.ClaimId == created.Id && candidate.Description == ManualEntry));
         (await Should.ThrowAsync<InvalidOperationException>(() => dbContext.SaveChangesAsync())).Message.ShouldContain("append-only");
     }
 
@@ -215,7 +221,7 @@ public sealed class DataIntegrityTests(ApiFixture fixture)
         (await Should.ThrowAsync<SqlException>(() => dbContext.Database.ExecuteSqlAsync($"DELETE FROM [ClaimAuditLog] WHERE [ClaimId] = {created.Id}")))
             .Number.ShouldBe(51000);
 
-        (await SingleAuditEntryAsync(created.Id)).Description.ShouldBe("Claim created.");
+        (await SingleAuditEntryAsync(created.Id)).Description.ShouldBe(ManualEntry);
     }
 
     [Fact]
@@ -273,7 +279,7 @@ public sealed class DataIntegrityTests(ApiFixture fixture)
         await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().ExecuteInTransactionAsync(
             _ =>
             {
-                scope.ServiceProvider.GetRequiredService<IAuditLogService>().Record(new AuditEntry(claimId, AuditEventTypes.ClaimCreated, "Claim created."));
+                scope.ServiceProvider.GetRequiredService<IAuditLogService>().Record(new AuditEntry(claimId, AuditEventTypes.ClaimCreated, ManualEntry));
                 return Task.FromResult(0);
             },
             CancellationToken.None);
@@ -282,7 +288,8 @@ public sealed class DataIntegrityTests(ApiFixture fixture)
     private async Task<ClaimAuditLog> SingleAuditEntryAsync(Guid claimId)
     {
         await using var scope = await _database.TenantScopeAsync();
-        return await scope.ServiceProvider.GetRequiredService<ClaimsDbContext>().ClaimAuditLog.AsNoTracking().SingleAsync(entry => entry.ClaimId == claimId);
+        return await scope.ServiceProvider.GetRequiredService<ClaimsDbContext>().ClaimAuditLog.AsNoTracking()
+            .SingleAsync(entry => entry.ClaimId == claimId && entry.Description == ManualEntry);
     }
 
     private static Task<T> ShadowAsync<T>(ClaimsDbContext dbContext, Guid claimId, string column) =>

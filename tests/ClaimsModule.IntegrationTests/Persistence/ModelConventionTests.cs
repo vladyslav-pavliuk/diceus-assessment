@@ -56,7 +56,8 @@ public sealed class ModelConventionTests(ApiFixture fixture)
     public void CONV_05_Every_business_table_has_soft_delete_audit_and_tenant_columns()
     {
         string[] required = ["IsDeleted", "DeletedAt", "CreatedAt", "UpdatedAt", "UserCreated", "UserModified", "OrganisationId"];
-        string[] exempt = ["Organisations", "ClaimStatusTransitions", "ClaimAuditLog", "ClaimNumberCounters"];
+        // D-14: the tenant, global configuration and bookkeeping tables (audit log, counters, idempotency records).
+        string[] exempt = ["Organisations", "ClaimStatusTransitions", "ClaimAuditLog", "ClaimNumberCounters", "IdempotencyRecords"];
 
         Tables()
             .Where(entity => !exempt.Contains(entity.GetTableName()))
