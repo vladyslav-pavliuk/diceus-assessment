@@ -116,3 +116,11 @@ Vlad ran `infra/bootstrap.sh` (all repository variables set) and then `gh workfl
      role id was written from memory with a wrong last group (`…-4fbe1bd5bc79`; the real id is `db58b8e5-c6ad-4a2a-8342-4190687cbf4a`). The Bicep linter
      cannot catch it (any GUID is valid). Fix, plus all four role ids now checked against `az role definition list --name "<role>"`; the other three were correct.
      Lesson recorded in D-44: built-in role ids are looked up, never recalled.
+4. **Run after the role-id fix:** `main.bicep` deployed, the signing key was created, the bundle built; *Apply EF Core migrations* failed five times with
+   `Connection string 'ClaimsDb' is not configured … while attempting to find 'DbContext' types`. **Claude's mistake:** the step passed the connection with
+   `efbundle --connection`, but the bundle first builds the API's service provider, and `AddPersistence` reads `ConnectionStrings:ClaimsDb` (and throws
+   when it is empty) as the DbContext is created, before `--connection` is applied. Every local run had used the compose `migrate` service, which sets
+   the environment variable, so the difference was never exercised; the "verified with the workflow's exact command" claim in §4 covered building the
+   bundle, not running it. Reproduced locally with the migrator image (`--connection` only → the same error; environment variable → reaches the
+   database). Fix: the step exports `ConnectionStrings__ClaimsDb` and runs the bundle without arguments. The retry loop also retried a
+   non-transient failure five times; left as is (cheap), noted.

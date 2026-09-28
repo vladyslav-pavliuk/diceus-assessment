@@ -208,9 +208,11 @@ jobs:
           SQL_SERVER_FQDN: ${{ steps.platform.outputs.sqlServerFqdn }}
           DATABASE_NAME: ${{ steps.platform.outputs.databaseName }}
         run: |
-          connection="Server=tcp:${SQL_SERVER_FQDN},1433;Database=${DATABASE_NAME};Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;Connect Timeout=60"
+          # As configuration, not --connection: the bundle builds the API's service provider, whose AddDbContext reads
+          # ConnectionStrings:ClaimsDb while creating the context, before --connection would be applied (same as compose's migrate).
+          export ConnectionStrings__ClaimsDb="Server=tcp:${SQL_SERVER_FQDN},1433;Database=${DATABASE_NAME};Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;Connect Timeout=60"
           for attempt in 1 2 3 4 5; do
-            if "$RUNNER_TEMP/efbundle" --connection "$connection"; then
+            if "$RUNNER_TEMP/efbundle"; then
               exit 0
             fi
             echo "Attempt $attempt failed; retrying in 30 s."
