@@ -101,20 +101,7 @@ internal sealed class ClaimQueries(ClaimsDbContext dbContext, IMapper mapper) : 
 
         var validationIssues = await ValidationIssues(claimId).ToListAsync(cancellationToken);
 
-        var reserveComponents = await dbContext.Set<ReserveComponent>().AsNoTracking()
-            .Where(component => component.ClaimId == claimId)
-            .Select(component => new ReserveComponentSummaryDto
-            {
-                Id = component.Id,
-                Component = component.Component,
-                CurrentAmount = component.CurrentAmount,
-                PendingAmount = component.Transactions
-                    .Where(transaction => transaction.ApprovalStatus == ReserveApprovalStatus.PendingApproval)
-                    .Sum(transaction => transaction.Amount),
-                HasPendingApproval = component.Transactions.Any(transaction => transaction.ApprovalStatus == ReserveApprovalStatus.PendingApproval),
-                Status = component.Status,
-            })
-            .ToListAsync(cancellationToken);
+        var reserveComponents = await ReserveSummaries(claimId).ToListAsync(cancellationToken);
 
         var documents = await dbContext.Set<ClaimDocument>().AsNoTracking()
             .Where(document => document.ClaimId == claimId)
@@ -179,6 +166,72 @@ internal sealed class ClaimQueries(ClaimsDbContext dbContext, IMapper mapper) : 
         }
 
         return await ValidationIssues(claimId).ToListAsync(cancellationToken);
+    }
+
+    /// <summary>Three queries whatever the size of the history: the claim header, the components, the transactions.</summary>
+    public async Task<ClaimReservesDto?> GetReservesAsync(Guid claimId, CancellationToken cancellationToken)
+    {
+        var claim = await dbContext.Claims.AsNoTracking()
+            .Where(candidate => candidate.Id == claimId)
+            .Select(candidate => new { candidate.Id, candidate.ReserveLimitOverride })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (claim is null)
+        {
+            return null;
+        }
+
+        var components = await ReserveSummaries(claimId).ToListAsync(cancellationToken);
+
+        var transactions = await dbContext.ReserveHistory.AsNoTracking()
+            .Where(transaction => transaction.ClaimId == claimId)
+            .OrderByDescending(transaction => EF.Property<DateTimeOffset>(transaction, ShadowColumns.CreatedAt))
+            .ThenByDescending(transaction => transaction.Id)
+            .Select(transaction => new ReserveHistoryEntryDto
+            {
+                Id = transaction.Id,
+                ReserveComponentId = transaction.ReserveComponentId,
+                Component = dbContext.Set<ReserveComponent>()
+                    .Where(component => component.Id == transaction.ReserveComponentId).Select(component => component.Component).First(),
+                TransactionType = transaction.TransactionType,
+                Amount = transaction.Amount,
+                PreviousBalance = transaction.PreviousBalance,
+                NewBalance = transaction.NewBalance,
+                ApprovalStatus = transaction.ApprovalStatus,
+                RequiredAuthority = transaction.RequiredAuthority,
+                ExceedsAggregateLimit = transaction.ExceedsAggregateLimit,
+                ChangeReason = transaction.ChangeReason,
+                ChangeSequence = transaction.ChangeSequence,
+                IdempotencyKey = transaction.IdempotencyKey,
+                PostingStatus = transaction.PostingStatus,
+                PostingJobId = transaction.PostingJobId,
+                CreatedAt = EF.Property<DateTimeOffset>(transaction, ShadowColumns.CreatedAt),
+                SubmittedByUserId = transaction.SubmittedByUserId,
+                SubmittedByName = dbContext.Users.Where(user => user.Id == transaction.SubmittedByUserId).Select(user => user.DisplayName).FirstOrDefault(),
+                ApprovedByUserId = transaction.ApprovedByUserId,
+                ApprovedByName = dbContext.Users.Where(user => user.Id == transaction.ApprovedByUserId).Select(user => user.DisplayName).FirstOrDefault(),
+                ApprovedAt = transaction.ApprovedAt,
+                RejectedByUserId = transaction.RejectedByUserId,
+                RejectedByName = dbContext.Users.Where(user => user.Id == transaction.RejectedByUserId).Select(user => user.DisplayName).FirstOrDefault(),
+                RejectedAt = transaction.RejectedAt,
+                RejectionReason = transaction.RejectionReason,
+            })
+            .ToListAsync(cancellationToken);
+
+        return new ClaimReservesDto
+        {
+            ClaimId = claim.Id,
+
+            // Stored as text, so SQL would sort them alphabetically; the enum order is the FRS §6.2 order.
+            Components = components.OrderBy(component => component.Component).ToList(),
+            Transactions = transactions,
+            TotalReserves = components.Sum(component => component.CurrentAmount),
+            ApprovedAggregate = components
+                .Where(component => ReserveLimits.CountsTowardAggregate(component.Component))
+                .Sum(component => component.CurrentAmount),
+            AggregateLimit = ReserveLimits.AggregateLimit,
+            ReserveLimitOverride = claim.ReserveLimitOverride,
+        };
     }
 
     private static IQueryable<Claim> Filter(IQueryable<Claim> claims, ClaimListFilter filter)
@@ -286,6 +339,22 @@ internal sealed class ClaimQueries(ClaimsDbContext dbContext, IMapper mapper) : 
             .Where(issue => issue.ClaimId == claimId)
             .OrderBy(issue => issue.RaisedAt).ThenBy(issue => issue.Id)
             .ProjectTo<ValidationIssueDto>(mapper.ConfigurationProvider);
+
+    /// <summary>The summary cards (FRS §11.3 Tab 3): current balance and pending amount per component (D-11, D-21).</summary>
+    private IQueryable<ReserveComponentSummaryDto> ReserveSummaries(Guid claimId) =>
+        dbContext.Set<ReserveComponent>().AsNoTracking()
+            .Where(component => component.ClaimId == claimId)
+            .Select(component => new ReserveComponentSummaryDto
+            {
+                Id = component.Id,
+                Component = component.Component,
+                CurrentAmount = component.CurrentAmount,
+                PendingAmount = component.Transactions
+                    .Where(transaction => transaction.ApprovalStatus == ReserveApprovalStatus.PendingApproval)
+                    .Sum(transaction => transaction.Amount),
+                HasPendingApproval = component.Transactions.Any(transaction => transaction.ApprovalStatus == ReserveApprovalStatus.PendingApproval),
+                Status = component.Status,
+            });
 
     private Task<bool> ClaimExistsAsync(Guid claimId, CancellationToken cancellationToken) =>
         dbContext.Claims.AnyAsync(claim => claim.Id == claimId, cancellationToken);

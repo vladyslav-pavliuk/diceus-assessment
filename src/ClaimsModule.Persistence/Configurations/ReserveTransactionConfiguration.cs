@@ -27,7 +27,11 @@ internal sealed class ReserveTransactionConfiguration : IEntityTypeConfiguration
         builder.Property(transaction => transaction.ExceedsAggregateLimit).IsRequired().HasDefaultValue(false);
         builder.Property(transaction => transaction.RejectionReason);
         builder.Property(transaction => transaction.ChangeReason).HasMaxLength(FieldLengths.Reason).IsRequired();
-        builder.Property(transaction => transaction.PostingStatus).IsRequired();
+        // A concurrency token: every writer of PostingStatus is a compare-and-set. The GL job writes it with a
+        // conditional UPDATE (GlPostingStore); a tracked update (the user's retry, a rejection) gets
+        // "AND PostingStatus = @original" in its WHERE clause, so it fails with 409 rather than overwrite a
+        // status that changed after it was read (ARCHITECTURE-PLAN §6.1 R9). No schema change.
+        builder.Property(transaction => transaction.PostingStatus).IsRequired().IsConcurrencyToken();
         builder.Property(transaction => transaction.PostingJobId).HasMaxLength(100);
         builder.Property(transaction => transaction.IdempotencyKey).HasMaxLength(GlIdempotencyKey.MaxLength).IsRequired();
         builder.Property(transaction => transaction.ChangeSequence).IsRequired();

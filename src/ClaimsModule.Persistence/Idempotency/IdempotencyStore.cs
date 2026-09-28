@@ -69,4 +69,8 @@ internal sealed class IdempotencyStore(ClaimsDbContext dbContext, ITenantContext
 
     public Task ReleaseAsync(Guid recordId, CancellationToken cancellationToken) =>
         dbContext.Set<IdempotencyRecord>().Where(record => record.Id == recordId).ExecuteDeleteAsync(cancellationToken);
+
+    // Keys are per user, not per tenant, and the table has no query filter, so the clean-up job needs no tenant scope.
+    public Task<int> PurgeAsync(DateTimeOffset createdBefore, CancellationToken cancellationToken) =>
+        dbContext.Set<IdempotencyRecord>().Where(record => record.CreatedAt < createdBefore).ExecuteDeleteAsync(cancellationToken);
 }

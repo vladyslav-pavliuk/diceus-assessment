@@ -2,10 +2,12 @@ using ClaimsModule.Application.Abstractions;
 using ClaimsModule.Application.Abstractions.Persistence;
 using ClaimsModule.Application.Abstractions.ReadModels;
 using ClaimsModule.Persistence.ClaimNumbers;
+using ClaimsModule.Persistence.GlPosting;
 using ClaimsModule.Persistence.Idempotency;
 using ClaimsModule.Persistence.Interceptors;
 using ClaimsModule.Persistence.ReadModels;
 using ClaimsModule.Persistence.Repositories;
+using ClaimsModule.Persistence.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -47,12 +49,15 @@ public static class DependencyInjection
         services.AddScoped<IPolicyRepository, PolicyRepository>();
         services.AddScoped<IStatusTransitionRepository, StatusTransitionRepository>();
         services.AddScoped<IIdempotencyStore, IdempotencyStore>();
+        services.AddScoped<IGlPostingStore, GlPostingStore>();
+        services.AddScoped<ITenantDirectory, TenantDirectory>();
 
         // Read side (D-40): SQL projections behind Application-owned contracts.
         services.AddScoped<IClaimQueries, ClaimQueries>();
         services.AddScoped<IReferenceDataQueries, ReferenceDataQueries>();
         services.AddScoped<IPolicyQueries, PolicyQueries>();
         services.AddScoped<IUserQueries, UserQueries>();
+        services.AddScoped<ISlaMonitoringQueries, SlaMonitoringQueries>();
 
         services.AddHealthChecks().AddDbContextCheck<ClaimsDbContext>("database", tags: [HealthCheckTags.Ready]);
 

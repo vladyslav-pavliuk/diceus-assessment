@@ -33,6 +33,13 @@ internal sealed class ClaimAuditLogConfiguration : IEntityTypeConfiguration<Clai
         builder.HasIndex([nameof(ClaimAuditLog.ClaimId), nameof(ClaimAuditLog.CreatedAt)], "IX_ClaimAuditLog_ClaimId_CreatedAt")
             .IsDescending(false, true);
 
+        // BR-R-06 backstop: at most one GL_POSTING_SIMULATED per reserve transaction, whatever the code does.
+        // The GL job's compare-and-set already guarantees it (ARCHITECTURE-PLAN §6.1 R6); a check-then-act bug
+        // would now fail with a duplicate key instead of writing a second posting.
+        builder.HasIndex([nameof(ClaimAuditLog.RelatedEntityId)], "UX_ClaimAuditLog_RelatedEntityId_GlPostingSimulated")
+            .IsUnique()
+            .HasFilter($"[EventType] = N'{AuditEventTypes.GlPostingSimulated}'");
+
         // SLA job: "last SLA_BREACH_DETECTED for this claim" (D-01).
         builder.HasIndex(
             [nameof(ClaimAuditLog.ClaimId), nameof(ClaimAuditLog.EventType), nameof(ClaimAuditLog.CreatedAt)],
