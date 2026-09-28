@@ -1,6 +1,6 @@
 # Architecture plan (draft → becomes ARCHITECTURE.md in Phase 8)
 
-Status: **DRAFT, Phase 0; §2.2, §2.3 and §3 revised in Phase 2 (D-39)**. Based on the entries in `docs/DECISIONS.md`, all ACCEPTED on 2026-09-27 (D-36 changed to Container Apps).
+Status: **DRAFT, Phase 0; §2.2, §2.3 and §3 revised in Phase 2 (D-39); §2.5, §3, §4.1 and §5 revised in Phase 3 (D-40)**. Based on the entries in `docs/DECISIONS.md`, all ACCEPTED on 2026-09-27 (D-36 changed to Container Apps).
 Spec references: FRS = `docs/spec/claims-frs.md`, Brief = `docs/spec/assessment-brief.md`.
 
 ---
@@ -97,6 +97,13 @@ Events are raised by aggregate methods and collected by the UoW. There are two d
 | GlPostingRetryRequested | audit GL_POSTING_RETRIED | **enqueue PostGLReserveChangeJob** |
 | DocumentUploaded | audit DOCUMENT_UPLOADED | — |
 
+**Mechanics (Phase 3, D-40).** Handlers implement `IBeforeCommitHandler<TEvent>` or `IAfterCommitHandler<TEvent>`: two explicit
+interfaces rather than MediatR notifications, because the phase is the important fact about a handler. `UnitOfWork` collects the events
+of every tracked aggregate after the command handler ran, dispatches the before-commit handlers (repeating until no new events appear),
+saves, commits, and only then dispatches the after-commit handlers, outside the replayed execution-strategy block. An after-commit failure
+is logged per handler and never fails the request. `ClaimAuditTrail` is the before-commit handler for all 20 events; a unit test fails if
+an event has none (AUD-I1). Phase 3 has no production after-commit handler yet: the GL enqueue arrives in Phase 4.
+
 **Why the split.** Audit rows must commit or roll back *with* the state change (no divergence), so they are written before commit. A Hangfire job must
 never see uncommitted rows, and must not run for a transaction that rolls back, so it is enqueued after commit. The window between commit and enqueue is
 closed by the GL sweeper (D-15). The jobs themselves write audit rows directly through `IAuditLogService`, because they do not go through an aggregate.
@@ -127,7 +134,7 @@ Organisations and Users exist since Phase 1.
 | ReserveHistory | Id, ReserveComponentId, ClaimId, TransactionType, Amount, PreviousBalance, NewBalance, ApprovalStatus, RequiredAuthority, ApprovedByUserId?, ApprovedAt?, RejectedByUserId?, RejectedAt?, RejectionReason?, ChangeReason, PostingStatus, PostingJobId?, IdempotencyKey, ChangeSequence, SubmittedByUserId, ExceedsAggregateLimit BIT | Components, Claims | UX (ReserveComponentId, ChangeSequence); UX IdempotencyKey (every row has a key, D-39 item 6); UX ReserveComponentId WHERE ApprovalStatus='PendingApproval' (D-22); IX (ClaimId, CreatedAt); IX (ApprovalStatus, PostingStatus, ApprovedAt) for the sweeper | ✓ | ✓ | — | ✓ (amount columns guarded, D-22) |
 | ClaimDocuments | Id, ClaimId, DocumentType, DocumentName, BlobPath, ContentType, FileSizeBytes BIGINT, UploadedAt, UploadedByUserId?, Notes? | Claims | IX ClaimId | ✓ | ✓ | — | ✓ |
 | **ClaimAuditLog** | Id, ClaimId, EventType, Description, OldValue?, NewValue?, RelatedEntityId?, RelatedEntityType?, CorrelationId?, CreatedAt, CreatedByUserId? | Claims | IX (ClaimId, CreatedAt DESC); IX (ClaimId, EventType, CreatedAt) for SLA dedupe | **—** (D-14) | ✓ | — | CreatedAt/CreatedByUserId only |
-| IdempotencyRecords (Phase 3, D-39 item 18) | Id, UserId, Key, Method, Route, RequestHash, StatusCode?, ResponseBody?, CreatedAt, CompletedAt? | — | UX (UserId, Key) | — | ✓ | — | CreatedAt only |
+| IdempotencyRecords (Phase 3, D-24, D-40 item 12) | Id, OrganisationId, UserId, Key, Method, Route, RequestHash CHAR(64), StatusCode?, ResponseBody?, ResponseLocation?, CreatedAt, CompletedAt? | Organisations | UX (UserId, Key); IX CreatedAt (clean-up) | — | column only (no filter: keys are per user) | — | CreatedAt only |
 | Hangfire.* | Hangfire's own schema (`[HangFire]`) in the same database | — | — | — | — | — | — |
 
 Seed data (HasData or migration SQL only, FRS §15.4):
@@ -176,6 +183,14 @@ state that never happened. Jobs could also be enqueued for data that then rolls 
 the handler call and the commit in the strategy, so a transient failure replays the whole unit. Handlers are deterministic given the same input and
 TimeProvider, so a replay is safe. The after-commit dispatch runs outside the replayed block.
 
+### 4.1 The read side (Phase 3, D-40)
+Queries do not load aggregates. Application defines read contracts (`IClaimQueries`, `IReferenceDataQueries`, `IPolicyQueries`,
+`IUserQueries`) and the DTO shapes; Persistence implements them as SQL projections. The claim rows are hand-written `Select`s,
+because they read shadow columns (UpdatedAt, CreatedAt) and correlated subqueries (cause and handler names, net reserve total, SLA flag).
+The simple child rows use AutoMapper `ProjectTo` with the Application profiles. Query counts are fixed and tested: the list runs 2 SQL
+commands (COUNT + page) and the detail runs 7, whatever the page size or the number of children. The tenant and soft-delete filters
+apply to every table they read.
+
 ---
 
 ## 5. MediatR pipeline behaviours (order)
@@ -185,7 +200,10 @@ TimeProvider, so a replay is safe. The after-commit dispatch runs outside the re
 3. **UnitOfWorkBehavior**: only for `ICommand<TResponse>`; queries skip it. It owns the transaction, commit, and event dispatch phases (§4).
 
 Not a MediatR behaviour:
-- **Idempotency** is an ASP.NET filter, because it stores an HTTP response (D-24).
+- **Idempotency** is an ASP.NET resource filter (`IdempotencyFilter`), because it stores an HTTP response (D-24). It runs before model
+  binding (to hash the raw body) and wraps result execution (to capture the bytes sent). Only 2xx responses are stored (D-40 item 12).
+- **Lenient JSON converters** (unknown enum → undefined, unparseable optional date → null) keep binding from rejecting values, so the
+  validator words every 422 as FRS §8 does (D-40 item 3).
 - **Authorization** by role is an endpoint policy, plus domain checks for data-dependent authority (D-25).
 
 ---

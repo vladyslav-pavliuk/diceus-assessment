@@ -181,3 +181,57 @@ can still correlate.
 The only persisted Critical is "no claimant". A claim reaches Closed only through Open, which needs a claimant, and the last claimant cannot be removed.
 The check stays because the transition table is data. The tests add a configured Draft → Closed row, and CC-02/CC-03 then fail as specified
 (D-39 item 17).
+
+## Phase 3: commands, queries, controllers
+**Walk me through POST /api/claims.**
+Model binding creates `CreateClaimCommand`. Then, in order:
+- `LoggingBehavior` logs the request.
+- `ValidationBehavior` runs the FNOL validator (FRS §8 messages, reference-data lookups for BR-C-05 and the policy). Any failure is a 422
+  before a transaction exists.
+- `UnitOfWorkBehavior` opens the transaction inside the execution strategy.
+- The handler draws the claim number (counter row, same transaction), builds the aggregate with `Claim.Create`, submits the optional
+  initial reserve through the same domain method the reserve endpoint uses, and adds the claim to the repository.
+- The Unit of Work collects the aggregate's events and runs `ClaimAuditTrail`, which stages the audit rows. It then saves, commits, and runs
+  the after-commit handlers.
+- The controller returns 201 with a Location header.
+
+If anything throws, everything rolls back, the claim number included (`AUD_I4_*` proves this with a handler that throws after the audit rows
+were staged).
+
+**Why do queries go through Persistence "query" classes instead of IQueryable in the handler?** (D-40 item 1)
+Application may not reference EF Core, and that is enforced by an architecture test. The list needs EF-only features: shadow columns
+(`EF.Property(claim, "UpdatedAt")` for the SLA flag) and correlated subqueries. Application owns the contract and the DTO shape, and
+Persistence owns the SQL. The query handlers stay thin, but they still carry validation and 404 mapping.
+
+**How do you know there is no N+1?**
+A test host adds a `DbCommandInterceptor` that counts SQL commands per request. The list is exactly 2 (COUNT and one page query with
+subqueries) for page size 1 and for 100. The detail is 7 for a claim with 1 party and for one with 6 parties plus a reserve.
+
+**Where does AutoMapper earn its keep here?**
+`ProjectTo` projects the child rows (parties, risk objects, issues, documents, codes, users) in SQL, and the same profiles map in memory in the
+command handlers. The claim rows are not mapped with AutoMapper: shadow columns and subqueries are clearer as a hand-written `Select`. The
+self-reference guard for the suppressed CVE (D-37) runs over all the new maps.
+
+**An unknown enum in the JSON body gives the FRS message, not a serializer error. How?** (D-40 item 3)
+A lenient converter binds unknown enum names as 0, which no domain enum defines, so `IsInEnum()` reports "Invalid reserve component type.". An
+empty or malformed optional date binds as null, which gives "Loss date is required.". Binding never words a 422; validators do.
+
+**Why two handler interfaces instead of MediatR notifications for domain events?**
+The phase is the important fact about a handler. A before-commit handler (audit) must share the transaction; an after-commit handler (a Hangfire
+enqueue) must never see uncommitted rows or run after a rollback. The types make that visible, and a test proves the after-commit handler sees
+the committed row and never runs after a rollback. The first version stopped at the first failing after-commit handler; a unit test caught it,
+and failures are now isolated per handler.
+
+**Idempotency: what exactly is stored, and why only 2xx?** (D-24, D-40 item 12)
+The filter stores (user, key, method, route, SHA-256 of the body) plus the status, body and Location of a successful response. A repeat
+replays those bytes with `Idempotency-Replayed: true`. A different body under the same key gets 422, and a request still in flight gets 409.
+Failures release the key: after a 409 concurrency conflict or a 5xx the client should be able to retry, and a repeated 422 re-validates to
+the same answer anyway. The placeholder row is committed before the command runs, so the unique (UserId, Key) index decides the race between
+two concurrent duplicates.
+
+**Why can an unknown policy id in the body be 422 but an unknown claim id be 404?**
+404 means "the resource in the URL does not exist, or is not yours" (tenant filter). A bad reference inside a valid request is a validation
+failure of that request.
+
+**Why does a transition return 403 for a handler reopening, but 422 for a missing reason?**
+The role can never make that move, whatever the data, so it is 403 (D-25). A missing reason is fixable input, so it is 422.

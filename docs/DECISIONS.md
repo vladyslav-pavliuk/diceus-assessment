@@ -52,6 +52,7 @@ Markers used below:
 | D-37 | Package versions and licences (+ AutoMapper CVE suppression) | ACCEPTED |
 | D-38 | Phase 1 cross-cutting choices (errors, auth, shadow columns, health, toolchain) | PROPOSED |
 | D-39 | Phase 2 domain and schema choices (+ two open questions) | ACCEPTED |
+| D-40 | Phase 3 API, read-side and pipeline choices (+ two decisions by Vlad) | PROPOSED (Q1, Q2 ACCEPTED) |
 
 ---
 
@@ -1009,3 +1010,81 @@ FRS/brief are silent or where the Phase 0 plan turned out to need a refinement. 
 
 **Rationale.** Each item is small and reversible, and each is visible in the schema or the tests, so none is a silent choice.
 **Status:** ACCEPTED (2026-09-27): Q1 → (a), Q2 → full load; the 18 choices accepted as written, to be revisited after the first deployed version if needed.
+
+## D-40 — Phase 3 API, read-side and pipeline choices
+**Context.** Phase 3 built the commands, queries, validators and controllers for FNOL, claims, parties, status, validation issues,
+policies and reference data. Two points needed Vlad's decision (Q1, Q2). The other items are choices where the FRS and the brief say
+nothing, or refinements of earlier decisions. None changes an FRS business rule.
+
+**Decisions by Vlad (2026-09-28).**
+- **Q1. Adding risk objects after FNOL.** Neither FRS §10 nor D-08 has an endpoint for it, so the "no risk objects" warning (FRS §5.4) could only
+  be avoided at intake. **Decision: add `POST /api/claims/{id}/risk-objects`** (`AddRiskObjectCommand`, API-30). It reuses the FNOL
+  risk-object rules. The first risk object becomes primary (D-33). Audit: RISK_OBJECT_ADDED.
+- **Q2. Idempotency-Key in Phase 3.** The Phase 3 prompt did not list it, but D-39 item 18 scheduled it here. **Decision: keep it in Phase 3.**
+
+**Choices (ASSUMPTION unless cited).**
+1. **Read side in Persistence, behind Application contracts.** `IClaimQueries`, `IReferenceDataQueries`, `IPolicyQueries` and `IUserQueries` are
+   defined in Application and return Application DTOs. Persistence implements them in SQL. Reason: the claim rows read EF shadow columns
+   (UpdatedAt, CreatedAt) and correlated subqueries, and Application may not reference EF Core (CONV-14). Claim rows use hand-written `Select`
+   projections, and simple child rows use AutoMapper `ProjectTo` with the Application profiles. The query count is fixed and tested:
+   the list runs 2 queries (count and page), and the detail runs 7, whatever the number of children.
+2. **Domain-event dispatch.** There are two explicit handler interfaces, `IBeforeCommitHandler<T>` and `IAfterCommitHandler<T>`, rather than
+   MediatR notifications, which have no notion of commit. The Unit of Work dispatches before-commit handlers, in a loop until no new events
+   appear, then saves, commits, and dispatches after-commit handlers outside the replayed execution-strategy block. A failing after-commit
+   handler is logged and does not stop the others or fail the request, because the commit already happened. Phase 3 has **no production
+   after-commit handler**: an auto-approved initial reserve keeps `PostingStatus = Pending` until Phase 4 adds the GL enqueue and the sweeper (D-15).
+3. **Lenient JSON binding**, so that validators, not the serializer, word the 422 (FRS §8):
+   - an unknown enum name (or a number) binds as 0, which no domain enum defines, and IsInEnum reports it (for example "Invalid reserve component type.");
+   - an empty or unparseable optional date-time binds as null, which gives "Loss date is required." (FRS §8 "Must be a valid date");
+   - a date without an offset is read as UTC (D-32);
+   - query-string binding errors (for example `?perilCategory=Volcano`) keep the framework wording, still in the FRS §10.4 shape.
+4. **Error keys** are the request's property paths, so the UI can put each message next to its control: `Parties[0].FirstName`,
+   `InitialReserve.Amount`, and top-level `FirstName` for "add party". Where FRS §8 names a field, the property has that name (LossDate,
+   LossDescription, CauseOfLossCode, PolicyId). Errors about the claim's state keep the domain keys (StatusTransition, OpenReserves,
+   ClaimParties, Claim, …).
+5. **Initial reserve at FNOL.** It is always an Add transaction, submitted through the same domain method as Phase 4. The FNOL form has no reason
+   field, so a blank reason becomes "Initial reserve at FNOL.". An initial reserve without a policy returns 422 on `PolicyId` (BR-C-06).
+6. **Unknown ids.** An unknown id in the URL gives 404. An unknown id in the body gives 422 ("Policy was not found.", "User was not found.").
+7. **Responses.**
+   - Create: 201 with a Location header and `ClaimCreatedDto` (id, number, status, validation issues, initial reserve with its warnings).
+   - Status: 200 with `{claimId, previousStatus, status}`.
+   - Add party / add risk object: 201 with no Location header, because there is no single-item GET.
+   - Validate: 200 with every issue. Acknowledge: 200 with the issue.
+   - Link policy, assignee, PATCH, remove party: 204.
+8. **PATCH /claims/{id}.** A null field is left unchanged. An empty `notes` string clears the notes.
+9. **Claims list.**
+   - `dateFrom` and `dateTo` filter on the loss date's UTC calendar date, inclusive at both ends (D-32).
+   - `search` matches part of the claim number or of the client name.
+   - Sort order: ReportedDate descending, then ClaimNumber descending.
+   - Paging: `page` ≥ 1, `pageSize` 1–100; anything else returns 422.
+10. **Policy search.**
+    - `q` is required (1–100 characters) and matches part of the policy number or client name.
+    - At most 20 results, ordered by number.
+    - The query is named `ListPoliciesQuery`, because FRS §15.3 allows only Get…/List… query names.
+11. **Cause codes are compared ordinally.** SQL Server compares case-insensitively, but a code is an exact identifier, so "col-fire" is not
+    recognised (BR-C-05).
+12. **Idempotency refinements to D-24.**
+    - Only 2xx responses are stored; any other outcome releases the key, so the client may retry. D-24 said "5xx not stored".
+    - Keys are 1–200 characters.
+    - Only authenticated POST/PUT/PATCH/DELETE requests take part.
+    - The table gains a `ResponseLocation` column, and a replay carries `Idempotency-Replayed: true`, which CORS exposes.
+    - The request hash is SHA-256 over the method, path, query and body.
+    - An execution-strategy retry of our own insert is recognised by its record id.
+    - The 24h clean-up job comes in Phase 4.
+13. **Column sizes live in `Domain/Common/FieldLengths`**, shared by the EF configurations and the validators. An over-long value returns 422,
+    never a SQL truncation error (500). The model and migrations are unchanged.
+14. **Audit JSON.**
+    - Values are camelCase objects.
+    - STATUS_CHANGED: Old `{status}`, New `{status, reason}`.
+    - CLAIM_CLOSED New: `{closureReason, justification, openReserveTotal}`.
+    - RESERVE_REJECTED puts the reason in OldValue, as FRS §14.1 says literally, and in NewValue as well.
+    - RelatedEntityId is null for claim-level events and names the child otherwise.
+15. **Audit reads.** The detail includes the latest 10 entries. The audit endpoint pages by 50, with a maximum of 200 (D-33). Order is CreatedAt
+    descending, then Id descending; ids are sequential (D-30), which keeps the rows of one transaction in write order.
+16. **`GET /reference/claim-statuses`** returns every row, including the system-only Reopened → Open with `isSystemOnly: true`, so a UI menu can
+    leave it out.
+17. **`GET /users?role=`** matches one role exactly and returns the active users of the caller's organisation.
+
+**Rationale.** Each item is small and reversible, and each is covered by a test named after its rule, so none is a silent choice.
+**Status:** PROPOSED (2026-09-28). Q1 and Q2 were decided by Vlad; items 1–17 await review.
+
