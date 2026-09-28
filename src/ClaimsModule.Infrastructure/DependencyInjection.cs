@@ -3,6 +3,7 @@ using ClaimsModule.Application.Abstractions.Auth;
 using ClaimsModule.Infrastructure.Auth;
 using ClaimsModule.Infrastructure.BackgroundJobs;
 using ClaimsModule.Infrastructure.Correlation;
+using ClaimsModule.Infrastructure.Storage;
 using ClaimsModule.Infrastructure.Tenancy;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,6 +37,7 @@ public static class DependencyInjection
         services.AddSingleton<ITokenService, JwtTokenService>();
 
         services.AddBackgroundJobs(configuration);
+        services.AddStorage(configuration);
 
         return services;
     }
