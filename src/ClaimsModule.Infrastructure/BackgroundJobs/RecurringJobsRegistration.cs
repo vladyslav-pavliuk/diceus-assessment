@@ -4,10 +4,8 @@ using Microsoft.Extensions.Hosting;
 namespace ClaimsModule.Infrastructure.BackgroundJobs;
 
 /// <summary>
-/// Registers the recurring jobs when the application starts (FRS §12 "Both must be registered on application
-/// startup"). AddOrUpdate is idempotent, so every start (and every replica) writes the same definitions. Times are
-/// UTC. While Container Apps has scaled the API to zero, nothing runs; on wake, Hangfire runs a missed occurrence
-/// once (D-36).
+/// AddOrUpdate is idempotent, so every start and replica writes the same definitions. While the API is scaled to zero
+/// nothing runs; on wake, Hangfire runs a missed occurrence once (D-36).
 /// </summary>
 internal sealed class RecurringJobsRegistration(IRecurringJobManager recurringJobs) : IHostedService
 {

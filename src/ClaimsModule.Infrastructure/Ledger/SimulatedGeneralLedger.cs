@@ -6,11 +6,7 @@ using Microsoft.Extensions.Options;
 
 namespace ClaimsModule.Infrastructure.Ledger;
 
-/// <summary>
-/// Stands in for the general ledger (FRS §6.5 "simulates what in production would be a real double-entry
-/// accounting transaction"): it logs the journal as a structured entry. With Jobs:GlPosting:SimulateFailure
-/// it fails every call, which drives the retry and failure path in a demo (D-35).
-/// </summary>
+/// <summary>Logs the journal. Jobs:GlPosting:SimulateFailure makes every call fail, to demo the retry path (D-35).</summary>
 internal sealed class SimulatedGeneralLedger(IOptionsMonitor<JobsOptions> options, ILogger<SimulatedGeneralLedger> logger) : IGeneralLedger
 {
     public Task PostAsync(GlJournalEntry entry, string idempotencyKey, CancellationToken cancellationToken)

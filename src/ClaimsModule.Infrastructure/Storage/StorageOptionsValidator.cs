@@ -4,8 +4,7 @@ using Microsoft.Extensions.Options;
 namespace ClaimsModule.Infrastructure.Storage;
 
 /// <summary>
-/// Refuses to start with a storage configuration that cannot work (D-42). The local file system is a development-only
-/// fallback: a Container App's disk is per replica and lost on restart, so outside Development documents must go to Azure Blob Storage.
+/// The local file system is development-only: a Container App's disk is per replica and lost on restart (D-42).
 /// </summary>
 internal sealed class StorageOptionsValidator(IHostEnvironment environment) : IValidateOptions<StorageOptions>
 {

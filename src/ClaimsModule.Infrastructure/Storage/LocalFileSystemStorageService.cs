@@ -8,15 +8,8 @@ using Microsoft.Extensions.Options;
 namespace ClaimsModule.Infrastructure.Storage;
 
 /// <summary>
-/// The development fallback of FRS §13 / BR-D-03: files under <c>{RootPath}/{organisationId}/{claimId}/</c>, downloaded
-/// through the development-only endpoint <c>GET /api/local-files/{token}</c>. The token plays the part of a SAS: it names one
-/// file and its response headers, expires after the requested lifetime, and is signed (HMAC-SHA256) with a key that exists only
-/// in this process, so it cannot be forged or edited and every link dies with a restart. Serving the file streams bytes through
-/// the API, which a local disk cannot avoid: the documented DEVIATION from BR-D-02, limited to this provider (D-28).
-/// <para>
-/// Path traversal is refused twice: the Application only ever passes a <see cref="Domain.Documents.DocumentBlobPath"/>, and every
-/// path is resolved here and must stay inside the root.
-/// </para>
+/// Development fallback (BR-D-03). The download token plays the part of a SAS: HMAC-signed with a per-process key, so it cannot
+/// be forged and dies with a restart. Streaming bytes through the API is the documented deviation from BR-D-02 (D-28).
 /// </summary>
 public sealed class LocalFileSystemStorageService : IStorageService
 {
@@ -34,7 +27,6 @@ public sealed class LocalFileSystemStorageService : IStorageService
         _timeProvider = timeProvider;
     }
 
-    /// <summary>The absolute directory every document lives under.</summary>
     public string RootPath { get; }
 
     public async Task UploadAsync(string objectPath, Stream content, string contentType, CancellationToken cancellationToken)
@@ -42,7 +34,7 @@ public sealed class LocalFileSystemStorageService : IStorageService
         var path = ResolveFullPath(objectPath);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
-        // CreateNew: an existing file is never overwritten (throws IOException), and is not deleted below.
+        // CreateNew throws for an existing file, which is therefore never overwritten or deleted below.
         var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize: 81_920, useAsync: true);
         try
         {
@@ -82,10 +74,7 @@ public sealed class LocalFileSystemStorageService : IStorageService
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// The file a download token grants, or null when the token is malformed, forged, edited, expired, or names a file that
-    /// does not exist. The caller answers every null the same way, so a probe learns nothing about which check failed.
-    /// </summary>
+    /// <summary>Null for every kind of bad token, so a probe learns nothing about which check failed.</summary>
     public LocalFileDownload? OpenDownload(string token)
     {
         var parts = token.Split('.');
@@ -112,10 +101,7 @@ public sealed class LocalFileSystemStorageService : IStorageService
             : null;
     }
 
-    /// <summary>
-    /// Defence in depth against path traversal: a relative, forward-slash path without empty, "." or ".." segments, whose full
-    /// path is inside the root. Anything else is a programming error, never user input, so it throws.
-    /// </summary>
+    /// <summary>Defence in depth against path traversal. Callers pass only DocumentBlobPath values, so a failure is a bug.</summary>
     private string ResolveFullPath(string objectPath)
     {
         if (string.IsNullOrWhiteSpace(objectPath)
@@ -138,5 +124,4 @@ public sealed class LocalFileSystemStorageService : IStorageService
     private sealed record DownloadToken(string Path, long ExpiresAt, string ContentType, string FileName, bool Inline);
 }
 
-/// <summary>A verified local download: the file and the response headers its token fixed.</summary>
 public sealed record LocalFileDownload(string FullPath, string ContentType, string ContentDisposition);

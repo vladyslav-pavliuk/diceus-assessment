@@ -9,32 +9,21 @@ using Microsoft.Extensions.Logging;
 namespace ClaimsModule.Infrastructure.BackgroundJobs;
 
 /// <summary>
-/// PostGLReserveChangeJob (FRS §12.1, Brief §3.5): enqueued after an approval commits (auto or manual), after a
-/// retry of a failed posting, and by the sweeper (D-15). It is a thin Hangfire entry point: it finds the claim's
-/// organisation (D-31) and sends <see cref="PostGlReserveChangeCommand"/>, which does the idempotent work in one
-/// transaction (ARCHITECTURE-PLAN §6.1 R6, R7).
-/// <para>
-/// Retries (D-35, amended by D-41): Hangfire retries a failed run <see cref="RetryAttempts"/> times, after
-/// 10, 30 and 60 seconds, so four runs in all. When the last run fails, the job marks the posting Failed and
-/// writes GL_POSTING_FAILED in a new unit of work, then rethrows, so the Hangfire dashboard shows the job as
-/// Failed too. The way back is the audited retry endpoint, not a requeue in the dashboard (which is read-only).
-/// </para>
+/// Thin entry point: sets the claim's tenant (D-31) and sends <see cref="PostGlReserveChangeCommand"/>. After the last retry
+/// it marks the posting Failed in a new unit of work and rethrows, so the dashboard shows the failure too (D-35, D-41).
 /// </summary>
 public sealed class PostGLReserveChangeJob(ITenantDirectory tenants, JobScopes jobScopes, ILogger<PostGLReserveChangeJob> logger)
 {
-    /// <summary>Retries after the first run. A constant, because attribute arguments must be.</summary>
+    /// <summary>A constant, because attribute arguments must be.</summary>
     public const int RetryAttempts = 3;
 
-    /// <summary>
-    /// The method Hangfire invokes. Hangfire passes the <paramref name="context"/> and the shutdown token itself;
-    /// the enqueue passes null and <see cref="CancellationToken.None"/> for them.
-    /// </summary>
+    /// <summary>Hangfire supplies <paramref name="context"/> and the cancellation token at run time.</summary>
     [AutomaticRetry(Attempts = RetryAttempts, DelaysInSeconds = [10, 30, 60], OnAttemptsExceeded = AttemptsExceededAction.Fail)]
     [DisplayName("GL posting {2}")]
     public Task ExecuteAsync(Guid reserveHistoryId, Guid claimId, string idempotencyKey, PerformContext? context, CancellationToken cancellationToken) =>
         RunAsync(new GlPostingRequest(reserveHistoryId, claimId, idempotencyKey), GlJobAttempt.From(context), cancellationToken);
 
-    /// <summary>One run of the job. Public so that tests can drive a given attempt without a Hangfire server.</summary>
+    /// <summary>Public so tests can drive a given attempt without a Hangfire server.</summary>
     public async Task<GlPostingOutcome?> RunAsync(GlPostingRequest request, GlJobAttempt attempt, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -47,7 +36,6 @@ public sealed class PostGLReserveChangeJob(ITenantDirectory tenants, JobScopes j
             return null;
         }
 
-        // One correlation id per run, shared by the posting attempt and, if it fails, the failure record.
         var correlationId = Guid.NewGuid();
         try
         {
@@ -82,15 +70,13 @@ public sealed class PostGLReserveChangeJob(ITenantDirectory tenants, JobScopes j
     }
 }
 
-/// <summary>Which run of the GL job this is: the Hangfire job id and how many retries came before it.</summary>
 public sealed record GlJobAttempt(string? JobId, int RetryCount)
 {
-    /// <summary>Hangfire's AutomaticRetry filter stores the number of retries so far under this job parameter.</summary>
+    /// <summary>Written by Hangfire's AutomaticRetry filter.</summary>
     private const string RetryCountParameter = "RetryCount";
 
     public int Number => RetryCount + 1;
 
-    /// <summary>After this run fails, Hangfire schedules no more retries.</summary>
     public bool IsFinal => RetryCount >= PostGLReserveChangeJob.RetryAttempts;
 
     public static GlJobAttempt From(PerformContext? context) =>

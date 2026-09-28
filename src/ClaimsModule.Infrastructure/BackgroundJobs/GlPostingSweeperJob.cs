@@ -5,9 +5,7 @@ using Hangfire;
 namespace ClaimsModule.Infrastructure.BackgroundJobs;
 
 /// <summary>
-/// GlPostingSweeperJob (D-15): every 5 minutes, re-enqueues GL postings whose after-commit enqueue was lost
-/// (ARCHITECTURE-PLAN §6.1 R4), per organisation (<see cref="RequeueStrandedGlPostingsCommand"/>). This makes GL
-/// posting at-least-once without an outbox table; the GL job's compare-and-set makes it exactly-once in effect.
+/// Makes GL posting at-least-once without an outbox table; the job's compare-and-set makes it exactly-once in effect (D-15).
 /// </summary>
 public sealed class GlPostingSweeperJob(ITenantDirectory tenants, JobScopes jobScopes)
 {

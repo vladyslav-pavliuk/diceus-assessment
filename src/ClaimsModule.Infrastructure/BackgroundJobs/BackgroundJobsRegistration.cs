@@ -9,16 +9,15 @@ namespace ClaimsModule.Infrastructure.BackgroundJobs;
 
 internal static class BackgroundJobsRegistration
 {
-    /// <summary>The application database: Hangfire keeps its tables there too, in the [HangFire] schema (D-36).</summary>
+    /// <summary>Hangfire shares the application database, in its own schema (D-36).</summary>
     private const string ConnectionStringName = "ClaimsDb";
 
     public static IServiceCollection AddBackgroundJobs(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<JobsOptions>().Bind(configuration.GetSection(JobsOptions.SectionName));
 
-        // Registered before AddHangfire, which only adds a JobStorage when none exists. Every Hangfire service then
-        // takes this instance from DI instead of the process-wide JobStorage.Current, so two hosts in one process
-        // (the integration tests) never share storage by accident.
+        // Registered before AddHangfire, so Hangfire takes this instance instead of the process-wide JobStorage.Current
+        // and two hosts in one process (the integration tests) never share storage.
         services.AddSingleton<JobStorage>(provider =>
         {
             var connectionString = provider.GetRequiredService<IConfiguration>().GetConnectionString(ConnectionStringName);

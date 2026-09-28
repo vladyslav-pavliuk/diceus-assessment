@@ -2,10 +2,7 @@ using ClaimsModule.Application.Abstractions;
 
 namespace ClaimsModule.Infrastructure.Correlation;
 
-/// <summary>
-/// Scoped holder for the correlation id. The API middleware sets it once per request; a
-/// background job sets it once per execution (Phase 4).
-/// </summary>
+/// <summary>Set once per request by the middleware, or once per run by a background job.</summary>
 public sealed class CorrelationContext : ICorrelationContext
 {
     private string? _correlationId;

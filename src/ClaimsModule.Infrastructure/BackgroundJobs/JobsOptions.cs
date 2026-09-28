@@ -1,14 +1,10 @@
 namespace ClaimsModule.Infrastructure.BackgroundJobs;
 
-/// <summary>The "Jobs" configuration section (D-35, D-41).</summary>
 public sealed class JobsOptions
 {
     public const string SectionName = "Jobs";
 
-    /// <summary>
-    /// Run a Hangfire server in this process (true in every deployed environment). The integration tests turn it
-    /// off and run the jobs themselves, so that nothing processes jobs behind a test's back.
-    /// </summary>
+    /// <summary>Integration tests turn it off and run jobs themselves, so nothing runs behind a test's back.</summary>
     public bool RunServer { get; init; } = true;
 
     public GlPostingOptions GlPosting { get; init; } = new();
@@ -16,9 +12,6 @@ public sealed class JobsOptions
 
 public sealed class GlPostingOptions
 {
-    /// <summary>
-    /// Makes the simulated ledger fail every posting, to demonstrate retries, the Failed state,
-    /// GL_POSTING_FAILED and the retry endpoint (D-35). Off by default.
-    /// </summary>
+    /// <summary>Makes every posting fail, to demo retries and the Failed state (D-35).</summary>
     public bool SimulateFailure { get; init; }
 }
