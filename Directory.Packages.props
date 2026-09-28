@@ -28,12 +28,21 @@
     <!-- Same IdentityModel version that Microsoft.AspNetCore.Authentication.JwtBearer 9.0.20 pulls in;
          mixing IdentityModel versions fails at runtime. -->
     <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.19.2" />
+    <!-- Hangfire 1.8.x: LGPL-3.0, used unmodified as a library (D-37, D-41). -->
+    <PackageVersion Include="Hangfire.Core" Version="1.8.25" />
+    <PackageVersion Include="Hangfire.NetCore" Version="1.8.25" />
+    <PackageVersion Include="Hangfire.SqlServer" Version="1.8.25" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.20" />
+    <!-- Transitive pin: Hangfire.Core asks for Newtonsoft.Json >= 11.0.1, and versions below 13.0.1 carry a
+         high-severity advisory (GHSA-5crp-9r3c-p9vr) that fails the NuGet audit. -->
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 
   <ItemGroup Label="API">
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.20" />
     <PackageVersion Include="Serilog.AspNetCore" Version="9.0.0" />
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="9.0.6" />
+    <PackageVersion Include="Hangfire.AspNetCore" Version="1.8.25" />
   </ItemGroup>
 
   <ItemGroup Label="Tests">
