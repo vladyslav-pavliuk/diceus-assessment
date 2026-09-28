@@ -1,0 +1,135 @@
+<form [formGroup]="group()" class="step">
+  <section class="step__section">
+    <h3 class="step__heading">Policy</h3>
+    <div class="policy-row">
+      <div class="policy-row__search">
+        @if (!group().controls.unknownPolicy.value) {
+          <app-policy-typeahead [control]="group().controls.policy" label="Search policy" />
+        } @else {
+          <div class="banner banner--warning">
+            <mat-icon>help_outline</mat-icon>
+            <span>
+              The claim will be created without a policy link. Reserves cannot be set until a policy
+              is linked (BR-C-06).
+            </span>
+          </div>
+        }
+      </div>
+      <mat-slide-toggle formControlName="unknownPolicy" class="policy-row__toggle"
+        >Unknown policy</mat-slide-toggle
+      >
+    </div>
+
+    @if (policy(); as selected) {
+      <div class="policy-card">
+        <div>
+          <div class="muted policy-card__label">Policy number</div>
+          <div class="policy-card__value">{{ selected.policyNumber }}</div>
+        </div>
+        <div>
+          <div class="muted policy-card__label">Client name</div>
+          <div class="policy-card__value">{{ selected.clientName }}</div>
+        </div>
+        <div>
+          <div class="muted policy-card__label">Effective period</div>
+          <div class="policy-card__value">
+            {{ selected.effectiveDate | date: 'd MMM y' }} –
+            {{ selected.expirationDate | date: 'd MMM y' }}
+          </div>
+        </div>
+        <div class="policy-card__badge">
+          @switch (policyState()) {
+            @case ('in-force') {
+              <span class="in-force in-force--green"
+                ><mat-icon>verified</mat-icon>In force on the loss date</span
+              >
+            }
+            @case ('outside-period') {
+              <span class="in-force in-force--amber"
+                ><mat-icon>warning_amber</mat-icon>Loss date outside the policy period</span
+              >
+            }
+            @default {
+              <span class="in-force in-force--neutral"
+                ><mat-icon>event</mat-icon>Enter the loss date to check cover</span
+              >
+            }
+          }
+        </div>
+      </div>
+    }
+  </section>
+
+  <section class="step__section">
+    <h3 class="step__heading">Loss details</h3>
+    <div class="form-row">
+      <mat-form-field>
+        <mat-label>Loss date</mat-label>
+        <input
+          matInput
+          [matDatepicker]="datePicker"
+          [max]="maxDate"
+          formControlName="lossDate"
+          required
+        />
+        <mat-datepicker-toggle matIconSuffix [for]="datePicker" />
+        <mat-datepicker #datePicker />
+        <mat-error>{{ error(group().controls.lossDate) }}</mat-error>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Loss time</mat-label>
+        <input matInput [matTimepicker]="timePicker" formControlName="lossTime" />
+        <mat-timepicker-toggle matIconSuffix [for]="timePicker" />
+        <mat-timepicker #timePicker interval="30m" />
+        <mat-hint>Local time</mat-hint>
+        <mat-error>{{ error(group().controls.lossTime) }}</mat-error>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Cause of loss</mat-label>
+        <input
+          matInput
+          formControlName="causeOfLoss"
+          [matAutocomplete]="causeAuto"
+          placeholder="Type to search"
+          autocomplete="off"
+          required
+        />
+        <mat-autocomplete #causeAuto [displayWith]="displayCause" autoActiveFirstOption>
+          @for (code of causeOptions(); track code.code) {
+            <mat-option [value]="code">
+              {{ code.name }} <span class="muted">· {{ code.perilCategory }}</span>
+            </mat-option>
+          }
+        </mat-autocomplete>
+        <mat-error>{{ error(group().controls.causeOfLoss) }}</mat-error>
+      </mat-form-field>
+    </div>
+
+    <mat-form-field class="full-width">
+      <mat-label>Loss description</mat-label>
+      <textarea matInput formControlName="lossDescription" rows="4" required></textarea>
+      <mat-hint
+        align="end"
+        [class.hint--ok]="trimmedLength(group().controls.lossDescription.value) >= minLength"
+      >
+        {{ trimmedLength(group().controls.lossDescription.value) }} / {{ minLength }} characters
+        minimum
+      </mat-hint>
+      <mat-error>{{ error(group().controls.lossDescription) }}</mat-error>
+    </mat-form-field>
+
+    <div class="form-row">
+      <mat-form-field>
+        <mat-label>Loss location</mat-label>
+        <input matInput formControlName="lossLocation" autocomplete="off" />
+        <mat-error>{{ error(group().controls.lossLocation) }}</mat-error>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Estimated loss amount (optional)</mat-label>
+        <span matTextPrefix>$&nbsp;</span>
+        <input matInput type="number" min="0" step="0.01" formControlName="estimatedLossAmount" />
+        <mat-error>{{ error(group().controls.estimatedLossAmount) }}</mat-error>
+      </mat-form-field>
+    </div>
+  </section>
+</form>

@@ -1,0 +1,28 @@
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.filters__search {
+  flex: 1 1 220px;
+}
+
+.filters__status {
+  flex: 0 1 200px;
+}
+
+.filters__dates {
+  flex: 0 1 240px;
+}
+
+.filters__handler,
+.filters__cause {
+  flex: 0 1 200px;
+}
+
+.filters__clear {
+  flex: none;
+}

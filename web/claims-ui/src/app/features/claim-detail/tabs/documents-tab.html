@@ -1,0 +1,95 @@
+<div class="tab">
+  <div class="tab__toolbar">
+    <h3 class="tab__heading docs__title">Documents</h3>
+    <span class="spacer"></span>
+    @if (!store.isReadOnly()) {
+      <mat-form-field class="docs__type" subscriptSizing="dynamic">
+        <mat-label>Document type</mat-label>
+        <mat-select [formControl]="documentType">
+          @for (type of documentTypes; track type) {
+            <mat-option [value]="type">{{ label(type) }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      <button mat-flat-button (click)="pickFile()" [disabled]="progress() !== null">
+        <mat-icon>upload_file</mat-icon>
+        Upload
+      </button>
+      <input #fileInput type="file" hidden [accept]="accept" (change)="onFileChosen($event)" />
+    }
+  </div>
+
+  <app-error-summary [messages]="errors()" title="The document was not uploaded:" />
+
+  @if (progress() !== null) {
+    <div class="upload" role="status" aria-live="polite">
+      <div class="upload__text">
+        <span>Uploading {{ uploadingName() }}</span>
+        <span>{{ progress() }}%</span>
+      </div>
+      <mat-progress-bar mode="determinate" [value]="progress()!" />
+    </div>
+  }
+
+  <p class="muted docs__hint">PDF, JPEG, PNG, DOCX, XLSX, TXT or CSV, up to 50 MB.</p>
+
+  @if (store.documents(); as documents) {
+    @if (documents.length === 0) {
+      <app-empty-state
+        icon="folder_open"
+        title="No documents yet"
+        message="Upload police reports, invoices, photos and other evidence."
+      />
+    } @else {
+      <div class="table-wrap">
+        <table mat-table [dataSource]="documents" class="data-table">
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Name</th>
+            <td mat-cell *matCellDef="let document">
+              <span class="docs__name"
+                ><mat-icon>description</mat-icon>{{ document.documentName }}</span
+              >
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="type">
+            <th mat-header-cell *matHeaderCellDef>Type</th>
+            <td mat-cell *matCellDef="let document">{{ label(document.documentType) }}</td>
+          </ng-container>
+          <ng-container matColumnDef="uploadedAt">
+            <th mat-header-cell *matHeaderCellDef>Uploaded</th>
+            <td mat-cell *matCellDef="let document">
+              {{ document.uploadedAt | date: 'd MMM y, HH:mm' }}
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="uploadedBy">
+            <th mat-header-cell *matHeaderCellDef>Uploaded by</th>
+            <td mat-cell *matCellDef="let document">{{ document.uploadedByName ?? 'System' }}</td>
+          </ng-container>
+          <ng-container matColumnDef="size">
+            <th mat-header-cell *matHeaderCellDef class="numeric">Size</th>
+            <td mat-cell *matCellDef="let document" class="numeric">
+              {{ document.fileSizeBytes | fileSize }}
+            </td>
+          </ng-container>
+          <ng-container matColumnDef="download">
+            <th mat-header-cell *matHeaderCellDef></th>
+            <td mat-cell *matCellDef="let document" class="numeric">
+              <button
+                mat-stroked-button
+                (click)="download(document)"
+                [disabled]="opening() === document.id"
+              >
+                <mat-icon>open_in_new</mat-icon>
+                Download
+              </button>
+            </td>
+          </ng-container>
+          <tr mat-header-row *matHeaderRowDef="columns"></tr>
+          <tr mat-row *matRowDef="let row; columns: columns"></tr>
+        </table>
+      </div>
+    }
+  } @else {
+    <div class="muted docs__loading" aria-busy="true">Loading documents…</div>
+  }
+</div>

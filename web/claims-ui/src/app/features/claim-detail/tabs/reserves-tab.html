@@ -1,0 +1,231 @@
+<mat-drawer-container class="drawer-container" [hasBackdrop]="true">
+  <mat-drawer
+    position="end"
+    mode="over"
+    [opened]="panelOpen()"
+    (closedStart)="panelOpen.set(false)"
+    class="drawer"
+  >
+    @if (panelOpen() && reserves(); as current) {
+      <app-add-reserve-panel
+        [claim]="claim()"
+        [reserves]="current"
+        (submitted)="onSubmitted($event)"
+        (closed)="panelOpen.set(false)"
+      />
+    }
+  </mat-drawer>
+
+  <mat-drawer-content>
+    <div class="tab">
+      @if (reserves(); as current) {
+        <div class="tab__toolbar">
+          <h3 class="tab__heading reserves__title">Reserves</h3>
+          <span class="muted">Net total <app-amount [value]="current.totalReserves" /></span>
+          <span class="spacer"></span>
+          @if (!store.isReadOnly()) {
+            <button mat-flat-button (click)="panelOpen.set(true)">
+              <mat-icon>add</mat-icon>
+              Add reserve
+            </button>
+          }
+        </div>
+
+        @if (!claim().policyId) {
+          <div class="banner banner--warning">
+            <mat-icon>link_off</mat-icon>
+            <span
+              >No policy linked. Policy must be associated before reserves can be set. Link one on
+              the Overview tab.</span
+            >
+          </div>
+        }
+
+        <div class="summary-cards">
+          @for (card of cards(); track card.type) {
+            <div
+              class="summary-card"
+              [class.summary-card--pending]="card.summary?.hasPendingApproval"
+              [class.summary-card--empty]="!card.summary"
+            >
+              <div class="summary-card__title">{{ label(card.type) }}</div>
+              @if (card.summary; as summary) {
+                <div class="summary-card__amount">
+                  <app-amount [value]="summary.currentAmount" />
+                </div>
+                <div class="summary-card__label">Current balance</div>
+                @if (summary.hasPendingApproval) {
+                  <div class="summary-card__pending">
+                    <mat-icon>hourglass_top</mat-icon>
+                    <app-amount [value]="summary.pendingAmount" [signed]="true" /> pending approval
+                  </div>
+                } @else {
+                  <div class="summary-card__label">Nothing pending</div>
+                }
+              } @else {
+                <div class="summary-card__amount muted">—</div>
+                <div class="summary-card__label">Not opened</div>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="aggregate">
+          <div class="aggregate__text">
+            <span>Approved cost reserves (BR-R-05)</span>
+            <span>
+              <app-amount [value]="current.approvedAggregate" /> of
+              <app-amount [value]="current.aggregateLimit" />&nbsp;
+              <span class="muted">({{ aggregateShare() | percent: '1.0-1' }})</span>
+            </span>
+          </div>
+          <mat-progress-bar mode="determinate" [value]="aggregateShare() * 100" />
+          <div class="aggregate__override">
+            @if (current.reserveLimitOverride) {
+              <app-badge tone="accent">Manager override: limit may be exceeded</app-badge>
+            }
+            @if (isManager() && !store.isReadOnly()) {
+              <button mat-button (click)="toggleOverride()" [disabled]="savingOverride()">
+                {{ current.reserveLimitOverride ? 'Remove override' : 'Allow above limit' }}
+              </button>
+            }
+          </div>
+        </div>
+
+        <h3 class="tab__heading">Transaction history</h3>
+        @if (current.transactions.length === 0) {
+          <app-empty-state icon="account_balance_wallet" title="No reserve transactions yet" />
+        } @else {
+          <div class="table-wrap">
+            <table mat-table [dataSource]="current.transactions" class="data-table">
+              <ng-container matColumnDef="date">
+                <th mat-header-cell *matHeaderCellDef>Date</th>
+                <td mat-cell *matCellDef="let row">{{ row.createdAt | date: 'd MMM y, HH:mm' }}</td>
+              </ng-container>
+              <ng-container matColumnDef="type">
+                <th mat-header-cell *matHeaderCellDef>Type</th>
+                <td mat-cell *matCellDef="let row">{{ row.transactionType }}</td>
+              </ng-container>
+              <ng-container matColumnDef="component">
+                <th mat-header-cell *matHeaderCellDef>Component</th>
+                <td mat-cell *matCellDef="let row">{{ label(row.component) }}</td>
+              </ng-container>
+              <ng-container matColumnDef="amount">
+                <th mat-header-cell *matHeaderCellDef class="numeric">Amount</th>
+                <td mat-cell *matCellDef="let row" class="numeric" [matTooltip]="row.changeReason">
+                  <app-amount [value]="row.amount" [signed]="true" />
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="status">
+                <th mat-header-cell *matHeaderCellDef>Status</th>
+                <td mat-cell *matCellDef="let row">
+                  <app-badge [tone]="approvalTone(row)">{{ label(row.approvalStatus) }}</app-badge>
+                  @if (row.approvalStatus === 'PendingApproval') {
+                    <div class="muted row-note">Needs {{ row.requiredAuthority }}</div>
+                  }
+                  @if (row.rejectionReason) {
+                    <div class="muted row-note" [matTooltip]="row.rejectionReason">
+                      “{{ row.rejectionReason }}”
+                    </div>
+                  }
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="submittedBy">
+                <th mat-header-cell *matHeaderCellDef>Submitted by</th>
+                <td mat-cell *matCellDef="let row">{{ row.submittedByName ?? '—' }}</td>
+              </ng-container>
+              <ng-container matColumnDef="approvedBy">
+                <th mat-header-cell *matHeaderCellDef>Approved by</th>
+                <td mat-cell *matCellDef="let row">
+                  @if (row.approvalStatus === 'AutoApproved') {
+                    <span class="muted">Automatic</span>
+                  } @else if (row.approvedByName) {
+                    {{ row.approvedByName }}
+                  } @else if (row.rejectedByName) {
+                    <span class="muted">Rejected by {{ row.rejectedByName }}</span>
+                  } @else {
+                    —
+                  }
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="posting">
+                <th mat-header-cell *matHeaderCellDef>GL posting</th>
+                <td mat-cell *matCellDef="let row">
+                  @if (row.approvalStatus === 'Approved' || row.approvalStatus === 'AutoApproved') {
+                    <app-badge [tone]="postingTone(row)">{{ row.postingStatus }}</app-badge>
+                  } @else {
+                    <span class="muted">—</span>
+                  }
+                </td>
+              </ng-container>
+              <ng-container matColumnDef="actions">
+                <th mat-header-cell *matHeaderCellDef></th>
+                <td mat-cell *matCellDef="let row">
+                  @let rowActions = actions(row);
+                  <div class="row-actions">
+                    @if (rowActions.showDecision) {
+                      <span [matTooltip]="rowActions.approveBlockedReason ?? ''">
+                        <button
+                          mat-flat-button
+                          class="compact"
+                          (click)="approve(row)"
+                          [disabled]="
+                            rowActions.approveBlockedReason !== null || busyRow() === row.id
+                          "
+                        >
+                          Approve
+                        </button>
+                      </span>
+                      <span [matTooltip]="rowActions.rejectBlockedReason ?? ''">
+                        <button
+                          mat-stroked-button
+                          class="compact"
+                          (click)="reject(row)"
+                          [disabled]="
+                            rowActions.rejectBlockedReason !== null || busyRow() === row.id
+                          "
+                        >
+                          Reject
+                        </button>
+                      </span>
+                    }
+                    @if (rowActions.showRetract) {
+                      <button
+                        mat-button
+                        class="compact"
+                        (click)="retract(row)"
+                        [disabled]="busyRow() === row.id"
+                      >
+                        Retract
+                      </button>
+                    }
+                    @if (rowActions.showRetryPosting) {
+                      <button
+                        mat-stroked-button
+                        class="compact"
+                        (click)="retryPosting(row)"
+                        [disabled]="busyRow() === row.id"
+                      >
+                        <mat-icon>refresh</mat-icon>
+                        Retry
+                      </button>
+                    }
+                  </div>
+                </td>
+              </ng-container>
+
+              <tr mat-header-row *matHeaderRowDef="columns"></tr>
+              <tr
+                mat-row
+                *matRowDef="let row; columns: columns"
+                [class.row--pending]="row.approvalStatus === 'PendingApproval'"
+              ></tr>
+            </table>
+          </div>
+        }
+      } @else {
+        <div class="loading-block" aria-busy="true">Loading reserves…</div>
+      }
+    </div>
+  </mat-drawer-content>
+</mat-drawer-container>

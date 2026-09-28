@@ -1,0 +1,132 @@
+<header class="page-header">
+  <h1>Claims</h1>
+  @if (page(); as current) {
+    <span class="muted"
+      >{{ current.totalCount }} {{ current.totalCount === 1 ? 'claim' : 'claims' }}</span
+    >
+  }
+  <span class="page-header__spacer"></span>
+  <a mat-flat-button routerLink="/claims/new">
+    <mat-icon>add</mat-icon>
+    Log New Claim
+  </a>
+</header>
+
+<app-claims-filter-bar [value]="filters()" (filtersChange)="onFiltersChange($event)" />
+
+<section class="table-wrap" [class.table-wrap--stale]="!firstLoad() && page() && loading()">
+  @if (firstLoad()) {
+    <div class="skeleton" aria-label="Loading claims" aria-busy="true">
+      @for (row of skeletonRows; track row) {
+        <div class="skeleton__row"></div>
+      }
+    </div>
+  } @else if (failed() && !page()) {
+    <app-empty-state
+      icon="cloud_off"
+      title="The claims could not be loaded"
+      message="Check that the API is running, then try again."
+    >
+      <button mat-stroked-button (click)="retry()">Try again</button>
+    </app-empty-state>
+  } @else if (page(); as current) {
+    @if (current.items.length === 0 && hasFilters()) {
+      <app-empty-state
+        icon="search_off"
+        title="No claims match these filters"
+        message="Try widening the date range or clearing a filter."
+      >
+        <button mat-stroked-button (click)="clearFilters()">Clear filters</button>
+      </app-empty-state>
+    } @else if (current.items.length === 0) {
+      <app-empty-state
+        icon="assignment"
+        title="No claims yet"
+        message="Log the first notice of loss to create a claim."
+      >
+        <a mat-stroked-button routerLink="/claims/new">Log New Claim</a>
+      </app-empty-state>
+    } @else {
+      <table mat-table [dataSource]="current.items" class="claims-table">
+        <ng-container matColumnDef="claimNumber">
+          <th mat-header-cell *matHeaderCellDef>Claim number</th>
+          <td mat-cell *matCellDef="let claim">
+            <span class="claim-number">{{ claim.claimNumber }}</span>
+            @if (claim.isSlaBreached) {
+              <mat-icon class="sla-icon" matTooltip="SLA breached: not updated for over 48 hours"
+                >schedule</mat-icon
+              >
+            }
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="policyNumber">
+          <th mat-header-cell *matHeaderCellDef>Policy number</th>
+          <td mat-cell *matCellDef="let claim">
+            @if (claim.policyNumber) {
+              {{ claim.policyNumber }}
+            } @else {
+              <span class="muted">Unknown policy</span>
+            }
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="clientName">
+          <th mat-header-cell *matHeaderCellDef>Client name</th>
+          <td mat-cell *matCellDef="let claim">{{ claim.clientName ?? '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="lossDate">
+          <th mat-header-cell *matHeaderCellDef>Loss date</th>
+          <td mat-cell *matCellDef="let claim">{{ claim.lossDate | date: 'd MMM y' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="cause">
+          <th mat-header-cell *matHeaderCellDef>Cause of loss</th>
+          <td mat-cell *matCellDef="let claim">
+            {{ claim.causeOfLossName ?? claim.causeOfLossCode }}
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let claim"><app-status-chip [status]="claim.status" /></td>
+        </ng-container>
+
+        <ng-container matColumnDef="handler">
+          <th mat-header-cell *matHeaderCellDef>Handler</th>
+          <td mat-cell *matCellDef="let claim">{{ claim.assignedHandlerName ?? '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="totalReserves">
+          <th mat-header-cell *matHeaderCellDef class="numeric">Total reserves</th>
+          <td mat-cell *matCellDef="let claim" class="numeric">
+            <app-amount [value]="claim.totalReserves" />
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="columns; sticky: true"></tr>
+        <tr
+          mat-row
+          *matRowDef="let claim; columns: columns"
+          class="clickable-row"
+          tabindex="0"
+          [attr.aria-label]="'Open claim ' + claim.claimNumber"
+          (click)="open(claim)"
+          (keydown.enter)="open(claim)"
+        ></tr>
+      </table>
+    }
+
+    <mat-paginator
+      [class.hidden]="current.totalCount === 0"
+      [length]="current.totalCount"
+      [pageIndex]="query().page - 1"
+      [pageSize]="query().pageSize"
+      [pageSizeOptions]="pageSizeOptions"
+      showFirstLastButtons
+      (page)="onPage($event)"
+      aria-label="Claims pages"
+    />
+  }
+</section>

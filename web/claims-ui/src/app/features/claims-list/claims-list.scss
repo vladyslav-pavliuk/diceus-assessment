@@ -1,0 +1,57 @@
+.table-wrap--stale .claims-table {
+  opacity: 0.6;
+  transition: opacity 120ms;
+}
+
+.claims-table {
+  width: 100%;
+}
+
+.numeric {
+  text-align: right;
+}
+
+.claim-number {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.sla-icon {
+  vertical-align: middle;
+  margin-left: 6px;
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--app-negative);
+}
+
+.skeleton {
+  padding: 8px 16px;
+}
+
+.skeleton__row {
+  height: 44px;
+  margin: 8px 0;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--mat-sys-surface-container) 0%,
+    var(--mat-sys-surface-container-high) 50%,
+    var(--mat-sys-surface-container) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.hidden {
+  display: none;
+}

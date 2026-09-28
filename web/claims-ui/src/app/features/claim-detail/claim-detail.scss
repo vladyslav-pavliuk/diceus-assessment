@@ -1,0 +1,37 @@
+.detail-tabs {
+  margin-top: 16px;
+  background: var(--mat-sys-surface);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.tab-count {
+  margin-left: 8px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--mat-sys-surface-container-high);
+  font: var(--mat-sys-label-small);
+}
+
+.detail-skeleton__header,
+.detail-skeleton__body {
+  border-radius: 12px;
+  background: var(--mat-sys-surface-container);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.detail-skeleton__header {
+  height: 140px;
+  margin-bottom: 16px;
+}
+
+.detail-skeleton__body {
+  height: 420px;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.5;
+  }
+}

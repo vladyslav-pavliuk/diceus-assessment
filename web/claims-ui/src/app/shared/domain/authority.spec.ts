@@ -1,0 +1,43 @@
+import { AUTHORITY_LABELS, requiredAuthority } from './authority';
+
+// RSV-09: the live authority indicator (FRS §11.2 step 3, §11.3 Add Reserve panel). The tiers mirror
+// ReserveAuthorityPolicy in the Domain (FRS §6.3, BR-R-02): ≤ $10,000 auto, ≤ $100,000 supervisor,
+// above that manager, by the absolute amount of the single transaction (D-05).
+
+describe('RSV-09 authority indicator', () => {
+  it.each([
+    [0.01, 'Auto'],
+    [9_999.99, 'Auto'],
+    [10_000, 'Auto'],
+    [10_000.01, 'Supervisor'],
+    [50_000, 'Supervisor'],
+    [100_000, 'Supervisor'],
+    [100_000.01, 'Manager'],
+    [2_500_000, 'Manager'],
+  ] as const)('RSV_09_Authority_indicator_boundaries: %s → %s', (amount, tier) => {
+    expect(requiredAuthority(amount)).toBe(tier);
+  });
+
+  it.each([
+    [-10_000, 'Auto'],
+    [-10_000.01, 'Supervisor'],
+    [-100_000.01, 'Manager'],
+  ] as const)('RSV_09_Negative_amounts_use_the_absolute_value: %s → %s', (amount, tier) => {
+    expect(requiredAuthority(amount)).toBe(tier);
+  });
+
+  it.each([null, undefined, 0, Number.NaN, Number.POSITIVE_INFINITY])(
+    'RSV_09_No_indicator_without_a_usable_amount: %s',
+    (amount) => {
+      expect(requiredAuthority(amount)).toBeNull();
+    },
+  );
+
+  it('RSV_09_Labels_are_the_FRS_§11.2_texts', () => {
+    expect(AUTHORITY_LABELS).toEqual({
+      Auto: '✓ Auto-approved (≤ $10,000)',
+      Supervisor: '⚠ Supervisor approval required',
+      Manager: '⚠ Manager approval required',
+    });
+  });
+});

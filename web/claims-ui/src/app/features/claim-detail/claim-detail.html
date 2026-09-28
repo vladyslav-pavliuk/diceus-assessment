@@ -1,0 +1,70 @@
+@if (store.notFound()) {
+  <app-empty-state
+    icon="search_off"
+    title="Claim not found"
+    message="It may have been removed, or the link is wrong."
+  >
+    <a mat-stroked-button routerLink="/claims">Back to claims</a>
+  </app-empty-state>
+} @else if (store.loadFailed()) {
+  <app-empty-state
+    icon="cloud_off"
+    title="The claim could not be loaded"
+    message="Check that the API is running, then try again."
+  >
+    <button mat-stroked-button (click)="store.reloadClaim()">Try again</button>
+  </app-empty-state>
+} @else if (store.claim(); as claim) {
+  <app-claim-header [claim]="claim" />
+
+  <mat-tab-group
+    class="detail-tabs"
+    [selectedIndex]="tabIndex()"
+    (selectedTabChange)="onTabChange($event)"
+    animationDuration="150ms"
+    mat-stretch-tabs="false"
+  >
+    <mat-tab label="Overview">
+      <app-overview-tab [claim]="claim" />
+    </mat-tab>
+    <mat-tab>
+      <ng-template mat-tab-label>
+        Parties
+        <span class="tab-count">{{ claim.parties.length }}</span>
+      </ng-template>
+      <app-parties-tab [claim]="claim" />
+    </mat-tab>
+    <mat-tab>
+      <ng-template mat-tab-label>
+        Reserves
+        @if (claim.reserveComponents.length > 0) {
+          <span class="tab-count">{{ claim.reserveComponents.length }}</span>
+        }
+      </ng-template>
+      <ng-template matTabContent>
+        <app-reserves-tab [claim]="claim" />
+      </ng-template>
+    </mat-tab>
+    <mat-tab>
+      <ng-template mat-tab-label>
+        Documents
+        @if (claim.documents.length > 0) {
+          <span class="tab-count">{{ claim.documents.length }}</span>
+        }
+      </ng-template>
+      <ng-template matTabContent>
+        <app-documents-tab [claim]="claim" />
+      </ng-template>
+    </mat-tab>
+    <mat-tab label="Audit log">
+      <ng-template matTabContent>
+        <app-audit-tab [claimId]="claim.id" [claimUpdatedAt]="claim.updatedAt" />
+      </ng-template>
+    </mat-tab>
+  </mat-tab-group>
+} @else {
+  <div class="detail-skeleton" aria-busy="true" aria-label="Loading claim">
+    <div class="detail-skeleton__header"></div>
+    <div class="detail-skeleton__body"></div>
+  </div>
+}

@@ -1,0 +1,18 @@
+.fnol {
+  padding: 8px 24px 24px;
+}
+
+.fnol__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  margin-top: 8px;
+}
+
+.fnol__spinner {
+  display: inline-block;
+  margin-right: 8px;
+  vertical-align: middle;
+}

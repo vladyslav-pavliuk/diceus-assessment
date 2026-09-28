@@ -1,0 +1,68 @@
+<form class="filters" [formGroup]="form" (submit)="$event.preventDefault()">
+  <mat-form-field class="filters__search">
+    <mat-label>Search</mat-label>
+    <mat-icon matPrefix>search</mat-icon>
+    <input matInput formControlName="search" placeholder="Claim number or client" />
+  </mat-form-field>
+
+  <mat-form-field class="filters__status">
+    <mat-label>Status</mat-label>
+    <mat-select formControlName="status" multiple>
+      @for (status of statuses; track status) {
+        <mat-option [value]="status">{{ label(status) }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <mat-form-field class="filters__dates">
+    <mat-label>Loss date</mat-label>
+    <mat-date-range-input [rangePicker]="range">
+      <input matStartDate formControlName="dateFrom" placeholder="From" />
+      <input matEndDate formControlName="dateTo" placeholder="To" />
+    </mat-date-range-input>
+    <mat-datepicker-toggle matIconSuffix [for]="range" />
+    <mat-date-range-picker #range />
+  </mat-form-field>
+
+  <mat-form-field class="filters__handler">
+    <mat-label>Assigned handler</mat-label>
+    <input
+      matInput
+      formControlName="handler"
+      [matAutocomplete]="handlerAuto"
+      placeholder="Type a name"
+    />
+    <mat-autocomplete #handlerAuto [displayWith]="displayUser" autoActiveFirstOption>
+      @for (user of handlerOptions(); track user.id) {
+        <mat-option [value]="user"
+          >{{ user.displayName }} <span class="muted">· {{ user.role }}</span></mat-option
+        >
+      }
+    </mat-autocomplete>
+  </mat-form-field>
+
+  <mat-form-field class="filters__cause">
+    <mat-label>Cause of loss</mat-label>
+    <mat-select formControlName="cause">
+      <mat-option [value]="null">Any cause</mat-option>
+      @for (group of causeGroups(); track group.category) {
+        <mat-optgroup [label]="group.category">
+          @for (code of group.codes; track code.code) {
+            <mat-option [value]="code.code">{{ code.name }}</mat-option>
+          }
+        </mat-optgroup>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <button
+    mat-button
+    type="button"
+    class="filters__clear"
+    (click)="clear()"
+    [disabled]="!hasFilters()"
+  >
+    <mat-icon>filter_alt_off</mat-icon>
+    Clear
+  </button>
+</form>
