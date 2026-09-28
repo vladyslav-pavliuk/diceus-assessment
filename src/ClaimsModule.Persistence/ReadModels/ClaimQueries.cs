@@ -356,6 +356,48 @@ internal sealed class ClaimQueries(ClaimsDbContext dbContext, IMapper mapper) : 
                 Status = component.Status,
             });
 
+    public async Task<ClaimStatus?> GetStatusAsync(Guid claimId, CancellationToken cancellationToken) =>
+        await dbContext.Claims.AsNoTracking()
+            .Where(claim => claim.Id == claimId)
+            .Select(claim => (ClaimStatus?)claim.Status)
+            .SingleOrDefaultAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<ClaimDocumentRecord>?> ListDocumentsAsync(Guid claimId, CancellationToken cancellationToken)
+    {
+        if (!await ClaimExistsAsync(claimId, cancellationToken))
+        {
+            return null;
+        }
+
+        // Ordered before the projection: EF cannot see through the record's constructor.
+        return await ToDocumentRecords(Documents()
+                .Where(document => document.ClaimId == claimId)
+                .OrderByDescending(document => document.UploadedAt).ThenByDescending(document => document.Id))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<ClaimDocumentRecord?> GetDocumentAsync(Guid claimId, Guid documentId, CancellationToken cancellationToken) =>
+        await ToDocumentRecords(Documents().Where(document => document.ClaimId == claimId && document.Id == documentId))
+            .SingleOrDefaultAsync(cancellationToken);
+
+    public Task<bool> DocumentExistsAsync(Guid documentId, CancellationToken cancellationToken) =>
+        Documents().AnyAsync(document => document.Id == documentId, cancellationToken);
+
+    private IQueryable<ClaimDocument> Documents() => dbContext.Set<ClaimDocument>().AsNoTracking();
+
+    private IQueryable<ClaimDocumentRecord> ToDocumentRecords(IQueryable<ClaimDocument> documents) =>
+        documents.Select(document => new ClaimDocumentRecord(
+            document.Id,
+            document.DocumentType,
+            document.DocumentName,
+            document.ContentType,
+            document.FileSizeBytes,
+            document.UploadedAt,
+            document.UploadedByUserId,
+            dbContext.Users.Where(user => user.Id == document.UploadedByUserId).Select(user => user.DisplayName).FirstOrDefault(),
+            document.Notes,
+            document.BlobPath));
+
     private Task<bool> ClaimExistsAsync(Guid claimId, CancellationToken cancellationToken) =>
         dbContext.Claims.AnyAsync(claim => claim.Id == claimId, cancellationToken);
 
