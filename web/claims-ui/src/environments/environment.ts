@@ -1,7 +1,10 @@
-// Production build settings. Phase 7 (deployment) sets apiBaseUrl to the Container App's URL at build time.
+// Production build settings. The API origin is a build-time constant (D-44): angular.json defaults it to the local API,
+// and the deploy workflow overrides it with the Container App's URL: ng build --define "API_BASE_URL='https://…'".
+declare const API_BASE_URL: string;
+
 export const environment = {
   production: true,
-  apiBaseUrl: 'http://localhost:5080',
+  apiBaseUrl: API_BASE_URL,
   /** The seeded user a new browser tab signs in as (D-16); the toolbar switcher changes it. */
   defaultUsername: 'handler.alex',
 };
