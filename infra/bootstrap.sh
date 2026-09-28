@@ -64,18 +64,32 @@ if [[ -z "$SP_OBJECT_ID" ]]; then
 fi
 echo "  client id $CLIENT_ID, service principal object id $SP_OBJECT_ID"
 
-echo "▶ Federated credential: repo:$REPO:ref:refs/heads/main"
-if [[ -z "$(az ad app federated-credential list --id "$CLIENT_ID" --query "[?name=='github-main'].name" --output tsv)" ]]; then
-  az ad app federated-credential create --id "$CLIENT_ID" --parameters "$(cat <<JSON
+# The subject must match the token's "sub" claim exactly. Newer repositories use immutable subjects that carry the owner
+# and repository ids (repo:owner@123/name@456:…), older ones the names only; GitHub reports the prefix it uses.
+OIDC_SETTINGS="$(gh api "repos/$REPO/actions/oidc/customization/sub")"
+if [[ "$(jq -r '.use_default' <<<"$OIDC_SETTINGS")" != true ]]; then
+  echo "The repository has a custom OIDC subject template; set the federated credential's subject by hand." >&2
+  exit 1
+fi
+SUBJECT="$(jq -r --arg repo "repo:$REPO" '.sub_claim_prefix // $repo' <<<"$OIDC_SETTINGS"):ref:refs/heads/main"
+
+echo "▶ Federated credential: $SUBJECT"
+CREDENTIAL="$(cat <<JSON
 {
   "name": "github-main",
   "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:${REPO}:ref:refs/heads/main",
+  "subject": "${SUBJECT}",
   "audiences": ["api://AzureADTokenExchange"],
   "description": "GitHub Actions deploy workflow, main branch only"
 }
 JSON
-)" --output none
+)"
+EXISTING_SUBJECT="$(az ad app federated-credential list --id "$CLIENT_ID" --query "[?name=='github-main'].subject | [0]" --output tsv)"
+if [[ -z "$EXISTING_SUBJECT" ]]; then
+  az ad app federated-credential create --id "$CLIENT_ID" --parameters "$CREDENTIAL" --output none
+elif [[ "$EXISTING_SUBJECT" != "$SUBJECT" ]]; then
+  echo "  replacing subject $EXISTING_SUBJECT"
+  az ad app federated-credential update --id "$CLIENT_ID" --federated-credential-id github-main --parameters "$CREDENTIAL" --output none
 fi
 
 echo "▶ Roles on $RESOURCE_GROUP (a new service principal can take a minute to be visible to RBAC)"

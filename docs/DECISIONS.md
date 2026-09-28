@@ -1395,8 +1395,10 @@ reviewer will probe (Q1–Q3), implemented as recommended; the rest are choices 
   Verified locally against SQL Server 2022 with an equivalent SQL-auth user: the full smoke test passes, Hangfire creates its schema, and `UPDATE
   ClaimAuditLog` (Msg 229), `DISABLE`/`DROP TRIGGER` (Msg 1088/3701), `CREATE TABLE dbo.x` (Msg 2760) and `ALTER TABLE dbo.Claims` (Msg 1088) are refused.
 - **Q3. No GitHub environment; the federated credential trusts `refs/heads/main`.** GitHub environments (and their approval gates) are not available for
-  private repositories on the Free plan, and this repository is private. The credential's subject is `repo:<owner>/<repo>:ref:refs/heads/main`, so a
-  workflow dispatched from any other branch cannot sign in to Azure. If the repository becomes public, or the plan allows it, switch to an environment
+  private repositories on the Free plan, and this repository is private. The credential's subject is `<prefix>:ref:refs/heads/main`, so a
+  workflow dispatched from any other branch cannot sign in to Azure. The prefix is the one GitHub issues for the repository
+  (`actions/oidc/customization/sub` → `sub_claim_prefix`): this repository uses **immutable subjects**, `repo:vladyslav-pavliuk@64861208/diceus-assessment@1390636621`,
+  which also stop a deleted-and-recreated repository of the same name from inheriting the trust (found on the first run, see the AI log). If the repository becomes public, or the plan allows it, switch to an environment
   (`environment: production` on the Azure jobs, subject `repo:…:environment:production`) and add a required reviewer. **Recommendation: main-branch
   subject now.**
 

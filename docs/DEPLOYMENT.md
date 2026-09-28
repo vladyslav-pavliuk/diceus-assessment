@@ -50,7 +50,7 @@ Everything below needs a human with rights no pipeline should have. After step 5
 
 1. **Subscription.** An Azure subscription where you are **Owner** (any type except "Azure for Students Starter", which the SQL free offer
    excludes). The SQL free offer allows 10 free databases per subscription, all in one region; if you already use it in another region, pass that region.
-2. **Push the code.** The GitHub repository must contain `main` (the federated credential trusts `refs/heads/main` only; D-44 Q3):
+2. **Push the code.** The GitHub repository's `main` must contain the workflows (GitHub runs a manual workflow only if it is on the default branch, and the federated credential trusts `refs/heads/main` only; D-44 Q3):
    ```bash
    git push -u origin main
    ```
@@ -89,7 +89,7 @@ Everything below needs a human with rights no pipeline should have. After step 5
 | Providers | `az provider register --namespace <ns> --wait` for Microsoft.App, OperationalInsights, ManagedIdentity, KeyVault, Storage, Sql, Web |
 | Resource group | `az group create -n rg-claims-demo -l westeurope` |
 | App registration + SP | `az ad app create --display-name github-claims-deploy`, then `az ad sp create --id <appId>` |
-| Federated credential | issuer `https://token.actions.githubusercontent.com`, subject `repo:<owner>/<repo>:ref:refs/heads/main`, audience `api://AzureADTokenExchange` |
+| Federated credential | issuer `https://token.actions.githubusercontent.com`, subject `<sub_claim_prefix>:ref:refs/heads/main`, audience `api://AzureADTokenExchange`. Take the prefix from `gh api repos/<owner>/<repo>/actions/oidc/customization/sub`: newer repositories use immutable subjects such as `repo:owner@123/name@456` |
 | Roles (scope: the resource group) | `Contributor` and `Role Based Access Control Administrator` for the SP |
 | Repository variables | as listed in step 4 (`gh variable set NAME --body VALUE`) |
 
@@ -139,7 +139,7 @@ It also runs locally against docker compose (`scripts/smoke-test.sh http://local
 
 | Symptom | Cause / fix |
 |---|---|
-| `azure/login` fails with `AADSTS70021` / no matching federated identity | the workflow ran from a branch other than `main`, or the repository was renamed; the subject must be `repo:<owner>/<repo>:ref:refs/heads/main` |
+| `azure/login` fails with `AADSTS700213` / `AADSTS70021`, no matching federated identity | the credential's subject differs from the token's `subject claim` (printed in the log). Either the run was not on `main`, or the credential uses the name-only form while the repository issues immutable subjects (`repo:owner@<id>/repo@<id>:…`). Re-run `infra/bootstrap.sh`: it reads the prefix from GitHub and corrects the credential |
 | `AuthorizationFailed` on a role assignment in `main.bicep` | the SP lacks *Role Based Access Control Administrator* on the resource group (bootstrap step) |
 | Key Vault `Forbidden` on the first run | role assignment still propagating; the step retries for 3 minutes |
 | API revision stuck *Activating*, "unable to fetch secret" | the identity's Key Vault role is still propagating on the very first run; the `api` job retries |

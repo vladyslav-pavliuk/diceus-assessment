@@ -95,3 +95,17 @@ Where Claude departed from written text, it did not decide silently: App Service
 - Run the manual steps in `docs/DEPLOYMENT.md` (push `main`, `az login`, `gh auth login`, `infra/bootstrap.sh`, first workflow run, make the ghcr package
   public, re-run). Then record the real run here: what failed on Azure, if anything.
 - `.claude/launch.json` is still uncommitted (not decided in Phase 6).
+
+## 7. First run on Azure (2026-09-28)
+Vlad ran `infra/bootstrap.sh` (all repository variables set) and then `gh workflow run deploy.yml --ref main`.
+
+1. **HTTP 404, "workflow deploy.yml not found on the default branch".** The workflows were only on `phase-7-azure`; the runbook said "push `main`"
+   without saying that Phase 7 had to be merged first. Vlad merged `phase-7-azure` into `main` and pushed (`eab37f8`). DEPLOYMENT.md step 2 now says why.
+2. **Run 36429843805 failed in two jobs:**
+   - `image`: *Check the image is publicly pullable*, as designed: the new ghcr package is private (manual step 5).
+   - `infra`: `azure/login` → `AADSTS700213: No matching federated identity record found for presented assertion subject
+     'repo:vladyslav-pavliuk@64861208/diceus-assessment@1390636621:ref:refs/heads/main'`. **Claude's mistake:** `bootstrap.sh` hard-coded the name-only
+     subject `repo:<owner>/<repo>:ref:refs/heads/main`, but this repository issues GitHub's immutable subjects (owner and repository ids in the claim).
+     Claude had not checked the repository's OIDC settings. Fix: `bootstrap.sh` reads `sub_claim_prefix` from `GET repos/{repo}/actions/oidc/customization/sub`,
+     refuses a custom subject template, and updates an existing credential whose subject differs. Verified that the computed subject equals the one in the
+     error. D-44 Q3 and DEPLOYMENT.md (manual table, troubleshooting) updated.
