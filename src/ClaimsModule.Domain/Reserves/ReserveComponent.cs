@@ -3,13 +3,8 @@ using ClaimsModule.Domain.Common;
 namespace ClaimsModule.Domain.Reserves;
 
 /// <summary>
-/// A reserve line of one type on a claim (FRS §6.2, §9.5). An entity inside the Claim aggregate
-/// (ARCHITECTURE-PLAN §2.2): the $10M limit, the no-policy rule and closure span components, so they
-/// are checked on one consistent snapshot. It still has its own RowVer (FRS §15.1).
-/// <para>
-/// <see cref="CurrentAmount"/> is a projection of the history (Σ approved amounts, D-11), recalculated
-/// in the same transaction whenever a transaction takes effect. It is never set directly.
-/// </para>
+/// Lives inside the Claim aggregate, so rules that span components ($10M limit, closure) see one snapshot.
+/// <see cref="CurrentAmount"/> is a projection of the approved history (D-11) and is never set directly.
 /// </summary>
 public sealed class ReserveComponent : Entity
 {
@@ -31,8 +26,8 @@ public sealed class ReserveComponent : Entity
     public decimal CurrentAmount { get; private set; }
 
     /// <summary>
-    /// The last ChangeSequence handed out on this component (D-23). Increments at submission, so
-    /// rejected and retracted transactions keep their numbers. Protected by the component's RowVer.
+    /// Increments at submission, so rejected and retracted transactions keep their numbers (D-23).
+    /// Protected by the component's RowVer.
     /// </summary>
     public int LastChangeSequence { get; private set; }
 
@@ -40,14 +35,13 @@ public sealed class ReserveComponent : Entity
 
     public string? Notes { get; private set; }
 
-    /// <summary>The full history of the component, in submission order.</summary>
+    /// <summary>In submission order.</summary>
     public IReadOnlyList<ReserveTransaction> Transactions => _transactions.AsReadOnly();
 
     public bool HasPendingTransaction => _transactions.Any(transaction => transaction.IsPending);
 
     public bool HasApprovedTransaction => _transactions.Any(transaction => transaction.IsApproved);
 
-    /// <summary>The pending delta, for the reserve summary cards (FRS §11.3, D-11).</summary>
     public decimal PendingAmount => _transactions.Where(transaction => transaction.IsPending).Sum(transaction => transaction.Amount);
 
     internal static ReserveComponent Open(Guid claimId, ReserveComponentType component) =>

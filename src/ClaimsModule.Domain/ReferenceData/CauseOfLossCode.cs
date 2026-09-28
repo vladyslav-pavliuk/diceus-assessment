@@ -2,7 +2,6 @@ using ClaimsModule.Domain.Common;
 
 namespace ClaimsModule.Domain.ReferenceData;
 
-/// <summary>FRS §5.6, §9.9.</summary>
 public enum PerilCategory
 {
     Property = 1,
@@ -14,10 +13,7 @@ public enum PerilCategory
     General,
 }
 
-/// <summary>
-/// Cause-of-loss reference data (FRS §5.6, §9.9), seeded by migration and scoped to the
-/// organisation (D-12). Claims reference it by <see cref="Code"/> (FRS §9.2).
-/// </summary>
+/// <summary>Seeded, organisation-scoped reference data (D-12). Claims reference it by <see cref="Code"/>.</summary>
 public sealed class CauseOfLossCode : Entity
 {
     private CauseOfLossCode()
@@ -34,6 +30,6 @@ public sealed class CauseOfLossCode : Entity
 
     public int SortOrder { get; private set; }
 
-    /// <summary>The "Notes" column of the FRS §5.6 seed table (not listed in §9.9; kept so the seed is exact).</summary>
+    /// <summary>From the FRS §5.6 seed table, although §9.9 does not list it.</summary>
     public string? Notes { get; private set; }
 }

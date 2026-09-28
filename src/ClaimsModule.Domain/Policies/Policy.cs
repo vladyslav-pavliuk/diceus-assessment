@@ -2,7 +2,6 @@ using ClaimsModule.Domain.Common;
 
 namespace ClaimsModule.Domain.Policies;
 
-/// <summary>FRS §9.10.</summary>
 public enum PolicyStatus
 {
     Active = 1,
@@ -10,10 +9,7 @@ public enum PolicyStatus
     Cancelled,
 }
 
-/// <summary>
-/// A simulated policy (FRS §5.5, §9.10): reference data outside the Claim aggregate, seeded by
-/// migration. A claim keeps only the id plus the denormalised number and client name.
-/// </summary>
+/// <summary>Simulated, seeded policy data, outside the Claim aggregate (FRS §5.5).</summary>
 public sealed class Policy : Entity
 {
     private Policy()
@@ -35,7 +31,7 @@ public sealed class Policy : Entity
 
     public PolicyStatus Status { get; private set; }
 
-    /// <summary>Stored as a JSON array (FRS §9.10 allows "comma-separated list or JSON array"; D-33).</summary>
+    /// <summary>Stored as a JSON array (D-33).</summary>
     public IReadOnlyList<string> CoverageTypes { get; private set; } = [];
 
     public static Policy Create(
@@ -64,10 +60,7 @@ public sealed class Policy : Entity
         };
     }
 
-    /// <summary>
-    /// BR-C-02: whether the loss date falls within the policy period. The loss date's UTC calendar
-    /// date is compared with the policy dates, inclusive at both ends (D-32, ASSUMPTION).
-    /// </summary>
+    /// <summary>BR-C-02: compares the loss date's UTC calendar date, inclusive at both ends (D-32).</summary>
     public bool CoversLossDate(DateTimeOffset lossDate)
     {
         var lossDay = DateOnly.FromDateTime(lossDate.UtcDateTime);

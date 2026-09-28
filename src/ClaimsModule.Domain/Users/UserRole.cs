@@ -1,9 +1,8 @@
 namespace ClaimsModule.Domain.Users;
 
 /// <summary>
-/// The three roles from FRS §3. They are hierarchical: each role has all the capabilities of the
-/// roles below it ("All handler capabilities +", "All supervisor capabilities +").
-/// The numeric values define that order; they are never persisted (enums are stored as NVARCHAR(50)).
+/// Hierarchical (FRS §3): each role has every capability of the roles below it. The numeric values
+/// define that order and are never persisted.
 /// </summary>
 public enum UserRole
 {
@@ -14,10 +13,6 @@ public enum UserRole
 
 public static class UserRoleExtensions
 {
-    /// <summary>
-    /// True when <paramref name="role"/> has at least the capabilities of <paramref name="minimum"/>.
-    /// Used by the API role policies and by the status-transition MinimumRole check (D-09).
-    /// </summary>
     public static bool IsAtLeast(this UserRole role, UserRole minimum)
     {
         if (!Enum.IsDefined(role))
@@ -33,7 +28,7 @@ public static class UserRoleExtensions
         return role >= minimum;
     }
 
-    /// <summary>The role code from FRS §3 ("handler", "supervisor", "manager"), used in the JWT role claim.</summary>
+    /// <summary>The FRS §3 role code, used in the JWT role claim.</summary>
     public static string ToCode(this UserRole role) => role switch
     {
         UserRole.Handler => "handler",

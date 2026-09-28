@@ -4,12 +4,11 @@ using ClaimsModule.Domain.Documents;
 namespace ClaimsModule.Domain.Claims;
 
 /// <summary>
-/// Metadata of a document stored in blob storage (FRS §9.7, §13). The bytes never enter the
-/// database. Added through the Claim, so the read-only rule for Closed/Withdrawn claims applies (D-26).
+/// Metadata only: the bytes live in blob storage. Added through the Claim, so the read-only rule for
+/// Closed and Withdrawn claims applies (D-26).
 /// </summary>
 public sealed class ClaimDocument : Entity
 {
-    /// <summary>FRS §13: "implement a reasonable 50 MB limit".</summary>
     public const long MaxFileSizeBytes = 50L * 1024 * 1024;
 
     public const string FileEmptyMessage = "The file is empty.";
@@ -29,13 +28,12 @@ public sealed class ClaimDocument : Entity
 
     public DocumentType DocumentType { get; private set; }
 
-    /// <summary>The sanitised file name, for display and as the download name (D-42: the raw client string is never stored).</summary>
+    /// <summary>Sanitised; the raw client file name is never stored (D-42).</summary>
     public string DocumentName { get; private set; } = null!;
 
-    /// <summary>{organisationId}/{claimId}/{documentId}_{sanitisedFileName} (D-28).</summary>
     public string BlobPath { get; private set; } = null!;
 
-    /// <summary>The canonical MIME type of the allowlisted format (FRS §13), never the client's declared value.</summary>
+    /// <summary>The canonical MIME type of the allowlisted format, never the client's declared value.</summary>
     public string ContentType { get; private set; } = null!;
 
     public long FileSizeBytes { get; private set; }
@@ -46,10 +44,6 @@ public sealed class ClaimDocument : Entity
 
     public string? Notes { get; private set; }
 
-    /// <summary>
-    /// Invariants: the blob path belongs to this claim and this document (a row can never point into another claim's
-    /// folder), the file name has an allowlisted extension, the size is 1 byte to 50 MB.
-    /// </summary>
     internal static ClaimDocument Create(
         Guid claimId,
         DocumentBlobPath blobPath,

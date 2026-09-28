@@ -2,7 +2,6 @@ using ClaimsModule.Domain.Common;
 
 namespace ClaimsModule.Domain.Claims;
 
-/// <summary>A damaged asset as entered at intake or through "Add Risk Object" (FRS §5.2 step 2, §9.4).</summary>
 public sealed record RiskObjectDetails(
     AssetType AssetType,
     string AssetDescription,
@@ -10,7 +9,7 @@ public sealed record RiskObjectDetails(
     string? AssetReference,
     bool IsPrimary = false);
 
-/// <summary>An asset affected by the loss (FRS §9.4). At most one per claim is primary.</summary>
+/// <summary>At most one risk object per claim is primary.</summary>
 public sealed class ClaimRiskObject : Entity
 {
     private ClaimRiskObject()

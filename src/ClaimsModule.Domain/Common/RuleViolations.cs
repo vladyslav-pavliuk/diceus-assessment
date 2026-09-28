@@ -1,9 +1,6 @@
 namespace ClaimsModule.Domain.Common;
 
-/// <summary>
-/// Collects every failed rule of one operation, so the caller gets all of them in one 422
-/// (BR-ST-03: "a list of blocking conditions") instead of fixing them one at a time.
-/// </summary>
+/// <summary>Collects every failed rule so that one 422 reports all of them (BR-ST-03).</summary>
 internal sealed class RuleViolations
 {
     private readonly Dictionary<string, List<string>> _errors = new(StringComparer.Ordinal);

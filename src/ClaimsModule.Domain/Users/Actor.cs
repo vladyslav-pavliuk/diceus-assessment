@@ -1,9 +1,6 @@
 namespace ClaimsModule.Domain.Users;
 
-/// <summary>
-/// The user performing a domain operation: who (for self-approval, retraction, audit) and with which
-/// role (for authority checks). Built by the Application layer from the validated JWT.
-/// </summary>
+/// <summary>The user performing a domain operation, built from the validated JWT.</summary>
 public sealed record Actor(Guid UserId, UserRole Role)
 {
     public Guid UserId { get; } = UserId != Guid.Empty

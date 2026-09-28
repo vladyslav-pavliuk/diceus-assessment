@@ -5,12 +5,12 @@ using ClaimsModule.Domain.Users;
 
 namespace ClaimsModule.Domain.Claims;
 
-// Parties, risk objects and the validation issues they drive (FRS §5.2 step 2, §5.4, §7.5, D-07).
+// Parties, risk objects and the validation issues they drive (D-07).
 public sealed partial class Claim
 {
     public bool HasActiveClaimant => _parties.Any(party => party.IsActiveClaimant);
 
-    /// <summary>POST /claims/{id}/parties (FRS §10.1). Multiple parties of one role are allowed (BR-P-02).</summary>
+    /// <summary>Several parties may share a role (BR-P-02).</summary>
     public ClaimParty AddParty(PartyDetails details, Actor actor, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(details);
@@ -22,10 +22,7 @@ public sealed partial class Claim
         return party;
     }
 
-    /// <summary>
-    /// DELETE /claims/{id}/parties/{partyId} (FRS §10.1): a soft remove (IsActive = false, D-27).
-    /// The last active Claimant cannot be removed, whatever the status (PTY-01).
-    /// </summary>
+    /// <summary>Deactivates the party (D-27). The last active Claimant cannot be removed, in any status.</summary>
     public void RemoveParty(Guid partyId, Actor actor, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(actor);
@@ -49,7 +46,7 @@ public sealed partial class Claim
         EvaluateCompletenessIssues(now);
     }
 
-    /// <summary>Adds a risk object (FRS §5.2 step 2). The first one is primary unless another is marked primary (D-33).</summary>
+    /// <summary>The first risk object is primary unless another is marked primary (D-33).</summary>
     public ClaimRiskObject AddRiskObject(RiskObjectDetails details, Actor actor, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(details);
@@ -62,8 +59,8 @@ public sealed partial class Claim
     }
 
     /// <summary>
-    /// D-07: a user accepts a Warning with a note. Criticals cannot be acknowledged (no waive, D-07).
-    /// Acknowledging BR-C-02 is what unblocks Draft → Open (D-19).
+    /// Only Warnings can be acknowledged; Criticals cannot be waived (D-07). Acknowledging BR-C-02 unblocks
+    /// Draft → Open (D-19).
     /// </summary>
     public void AcknowledgeValidationIssue(Guid issueId, string? note, Actor actor, DateTimeOffset now)
     {
@@ -121,7 +118,7 @@ public sealed partial class Claim
         return riskObject;
     }
 
-    /// <summary>The issues that depend only on the claim itself (D-06): BR-C-03, BR-C-06 and no risk objects.</summary>
+    /// <summary>The issues that depend only on the claim itself (D-06).</summary>
     private void EvaluateCompletenessIssues(DateTimeOffset now)
     {
         Evaluate(
@@ -143,7 +140,7 @@ public sealed partial class Claim
             now);
     }
 
-    /// <summary>BR-C-02: the loss date must fall within the linked policy's period. Without a policy there is nothing to check.</summary>
+    /// <summary>BR-C-02. Without a policy there is nothing to check.</summary>
     private void EvaluatePolicyPeriodIssue(Policy? policy, DateTimeOffset now) =>
         Evaluate(
             failing: policy is not null && !policy.CoversLossDate(LossEvent.LossDate),

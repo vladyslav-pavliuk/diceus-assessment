@@ -3,10 +3,7 @@ using ClaimsModule.Domain.Reserves;
 
 namespace ClaimsModule.Domain.Claims;
 
-/// <summary>
-/// User-facing rule messages. The first group is FRS §8 verbatim and is asserted word for word in
-/// tests; the rest fill gaps the FRS leaves open and are marked ASSUMPTION in DECISIONS.md.
-/// </summary>
+/// <summary>User-facing rule messages. The FRS §8 group is verbatim and asserted word for word in tests.</summary>
 public static class DomainMessages
 {
     // FRS §8, verbatim.
@@ -29,13 +26,13 @@ public static class DomainMessages
     public static string ClosureConditionNotSatisfied(string condition) =>
         $"Claim cannot be closed — {condition} is not satisfied.";
 
-    // Closure conditions (FRS §4.3), used in the §8 closure template above.
+    // Closure conditions (FRS §4.3) for the closure template above.
     public const string ConditionNoPendingReserves = "CC-01 (no reserve transaction is pending approval)";
     public const string ConditionNoOpenCriticalIssues = "CC-02 (no unresolved Critical validation issue)";
     public const string ConditionActiveClaimant = "CC-03 (at least one active Claimant party)";
     public const string ConditionOpenReservesJustified = "CC-04 (a justification note is required to close a claim with open reserves)";
 
-    // ASSUMPTION wordings (D-05, D-18, D-19, D-22, D-25, D-26, D-39, D-45).
+    // Not worded by the FRS (D-05, D-18, D-19, D-22, D-25, D-26, D-39, D-45).
     public const string LossDateOutsidePolicyPeriodNotAcknowledged =
         "Loss date is outside the policy effective period. Acknowledge the warning or link a policy that covers the loss date before opening the claim.";
     public const string HandlerRequiredToOpen = "A handler must be assigned before the claim can be opened.";
@@ -62,7 +59,7 @@ public static class DomainMessages
     public const string AcknowledgementNoteRequired = "An acknowledgement note is required.";
     public const string AssigneeMustBeActive = "The assigned handler must be an active user.";
 
-    // Shape rules shared by the FluentValidation validators and the entities (ASSUMPTION wordings, D-40).
+    // Shape rules shared by the validators and the entities (D-40).
     public const string InvalidClaimSeverity = "Invalid claim severity.";
     public const string InvalidPartyRole = "Invalid party role.";
     public const string InvalidPartyType = "Invalid party type.";

@@ -5,9 +5,8 @@ using ClaimsModule.Domain.Common;
 namespace ClaimsModule.Domain.Claims;
 
 /// <summary>
-/// CLM-{YYYY}-{7-digit zero-padded sequence}, e.g. CLM-2026-0000142 (FRS §5.3, BR-C-04).
-/// The sequence comes from the per-organisation, per-year counter table inside the claim-creation
-/// transaction (D-10); this type only owns the format.
+/// CLM-{YYYY}-{0000000} (BR-C-04). Only the format: the gap-free sequence comes from the counter
+/// table inside the claim-creation transaction (D-10).
 /// </summary>
 public sealed partial record ClaimNumber
 {
@@ -40,7 +39,7 @@ public sealed partial record ClaimNumber
 
         if (sequence > MaxSequence)
         {
-            // D-10: unreachable in practice, but the format has room for 7 digits only.
+            // Unreachable in practice, but the format has room for 7 digits only (D-10).
             throw new BusinessRuleViolationException(
                 ErrorKeys.ClaimNumber,
                 $"The claim number sequence for {year} is exhausted.");

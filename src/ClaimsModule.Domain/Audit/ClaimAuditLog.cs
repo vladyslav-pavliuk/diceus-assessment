@@ -3,10 +3,8 @@ using ClaimsModule.Domain.Common;
 namespace ClaimsModule.Domain.Audit;
 
 /// <summary>
-/// One row of the immutable, append-only claim event log (FRS §9.8, §14, BR-A-01).
-/// Created only through IAuditLogService (FRS §14.2). There is no method that changes a row, and
-/// Persistence rejects modified or deleted rows, backed by a database trigger (D-14).
-/// Unlike every other table it has no soft-delete, UpdatedAt or UserModified columns (D-14).
+/// Append-only audit row (BR-A-01), written only through IAuditLogService. Persistence and a database
+/// trigger reject updates and deletes, and the table has no soft-delete or modification columns (D-14).
 /// </summary>
 public sealed class ClaimAuditLog : Entity
 {
@@ -25,10 +23,10 @@ public sealed class ClaimAuditLog : Entity
 
     public string Description { get; private set; } = null!;
 
-    /// <summary>Previous value as JSON.</summary>
+    /// <summary>JSON.</summary>
     public string? OldValue { get; private set; }
 
-    /// <summary>New value as JSON.</summary>
+    /// <summary>JSON.</summary>
     public string? NewValue { get; private set; }
 
     public Guid? RelatedEntityId { get; private set; }
@@ -39,7 +37,7 @@ public sealed class ClaimAuditLog : Entity
 
     public DateTimeOffset CreatedAt { get; private set; }
 
-    /// <summary>Null for the system actor (background jobs, D-33).</summary>
+    /// <summary>Null for background jobs (D-33).</summary>
     public Guid? CreatedByUserId { get; private set; }
 
     public static ClaimAuditLog Create(

@@ -5,37 +5,30 @@ using ClaimsModule.Domain.Users;
 
 namespace ClaimsModule.Domain.Claims;
 
-/// <summary>The outcome of a reserve submission: the new transaction, plus non-blocking warnings (BR-R-05).</summary>
+/// <summary>Warnings are non-blocking (BR-R-05).</summary>
 public sealed record ReserveSubmissionResult(ReserveTransaction Transaction, IReadOnlyList<string> Warnings);
 
-// Event-sourced reserves (FRS §6, §7.2, D-05, D-11, D-21, D-22, D-23). Amounts are never updated: every
-// change is a new ReserveTransaction, and a component's CurrentAmount is the projection of its history.
+// Event-sourced reserves: every change is a new ReserveTransaction, and a component's CurrentAmount is the
+// projection of its history. Amounts are never updated.
 public sealed partial class Claim
 {
-    /// <summary>Σ CurrentAmount of the cost components: the figure BR-R-05 limits (D-11).</summary>
+    /// <summary>The figure BR-R-05 limits: cost components only (D-11).</summary>
     public decimal ApprovedAggregate =>
         _reserveComponents.Where(component => ReserveLimits.CountsTowardAggregate(component.Component)).Sum(component => component.CurrentAmount);
 
-    /// <summary>CC-04: the reserves still open at closure (components with a positive balance).</summary>
+    /// <summary>CC-04: components with a positive balance.</summary>
     public decimal OpenReserveTotal =>
         _reserveComponents.Where(component => component.CurrentAmount > 0).Sum(component => component.CurrentAmount);
 
     public bool HasPendingReserve => _reserveComponents.Any(component => component.HasPendingTransaction);
 
-    /// <summary>FRS §4.2 → PendingPayment: "at least one reserve component with status Approved" (D-21).</summary>
+    /// <summary>Entry condition of PendingPayment (D-21).</summary>
     public bool HasApprovedReserve => _reserveComponents.Any(component => component.HasApprovedTransaction);
 
     /// <summary>
-    /// POST /claims/{id}/reserves (FRS §10.2): opens or adjusts a reserve component.
-    /// <list type="bullet">
-    /// <item>Add opens a component: amount &gt; 0, or ≠ 0 for SubrogationRecoverable (BR-R-01).</item>
-    /// <item>Adjust is a signed, non-zero delta; cost components cannot go below zero (D-05).</item>
-    /// <item>Reverse brings the component to zero; the system computes the amount (D-05).</item>
-    /// </list>
-    /// <paramref name="transactionType"/> may be omitted: Add for a new component, Adjust otherwise.
-    /// The approval tier follows |amount| (BR-R-02); ≤ $10,000 is approved at once. A transaction that
-    /// would take approved reserves over $10,000,000 without the override is escalated to Manager and
-    /// returns a warning (BR-R-05, D-11).
+    /// Add opens a component, Adjust applies a signed delta, Reverse brings it to zero (D-05). An omitted type means
+    /// Add for a new component and Adjust otherwise. A transaction that would breach the $10,000,000 limit is
+    /// escalated to Manager with a warning instead of being refused (BR-R-05, D-11).
     /// </summary>
     public ReserveSubmissionResult SubmitReserveTransaction(
         ReserveComponentType componentType,
@@ -66,7 +59,7 @@ public sealed partial class Claim
 
         var component = _reserveComponents.SingleOrDefault(candidate => candidate.Component == componentType);
 
-        // FRS §6.4: a pending transaction cannot be modified; retract it first (D-22: one pending per component).
+        // One pending transaction per component; retract it first (D-22).
         if (component is { HasPendingTransaction: true })
         {
             throw new BusinessRuleViolationException(ErrorKeys.ReserveComponent, DomainMessages.PendingTransactionExists);
@@ -106,10 +99,7 @@ public sealed partial class Claim
         return new ReserveSubmissionResult(transaction, exceedsLimit ? [DomainMessages.AggregateLimitExceeded] : []);
     }
 
-    /// <summary>
-    /// POST /claims/{id}/reserves/{txnId}/approve (FRS §6.4): not by the submitter (BR-R-03), only
-    /// with enough authority (BR-R-02), and not past the $10M limit without the override (BR-R-05).
-    /// </summary>
+    /// <summary>BR-R-02 authority, BR-R-03 no self-approval, BR-R-05 limit re-checked at approval time.</summary>
     public void ApproveReserveTransaction(Guid transactionId, Actor approver, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(approver);
@@ -141,9 +131,8 @@ public sealed partial class Claim
     }
 
     /// <summary>
-    /// POST /claims/{id}/reserves/{txnId}/reject (FRS §6.4 step 9). Rejecting needs the same authority
-    /// as approving (FRS §3 "approve/reject reserves up to …"), and, like approving, must be someone else's
-    /// decision: the submitter withdraws their own transaction with Retract (D-45). The row stays in history (BR-R-04).
+    /// Needs the same authority as approving and, like approving, someone other than the submitter, who
+    /// retracts instead (D-45). The row stays in history (BR-R-04).
     /// </summary>
     public void RejectReserveTransaction(Guid transactionId, string? rejectionReason, Actor approver, DateTimeOffset now)
     {
@@ -175,10 +164,7 @@ public sealed partial class Claim
         Raise(new ReserveRejected(Id, transaction.Id, transaction.Amount, reason!));
     }
 
-    /// <summary>
-    /// POST /claims/{id}/reserves/{txnId}/retract (FRS §6.4 rule box): only the submitter, only while
-    /// pending; the row becomes Cancelled and a new transaction may then be submitted.
-    /// </summary>
+    /// <summary>Only the submitter, only while pending; the row becomes Cancelled (FRS §6.4).</summary>
     public void RetractReserveTransaction(Guid transactionId, Actor submitter)
     {
         ArgumentNullException.ThrowIfNull(submitter);
@@ -194,7 +180,6 @@ public sealed partial class Claim
         Raise(new ReserveRetracted(Id, transaction.Id, transaction.Amount));
     }
 
-    /// <summary>BR-R-05 / FRS §3: only a manager may allow approved reserves above the $10M limit.</summary>
     public void SetReserveLimitOverride(bool enabled, string? reason, Actor manager, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(manager);
@@ -216,10 +201,8 @@ public sealed partial class Claim
     }
 
     /// <summary>
-    /// POST /claims/{id}/reserves/{txnId}/retry-posting (FRS §11.3 "retry button for Failed", D-08): puts a
-    /// failed GL posting back to Pending; the GL job is enqueued after commit. Any role may retry: the change
-    /// was already approved, and posting it is idempotent. Allowed on Closed and Withdrawn claims too, because
-    /// it completes the accounting of a change that was approved before the claim closed (D-41).
+    /// Any role may retry, since the change is already approved and posting is idempotent. Allowed on Closed and
+    /// Withdrawn claims too: it completes the accounting of a change approved before closure (D-41).
     /// </summary>
     public ReserveTransaction RetryGlPosting(Guid transactionId, Actor actor)
     {
@@ -250,7 +233,7 @@ public sealed partial class Claim
                     throw new BusinessRuleViolationException(ErrorKeys.TransactionType, DomainMessages.ComponentAlreadyExists(componentType));
                 }
 
-                // BR-R-01: greater than zero, except SubrogationRecoverable, which may be negative (but not zero).
+                // BR-R-01: SubrogationRecoverable may be negative, but never zero.
                 if (ReserveLimits.MayGoNegative(componentType))
                 {
                     if (amount is null or 0m)
@@ -276,7 +259,6 @@ public sealed partial class Claim
                     throw new BusinessRuleViolationException(ErrorKeys.ReserveAmount, DomainMessages.AdjustmentAmountZero);
                 }
 
-                // FRS §6.2 "May go negative?": only SubrogationRecoverable.
                 if (!ReserveLimits.MayGoNegative(componentType) && component.CurrentAmount + amount.Value < 0)
                 {
                     throw new BusinessRuleViolationException(ErrorKeys.ReserveAmount, DomainMessages.BalanceBelowZero(componentType));
@@ -312,10 +294,7 @@ public sealed partial class Claim
             ? amount
             : throw new BusinessRuleViolationException(ErrorKeys.ReserveAmount, DomainMessages.TooManyDecimalPlaces("Reserve amount"));
 
-    /// <summary>
-    /// BR-R-05: would approving this delta take the approved aggregate over $10,000,000? Only increases
-    /// of cost components can; the manager override lifts the limit (D-11). Exactly $10,000,000 is allowed.
-    /// </summary>
+    /// <summary>BR-R-05: exactly $10,000,000 is allowed, and only increases of cost components count (D-11).</summary>
     private bool WouldExceedAggregateLimit(ReserveComponentType componentType, decimal delta) =>
         !ReserveLimitOverride
         && ReserveLimits.CountsTowardAggregate(componentType)

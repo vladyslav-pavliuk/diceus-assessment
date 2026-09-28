@@ -1,12 +1,8 @@
 namespace ClaimsModule.Domain.Common;
 
 /// <summary>
-/// Base type for every entity. Identity is a GUID (FRS §15.1), assigned at construction with
-/// <see cref="SequentialGuid"/> so that an entity is complete from birth and domain events can carry
-/// real ids before SaveChanges (D-30).
-/// Audit columns (CreatedAt, UpdatedAt, UserCreated, UserModified), soft-delete columns
-/// (IsDeleted, DeletedAt), OrganisationId and RowVer are EF Core shadow properties configured in
-/// Persistence, so the domain model carries no persistence bookkeeping.
+/// The id is assigned at construction, so domain events carry real ids before SaveChanges (D-30).
+/// Audit, soft-delete, tenant and RowVer columns are EF Core shadow properties, not domain state.
 /// </summary>
 public abstract class Entity
 {

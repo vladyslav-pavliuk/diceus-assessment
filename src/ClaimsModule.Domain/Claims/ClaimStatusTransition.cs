@@ -4,9 +4,8 @@ using ClaimsModule.Domain.Users;
 namespace ClaimsModule.Domain.Claims;
 
 /// <summary>
-/// One allowed status transition (FRS §4.2, D-09). The rows are seeded into the
-/// ClaimStatusTransitions table and served by GET /api/reference/claim-statuses, and the aggregate
-/// enforces exactly those rows: the rule is data, not a switch statement.
+/// An allowed status transition (FRS §4.2, D-09). The aggregate enforces the seeded rows, so the rule
+/// is data rather than a switch statement.
 /// </summary>
 public sealed class ClaimStatusTransition : Entity
 {
@@ -23,12 +22,12 @@ public sealed class ClaimStatusTransition : Entity
 
     public ClaimStatus ToStatus { get; private set; }
 
-    /// <summary>The lowest role allowed to request it (compared hierarchically). Null for system-only rows.</summary>
+    /// <summary>Compared hierarchically. Null for system-only rows.</summary>
     public UserRole? MinimumRole { get; private set; }
 
     public bool RequiresReason { get; private set; }
 
-    /// <summary>Applied by the system inside another transition (Reopened → Open), never requested.</summary>
+    /// <summary>Applied by the system (Reopened → Open), never requested by a user.</summary>
     public bool IsSystemOnly { get; private set; }
 
     public static ClaimStatusTransition Create(
@@ -49,10 +48,7 @@ public sealed class ClaimStatusTransition : Entity
         };
     }
 
-    /// <summary>
-    /// The FRS §4.2 table as decided in D-09. Declared once, here: Persistence seeds these rows
-    /// (HasData), and domain tests run against them.
-    /// </summary>
+    /// <summary>The FRS §4.2 table as decided in D-09; the single source for the seed and the domain tests.</summary>
     public static IReadOnlyList<ClaimStatusTransition> FrsDefaults() =>
     [
         Create(ClaimStatus.Draft, ClaimStatus.Open, UserRole.Handler, requiresReason: false, isSystemOnly: false),
@@ -70,7 +66,6 @@ public sealed class ClaimStatusTransition : Entity
     ];
 }
 
-/// <summary>The loaded set of <see cref="ClaimStatusTransition"/> rows, as the aggregate consults it.</summary>
 public sealed class StatusTransitionTable
 {
     private readonly IReadOnlyList<ClaimStatusTransition> _transitions;
@@ -88,7 +83,7 @@ public sealed class StatusTransitionTable
     public ClaimStatusTransition? Find(ClaimStatus from, ClaimStatus to) =>
         _transitions.SingleOrDefault(t => t.FromStatus == from && t.ToStatus == to);
 
-    /// <summary>The statuses a user may request from <paramref name="from"/> (system-only rows excluded).</summary>
+    /// <summary>Excludes system-only rows.</summary>
     public IReadOnlyList<ClaimStatus> ValidNextStatuses(ClaimStatus from) =>
         _transitions.Where(t => t.FromStatus == from && !t.IsSystemOnly).Select(t => t.ToStatus).Order().ToList();
 }

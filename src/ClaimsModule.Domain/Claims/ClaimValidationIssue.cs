@@ -2,7 +2,6 @@ using ClaimsModule.Domain.Common;
 
 namespace ClaimsModule.Domain.Claims;
 
-/// <summary>Rule codes of the issues the system persists on a claim (D-06, D-07).</summary>
 public static class ValidationRuleCodes
 {
     /// <summary>Warning: loss date outside the policy period. Blocks Draft → Open until acknowledged (D-19).</summary>
@@ -14,13 +13,12 @@ public static class ValidationRuleCodes
     /// <summary>Warning: no policy linked. Blocks reserves, not Open.</summary>
     public const string NoPolicy = "BR-C-06";
 
-    /// <summary>Warning: no risk objects (FRS §5.4).</summary>
+    /// <summary>Warning: no risk objects.</summary>
     public const string NoRiskObject = "NO-RISK-OBJECT";
 }
 
 /// <summary>
-/// A validation finding recorded against a claim (D-07): Critical issues block Draft → Open and
-/// closure (BR-ST-02, CC-02); Warnings do not, except BR-C-02 (D-19).
+/// Critical issues block Draft → Open and closure (BR-ST-02, CC-02). Warnings do not, except BR-C-02 (D-19).
 /// </summary>
 public sealed class ClaimValidationIssue : Entity
 {
@@ -49,12 +47,12 @@ public sealed class ClaimValidationIssue : Entity
 
     public DateTimeOffset? ResolvedAt { get; private set; }
 
-    /// <summary>The user who acknowledged the issue; null when the system resolved it.</summary>
+    /// <summary>Null when the system resolved the issue.</summary>
     public Guid? ResolvedByUserId { get; private set; }
 
     public string? ResolutionNote { get; private set; }
 
-    /// <summary>Open or Acknowledged: the underlying rule still fails.</summary>
+    /// <summary>Open or Acknowledged: the rule still fails.</summary>
     public bool IsActive => Status is IssueStatus.Open or IssueStatus.Acknowledged;
 
     public bool IsOpenCritical => Status == IssueStatus.Open && Severity == IssueSeverity.Critical;

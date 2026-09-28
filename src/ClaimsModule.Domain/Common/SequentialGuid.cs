@@ -3,17 +3,13 @@ using System.Buffers.Binary;
 namespace ClaimsModule.Domain.Common;
 
 /// <summary>
-/// Generates GUIDs that increase in SQL Server's uniqueidentifier sort order, so inserts append to
-/// the clustered index instead of fragmenting it (FRS §15.1 "use sequential GUIDs", D-30).
-/// This is the algorithm of EF Core's SequentialGuidValueGenerator: random bytes, with a
-/// monotonically increasing counter written into bytes 10–15 and 8–9, which SQL Server compares first.
-/// Guid.CreateVersion7 is not used: its timestamp sits in the first bytes, which SQL Server compares last.
+/// GUIDs ordered for SQL Server's uniqueidentifier sort, so inserts append to the clustered index (D-30).
+/// Same algorithm as EF Core's SequentialGuidValueGenerator. Guid.CreateVersion7 does not work here:
+/// its timestamp sits in the bytes SQL Server compares last.
 /// </summary>
 public static class SequentialGuid
 {
-    // Seeded from the clock so that values keep increasing across process restarts. This is not
-    // business time, so it does not go through an injected TimeProvider (CLAUDE.md rule 9 is about
-    // time-based rules); TimeProvider.System keeps the architecture test's clock scan meaningful.
+    // Seeded from the clock so values keep increasing across restarts. Not business time, so no injected TimeProvider.
     private static long _counter = TimeProvider.System.GetUtcNow().UtcTicks;
 
     public static Guid NewGuid()

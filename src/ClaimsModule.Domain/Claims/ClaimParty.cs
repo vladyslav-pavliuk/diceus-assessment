@@ -2,7 +2,6 @@ using ClaimsModule.Domain.Common;
 
 namespace ClaimsModule.Domain.Claims;
 
-/// <summary>A party as entered at intake or through "Add Party" (FRS §5.2 step 2, §9.3).</summary>
 public sealed record PartyDetails(
     PartyRole Role,
     PartyType Type,
@@ -14,9 +13,8 @@ public sealed record PartyDetails(
     string? Notes);
 
 /// <summary>
-/// A person or company involved in the claim (FRS §9.3). Removing a party is a business
-/// soft-remove (<see cref="IsActive"/> = false, PARTY_REMOVED); the IsDeleted column is the separate
-/// technical convention and is never set by business flows (D-27).
+/// Removing a party clears <see cref="IsActive"/>. The IsDeleted column is a separate technical flag that
+/// business flows never set (D-27).
 /// </summary>
 public sealed class ClaimParty : Entity
 {
@@ -71,7 +69,6 @@ public sealed class ClaimParty : Entity
         var lastName = Text.NullIfBlank(details.LastName);
         var companyName = Text.NullIfBlank(details.CompanyName);
 
-        // FRS §9.3: first/last name "for person parties", company name "for company parties".
         if (details.Type == PartyType.Person && (firstName is null || lastName is null))
         {
             violations.Add(ErrorKeys.ClaimParties, DomainMessages.PersonNameRequired);
@@ -107,10 +104,7 @@ public sealed class ClaimParty : Entity
 
     internal void Deactivate() => IsActive = false;
 
-    /// <summary>
-    /// A deliberately loose shape check: one @ with text on both sides and a dot in the domain.
-    /// Deliverability is not a domain rule. Public so the request validator applies the same check.
-    /// </summary>
+    /// <summary>Deliberately loose: deliverability is not a domain rule. Shared with the request validator.</summary>
     public static bool IsPlausibleEmail(string email)
     {
         var at = email.IndexOf('@', StringComparison.Ordinal);

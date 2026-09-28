@@ -8,12 +8,9 @@ namespace ClaimsModule.Domain.Claims;
 public sealed partial class Claim
 {
     /// <summary>
-    /// PUT /claims/{id}/status (FRS §10.1). The transition must be a row of
-    /// <paramref name="transitions"/> (BR-ST-01), the actor must hold its minimum role (D-09), and the
-    /// target's entry conditions must hold (BR-ST-02, BR-ST-03 / CC-01..04, §4.2). Every failed
-    /// condition is reported at once. Reopen moves on to Open in the same call (BR-ST-04).
+    /// The transition must be a seeded row the actor's role may request (BR-ST-01, D-09), and the target's
+    /// entry conditions must hold; every failed condition is reported at once. Reopen continues to Open (BR-ST-04).
     /// </summary>
-    /// <param name="reason">Closure, withdrawal or reopen reason; required where the row says so.</param>
     /// <param name="justification">CC-04: confirms closing a claim whose reserves are still open.</param>
     public void ChangeStatus(
         ClaimStatus target,
@@ -98,7 +95,7 @@ public sealed partial class Claim
         }
     }
 
-    /// <summary>BR-ST-02 (+ D-18, D-19): the conditions to enter Open by request.</summary>
+    /// <summary>BR-ST-02, plus D-18 and D-19.</summary>
     private void CheckOpenConditions(RuleViolations violations)
     {
         if (!HasActiveClaimant)
@@ -124,7 +121,7 @@ public sealed partial class Claim
         }
     }
 
-    /// <summary>FRS §4.3 CC-01..04 / BR-ST-03: every failed condition is listed.</summary>
+    /// <summary>CC-01..04 (BR-ST-03).</summary>
     private void CheckClosureConditions(RuleViolations violations, string? justification)
     {
         if (HasPendingReserve)
@@ -151,10 +148,7 @@ public sealed partial class Claim
         }
     }
 
-    /// <summary>
-    /// BR-ST-04: Closed → Reopened, then immediately Reopened → Open through the system-only row, in
-    /// the same unit of work. Audit: STATUS_CHANGED, CLAIM_REOPENED, STATUS_CHANGED (D-26).
-    /// </summary>
+    /// <summary>BR-ST-04: Closed → Reopened → Open in one unit of work, via the system-only row (D-26).</summary>
     private void Reopen(string reason, StatusTransitionTable transitions)
     {
         var automatic = transitions.Find(ClaimStatus.Reopened, ClaimStatus.Open);

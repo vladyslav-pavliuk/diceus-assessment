@@ -1,9 +1,8 @@
 namespace ClaimsModule.Domain.Common;
 
 /// <summary>
-/// An entity that owns a consistency boundary and records what happened to it as domain events.
-/// The Unit of Work reads <see cref="DomainEvents"/> after the handler has run: audit rows are
-/// written before commit, background jobs are enqueued after commit (CLAUDE.md rule 5).
+/// Consistency boundary that records domain events. The Unit of Work dispatches them: audit rows
+/// before commit, background jobs after commit.
 /// </summary>
 public abstract class AggregateRoot : Entity
 {
