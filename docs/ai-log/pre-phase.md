@@ -31,8 +31,12 @@ orchestration. Rather than pasting the docs into a single prompt, I used a separ
   an SLA job mutating status.
 
 ## What I reviewed / changed
-- TODO (Vlad): note any edits you made to `CLAUDE.md` / `PROMPTS.md` / the D-xx recommendations before running
-  Phase 0, and why.
+- **No edits before Phase 0 are recorded.** The first commit (`cdc361d`) matches this session's kit byte for byte: `docs/PROMPTS.md` and both
+  specs (21,532 / 44,788 / 89,157 bytes, as in the zip listing below). The one exception is `CLAUDE.md`, which is 48 bytes longer (11,333 vs
+  11,285): its stack line was changed from App Service to Container Apps during Phase 0, after D-36 was redirected (`phase-0.md` §6).
+- The D-xx recommendations did not exist yet. This session produced the 18 suspected conflicts, and Phase 0 turned them into D-01..D-18 with
+  recommendations; they were then accepted as recommended, except D-36 (`phase-0.md` §6).
+- Later changes to `CLAUDE.md` came from phase decisions: the AutoMapper licence fix (Phase 1) and the D-41 GL-job rule (Phase 4).
 
 ---
 

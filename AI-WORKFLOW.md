@@ -14,11 +14,12 @@ This report follows brief §4.5.
 
 | Tool | Used for | Source |
 |---|---|---|
+| Claude (Claude app, an agentic session with file tools, Opus) | **pre-phase:** converting the two `.docx` specs to Markdown and generating `CLAUDE.md`, `docs/PROMPTS.md` and the 18 suspected conflicts, from Vlad's prompt | [`docs/ai-log/pre-phase.md`](docs/ai-log/pre-phase.md) |
 | Claude Code (desktop app, Code tab), model Claude Opus 5.5 | every phase: analysis (Plan mode in Phase 0), code, tests, docs, Azure infrastructure, this review | `docs/ai-log/phase-0.md` … `phase-7.md` header lines |
 | The desktop app's built-in browser pane | driving the Angular app during Phase 6, where the date/time-picker bug (§5, item 6) was found; measuring the Link policy spacing bug in the refinement phase (§5.1, V3) | `docs/ai-log/phase-6.md` §5 item 1; `phase-refinement.md` §5 |
 
-Claude Code is the only AI tool recorded in the logs and in the git history: every non-merge commit carries the Claude co-author line. Git, the
-GitHub CLI, Docker, the .NET and Angular CLIs and the Azure CLI were used as ordinary tooling, driven through Claude Code.
+No other AI tool is recorded. Every non-merge commit except `5fe0cf1` (Vlad's commit of `pre-phase.md`) carries the Claude co-author line. Git,
+the GitHub CLI, Docker, the .NET and Angular CLIs and the Azure CLI were used as ordinary tooling, driven through Claude Code.
 
 ---
 
@@ -70,12 +71,16 @@ GitHub CLI, Docker, the .NET and Angular CLIs and the Azure CLI were used as ord
   got wrong.
 
 ### 2.4 How the context was prepared, and how the prompts changed
-- **Prepared before Phase 0.** The first commit (`cdc361d`) holds `CLAUDE.md` (127 lines), `docs/PROMPTS.md` (286 lines) and both specs.
-  The prompt pack already contained:
-  - the phase plan with its stop points;
-  - 18 suspected brief/FRS conflicts (D-01..D-18) that Claude had to *verify* rather than accept;
-  - a note on collecting evidence for this report from the start ("Every time you reject or fix Claude's output, one line in
-    `docs/ai-log/phase-N.md` saves you work later").
+- **Prepared before Phase 0, in a separate Claude session** ([pre-phase.md](docs/ai-log/pre-phase.md)). Vlad chose the approach: specs in the
+  repo as Markdown, a persistent rules file instead of one long paste, a phased prompt sequence with a human checkpoint at every phase, and an
+  analysis-only Phase 0 so conflicts become written decisions. From his prompt, the Claude-app session generated:
+  - the Markdown specs, `CLAUDE.md` and `docs/PROMPTS.md`, with the phase plan and its stop points;
+  - 18 suspected brief/FRS conflicts (D-01..D-18), put into the kickoff prompt so the Claude Code session had to *verify* them rather than accept them;
+  - a list of likely AI failure modes to watch for (a SEQUENCE for claim numbers, check-then-act GL idempotency, `DateTime.Now`, ≤ vs <, …);
+  - a note on collecting evidence for this report from the start.
+- **What was committed.** The first commit (`cdc361d`) matches that session's kit byte for byte: `PROMPTS.md` and both specs. The one
+  exception is `CLAUDE.md`, which is 48 bytes longer: the D-36 stack line changed during Phase 0 (`phase-0.md` §6). No other edits before
+  Phase 0 are recorded.
 - **Why phase gates and numbered questions rather than free-form chat.** `CLAUDE.md` states the constraint: reviewers weigh "correctness,
   consistency and explainable decisions", and the author "must be able to defend every line in a 90-minute live review". A gate produces a
   diff small enough to review, a test count, and a written decision (D-xx) for every departure from the specs. Free-form chat would have
@@ -95,6 +100,15 @@ GitHub CLI, Docker, the .NET and Angular CLIs and the Azure CLI were used as ord
 ## 3. Representative prompts
 
 All verbatim, from `docs/PROMPTS.md` / `docs/ai-log/`.
+
+**Prompt 0: pre-phase, building the context** ([pre-phase.md](docs/ai-log/pre-phase.md), verbatim).
+*Purpose:* rather than prompting Claude Code with the raw documents, first build the context and the prompt sequence, focusing on what brief §5
+evaluates.
+
+```
+`DICEUS_Fullstack_Technical_Assessment.docx` `Claims_Module_Candidate_Specification.docx` I need you to generate a prompt for Claude Code in order to successfully finish a technical assessment. Read the DICEUS_Fullstack_Technical_Assessment.docx, pay attention to the PAS requirements and specification mentioned in the document in order to build a proper context for Claude with understanding what should be implemented especially considering section 5 "AI Workflow Expectations". A deeper specification for PAS described in the Claims_Module_Candidate_Specification.docx.
+```
+*Result:* the kit committed in `cdc361d`: the specs as Markdown, `CLAUDE.md`, and `PROMPTS.md` with the kickoff and eight phase prompts.
 
 **Prompt 1: Phase 0 kickoff, analysis only** (`phase-0.md` §1, excerpt).
 *Purpose:* load the full specs, and make Claude surface every conflict before writing any code. Several suspected conflicts were seeded
@@ -199,11 +213,11 @@ dead: it is registered by an assembly scan, which its summary now says. The unus
 - **Review comments from Vlad** on finished code are recorded in the refinement phase (`phase-refinement.md` §8, and §5.1 below). The §7 sections
   of phases 1–7 record decisions only, no line-level review comments.
 
-**Designed by Vlad before prompting** (git history, `cdc361d`):
-- the phase plan and each phase's stop points (`docs/PROMPTS.md`);
-- the 13 engineering rules and the domain cheat-sheet (`CLAUDE.md`);
-- the 18 seeded conflict suspicions of the kickoff prompt;
-- the decision to keep an honest per-phase log from the start.
+**Designed by Vlad; generated by Claude from that design** ([pre-phase.md](docs/ai-log/pre-phase.md)):
+- Vlad's: the strategy. A separate context-building session first; specs as repo files; a persistent rules file; a phased sequence with a human
+  checkpoint at each phase; an analysis-only Phase 0; the focus on brief §5.
+- Claude's, in that session: the concrete artefacts. The text of `CLAUDE.md` (the 13 rules and the cheat-sheet), the phase prompts, the 18
+  seeded conflicts, and the list of failure modes to watch for. They were committed unchanged apart from the D-36 stack line (§2.4).
 
 **Reviewed by eye** (from the logs):
 - the entity/table mapping and the generated migration DDL (Phase 2, which caught the nullable RowVer);
@@ -215,8 +229,9 @@ dead: it is registered by an assembly scan, which its summary now says. The unus
 **Accepted on the strength of tests and summaries:** the bulk of Phases 1–7. The logs record no line-level comments for those phases. Acceptance
 rested on the phase summaries, the rule-named tests (695 backend, 100 frontend), the mutation checks and the smoke runs.
 
-**Written by hand:** none in git. Every non-merge commit is co-authored by Claude; every change, including the refinement corrections, was
-made by directing Claude rather than by editing files directly.
+**Written by hand:** `docs/ai-log/pre-phase.md`, Vlad's write-up of the pre-phase with its exported transcript (`5fe0cf1`, the only commit without
+the Claude co-author line). Every other change, including the refinement corrections, was made by directing Claude rather than by editing files
+directly.
 
 ---
 
@@ -309,11 +324,13 @@ F2 and F3 were Claude's own gaps from Phases 4 and 6, found only when the finish
 
 ## 7. AI interaction history (brief §4.6)
 
-- Per-phase logs with the verbatim prompts, the decisions and the corrections: [docs/ai-log/](docs/ai-log/) (phases 0–8 and the refinement phase).
+- Per-phase logs with the verbatim prompts, the decisions and the corrections: [docs/ai-log/](docs/ai-log/) (the pre-phase, phases 0–8 and the
+  refinement phase).
 - The prompt set: [docs/PROMPTS.md](docs/PROMPTS.md). The session context file: [CLAUDE.md](CLAUDE.md).
 
 - The refinement phase: [docs/ai-log/phase-refinement.md](docs/ai-log/phase-refinement.md).
-- **Session exports (DEL-04), still open.** The project ran in 11 Claude Code sessions: Phase 0 analysis, Phases 1–8, one branch-merge session, and
-  the refinement session. The raw transcripts are not yet committed. The desktop app exports them as zip files, at most six per hour, and they
+- **Exported transcripts.** The pre-phase session's transcript is committed in [pre-phase.md](docs/ai-log/pre-phase.md), with tool output collapsed.
+- **Session exports (DEL-04), still open for Claude Code.** The build ran in 11 Claude Code sessions: Phase 0 analysis, Phases 1–8, one
+  branch-merge session, and the refinement session. Their raw transcripts are not yet committed. The desktop app exports them as zip files, at most six per hour, and they
   include full command output (for example from the Azure sessions). They should be checked for secrets before they are committed under
   `docs/ai-log/exports/`.

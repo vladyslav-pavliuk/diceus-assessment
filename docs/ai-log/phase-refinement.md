@@ -124,6 +124,13 @@ yes please, but before that, update AI-workflow with the examples of most valuab
   the 12 px gap. The deployed Static Web App's bundle still had the old rule (`.tab__actions{…gap:8px;margin-bottom:8px}`): the last Deploy run
   was 16:58 UTC, before the fix, and pushing `main` runs CI only. The fix was correct; Claude's report had not said that it was live only locally.
   Vlad approved a deploy, to run after the AI-WORKFLOW update.
+- **Deploy (run `36475070385`).** The SPA job succeeded, and the live bundle was checked afterwards: it now has
+  `.tab__actions{…margin-top:12px…}`. The **API image job failed**: `ghcr.io/vladyslav-pavliuk/claims-api` had become private, although the
+  16:58 run had passed the same anonymous-pull check. Anonymous probes confirmed it: no token, 403 on the manifest. Container Apps and the smoke
+  test were skipped. The live API still answered 200 on `/health/live` and `/health/ready` (old image), but a private image risks failing the
+  next scale-from-zero pull. GitHub has no API for package visibility, so Vlad made the package public and ran
+  `gh run rerun 36475070385 --failed`. On the re-run **all eight jobs succeeded**, including the smoke test. The Container App now runs
+  `claims-api:0c905a7`.
 
 ## 5a. AI-WORKFLOW.md completed
 
@@ -134,6 +141,12 @@ yes please, but before that, update AI-workflow with the examples of most valuab
   hand-written (none, per git) (§4); **§5.1, seven corrections that came from Vlad, V1–V7**; the assessment (§6).
 - Checked against the logs before committing: the first draft gave an invented reason for dropping the Phase 6 per-screen stops ("once the backend
   contract was stable"). It was replaced with Vlad's actual words from `phase-6.md` §1.
+- **Corrected after Vlad committed `docs/ai-log/pre-phase.md` (`5fe0cf1`)** during the deploy. That file shows `CLAUDE.md`, `PROMPTS.md`, the
+  Markdown specs and the 18 suspected conflicts were generated in a separate Claude-app session from Vlad's prompt. Three statements in the
+  AI-WORKFLOW draft were therefore wrong: "Claude Code is the only AI tool", "designed by Vlad before prompting" for those artefacts, and
+  "written by hand: none in git". §1, §2.4, §3 (new Prompt 0) and §4 were corrected. Vlad's part is now credited as the strategy and Claude's as
+  the artefacts. The `TODO (Vlad)` in `pre-phase.md` was filled from evidence: the kit and the first commit match byte for byte, except the D-36
+  line in `CLAUDE.md` (+48 bytes).
 - Still open: **DEL-04, the raw session exports** (11 sessions). They need a secret review, and the app allows six exports per hour. DEL-03 is
   now Done in the requirements matrix.
 
@@ -158,7 +171,10 @@ yes please, but before that, update AI-workflow with the examples of most valuab
    not on the deployed site, which Vlad was looking at. The deploy step was only mentioned after he reported it still broken.
 5. **Invented a reason in the AI-WORKFLOW draft.** "Per-screen stops were dropped once the backend contract was stable" was not in any log; corrected
    to Vlad's quoted reason before committing.
-6. **Missed the spacing bug.** The frontend pass checked builds, tests and lint but no rendered screens, so the button touching the field above it
+6. **Credited Vlad with artefacts Claude had generated.** The first AI-WORKFLOW draft took the first commit as proof that Vlad wrote `CLAUDE.md`,
+   `PROMPTS.md` and the seeded conflicts, and that no AI tool other than Claude Code was used. The pre-phase log showed both were wrong; corrected
+   the same day.
+7. **Missed the spacing bug.** The frontend pass checked builds, tests and lint but no rendered screens, so the button touching the field above it
    was found by Vlad, not by the AI.
 
 ## 8. What Vlad changed or rejected
