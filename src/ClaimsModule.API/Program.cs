@@ -1,6 +1,7 @@
 using ClaimsModule.API;
 using ClaimsModule.API.Auth;
 using ClaimsModule.API.Middleware;
+using ClaimsModule.API.Storage;
 using ClaimsModule.Application;
 using ClaimsModule.Infrastructure;
 using ClaimsModule.Persistence;
@@ -54,6 +55,9 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Development-only download endpoint of the local document storage fallback (FRS §13, D-28); absent with Azure Blob Storage.
+app.MapLocalFileDownloads();
 
 // Hangfire dashboard (D-41): managers only, through the normal authorization pipeline (the token may arrive as
 // ?access_token= once, then as a cookie; see DashboardTokenHandoff). Read-only: no requeue or delete buttons, so

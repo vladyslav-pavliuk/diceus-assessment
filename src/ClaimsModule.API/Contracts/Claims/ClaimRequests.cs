@@ -1,4 +1,5 @@
 using ClaimsModule.Domain.Claims;
+using ClaimsModule.Domain.Documents;
 using ClaimsModule.Domain.Reserves;
 
 namespace ClaimsModule.API.Contracts.Claims;
@@ -34,3 +35,16 @@ public sealed record AdjustReserveRequest(decimal? NewAmount, string? ChangeReas
 
 /// <summary>POST /api/claims/{id}/reserves/{txnId}/reject (FRS §10.2).</summary>
 public sealed record RejectReserveRequest(string? RejectionReason);
+
+/// <summary>
+/// POST /api/claims/{id}/documents (FRS §10.1): the multipart form. All fields optional at binding, so the validator words
+/// what is missing; <see cref="DocumentType"/> defaults to Other (D-42).
+/// </summary>
+public sealed class UploadDocumentForm
+{
+    public IFormFile? File { get; init; }
+
+    public DocumentType? DocumentType { get; init; }
+
+    public string? Notes { get; init; }
+}

@@ -27,7 +27,8 @@ services:
 
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite:latest
-    command: azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --location /data --loose
+    # --skipApiVersionCheck: the Azure SDK may send a newer REST API version than this Azurite image knows.
+    command: azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --location /data --loose --skipApiVersionCheck
     ports:
       - "10000:10000"
     volumes:
@@ -52,6 +53,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__ClaimsDb: *claims-db
+      # Documents on the container's disk (D-42): the non-root user can write to its home, and download links point at the
+      # published port. Azurite is not used here: its SAS URLs would name the "azurite" host, which a browser cannot reach.
+      Storage__LocalFileSystem__RootPath: /home/app/uploads
+      Storage__LocalFileSystem__PublicBaseUrl: http://localhost:5080
     ports:
       - "5080:8080"
     depends_on:
