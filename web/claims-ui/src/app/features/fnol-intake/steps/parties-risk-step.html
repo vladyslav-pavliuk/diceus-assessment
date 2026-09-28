@@ -1,0 +1,119 @@
+<div class="step">
+  <section class="step__section">
+    <h3 class="step__subheading">
+      Parties
+      <span class="spacer"></span>
+      @if (!addingParty()) {
+        <button mat-stroked-button type="button" (click)="addingParty.set(true)">
+          <mat-icon>person_add</mat-icon>
+          Add party
+        </button>
+      }
+    </h3>
+
+    @if (group().controls.parties.hasError('claimantRequired')) {
+      <div class="banner banner--warning" role="alert">
+        <mat-icon>warning_amber</mat-icon>
+        <span>{{ claimantMessage }}</span>
+      </div>
+    }
+
+    @if (group().controls.parties.length > 0) {
+      <div class="items">
+        @for (party of group().controls.parties.controls; track party; let index = $index) {
+          <div class="item-card">
+            <div class="item-card__body">
+              <div class="item-card__title">
+                <app-badge [tone]="party.value.role === 'Claimant' ? 'info' : 'neutral'">
+                  {{ label(party.value.role) }}
+                </app-badge>
+                {{ displayName(party.getRawValue()) }}
+              </div>
+              <div class="item-card__line">{{ party.value.type }}</div>
+              @if (party.value.email || party.value.phone) {
+                <div class="item-card__line">{{ party.value.email }} {{ party.value.phone }}</div>
+              }
+            </div>
+            <button
+              mat-icon-button
+              type="button"
+              (click)="removeParty(index)"
+              matTooltip="Remove party"
+              aria-label="Remove party"
+            >
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+        }
+      </div>
+    }
+
+    @if (addingParty()) {
+      <app-party-form
+        #partyForm
+        (submitted)="addParty($event, partyForm)"
+        (cancelled)="addingParty.set(false)"
+      />
+    }
+  </section>
+
+  <section class="step__section">
+    <h3 class="step__subheading">
+      Risk objects
+      <span class="spacer"></span>
+      @if (!addingRiskObject()) {
+        <button mat-stroked-button type="button" (click)="addingRiskObject.set(true)">
+          <mat-icon>add</mat-icon>
+          Add risk object
+        </button>
+      }
+    </h3>
+
+    @if (group().controls.riskObjects.length === 0) {
+      <div class="banner banner--info">
+        <mat-icon>info</mat-icon>
+        <span>{{ riskAdvisory }} At least one risk object is recommended.</span>
+      </div>
+    } @else {
+      <div class="items">
+        @for (
+          riskObject of group().controls.riskObjects.controls;
+          track riskObject;
+          let index = $index
+        ) {
+          <div class="item-card">
+            <div class="item-card__body">
+              <div class="item-card__title">
+                <app-badge>{{ riskObject.value.assetType }}</app-badge>
+                {{ riskObject.value.assetDescription }}
+              </div>
+              @if (riskObject.value.damageDescription) {
+                <div class="item-card__line">{{ riskObject.value.damageDescription }}</div>
+              }
+              @if (riskObject.value.assetReference) {
+                <div class="item-card__line">Ref. {{ riskObject.value.assetReference }}</div>
+              }
+            </div>
+            <button
+              mat-icon-button
+              type="button"
+              (click)="removeRiskObject(index)"
+              matTooltip="Remove risk object"
+              aria-label="Remove risk object"
+            >
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+        }
+      </div>
+    }
+
+    @if (addingRiskObject()) {
+      <app-risk-object-form
+        #riskForm
+        (submitted)="addRiskObject($event, riskForm)"
+        (cancelled)="addingRiskObject.set(false)"
+      />
+    }
+  </section>
+</div>

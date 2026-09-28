@@ -9,5 +9,9 @@ export const routes: Routes = [
     pathMatch: 'full',
     loadChildren: () => import('./features/claims-list/claims-list.routes'),
   },
+  {
+    path: 'claims/new',
+    loadChildren: () => import('./features/fnol-intake/fnol-intake.routes'),
+  },
   { path: '**', redirectTo: 'claims' },
 ];

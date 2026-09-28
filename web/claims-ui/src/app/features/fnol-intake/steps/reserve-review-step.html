@@ -1,0 +1,129 @@
+<div class="step">
+  <section class="step__section">
+    <h3 class="step__heading">Initial reserve (optional)</h3>
+    @if (group().disabled) {
+      <div class="banner banner--info">
+        <mat-icon>lock</mat-icon>
+        <span>No policy linked. Policy must be associated before reserves can be set.</span>
+      </div>
+    } @else {
+      <form class="reserve-row" [formGroup]="group()">
+        <mat-form-field>
+          <mat-label>Component</mat-label>
+          <mat-select formControlName="component">
+            <mat-option [value]="null">No initial reserve</mat-option>
+            @for (component of components; track component) {
+              <mat-option [value]="component">{{ label(component) }}</mat-option>
+            }
+          </mat-select>
+          <mat-error>{{ error(group().controls.component) }}</mat-error>
+        </mat-form-field>
+        <mat-form-field>
+          <mat-label>Amount</mat-label>
+          <span matTextPrefix>$&nbsp;</span>
+          <input matInput type="number" step="0.01" formControlName="amount" />
+          <mat-error>{{ error(group().controls.amount) }}</mat-error>
+        </mat-form-field>
+        <app-authority-indicator [amount]="reserveAmount()" />
+      </form>
+    }
+  </section>
+
+  <section class="step__section">
+    <h3 class="step__heading">Review</h3>
+    @if (warnings().length > 0) {
+      <div class="banner banner--warning">
+        <mat-icon>warning_amber</mat-icon>
+        <div>
+          <strong>The claim will be created in Draft with these warnings:</strong>
+          <ul>
+            @for (warning of warnings(); track warning) {
+              <li>{{ warning }}</li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+    <table class="review">
+      <tbody>
+        <tr>
+          <th scope="row">Policy</th>
+          <td>
+            @if (policy(); as selected) {
+              {{ selected.policyNumber }} · {{ selected.clientName }}
+            } @else {
+              <span class="muted">Unknown policy</span>
+            }
+          </td>
+        </tr>
+        <tr>
+          <th scope="row">Loss date</th>
+          <td>{{ review().lossDate | date: 'd MMM y, HH:mm' }}</td>
+        </tr>
+        <tr>
+          <th scope="row">Cause of loss</th>
+          <td>{{ causeName() || '—' }}</td>
+        </tr>
+        <tr>
+          <th scope="row">Description</th>
+          <td>{{ review().lossDescription || '—' }}</td>
+        </tr>
+        <tr>
+          <th scope="row">Location</th>
+          <td>{{ review().lossLocation || '—' }}</td>
+        </tr>
+        <tr>
+          <th scope="row">Estimated loss</th>
+          <td>
+            @if (review().estimatedLossAmount !== null) {
+              {{ review().estimatedLossAmount | currency: 'USD' }}
+            } @else {
+              —
+            }
+          </td>
+        </tr>
+        <tr>
+          <th scope="row">Parties</th>
+          <td>
+            @if (review().parties.length === 0) {
+              —
+            } @else {
+              <ul>
+                @for (party of review().parties; track $index) {
+                  <li>
+                    {{ label(party.role) }}: {{ displayName(party)
+                    }}{{ party.email ? ' · ' + party.email : '' }}
+                  </li>
+                }
+              </ul>
+            }
+          </td>
+        </tr>
+        <tr>
+          <th scope="row">Risk objects</th>
+          <td>
+            @if (review().riskObjects.length === 0) {
+              —
+            } @else {
+              <ul>
+                @for (riskObject of review().riskObjects; track $index) {
+                  <li>{{ riskObject.assetType }}: {{ riskObject.assetDescription }}</li>
+                }
+              </ul>
+            }
+          </td>
+        </tr>
+        <tr>
+          <th scope="row">Initial reserve</th>
+          <td>
+            @if (review().initialReserve; as reserve) {
+              {{ label(reserve.component) }} · {{ reserve.amount | currency: 'USD' }}
+            } @else {
+              None
+            }
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</div>

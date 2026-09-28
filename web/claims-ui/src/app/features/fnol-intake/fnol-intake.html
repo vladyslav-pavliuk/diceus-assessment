@@ -1,0 +1,81 @@
+<header class="page-header">
+  <a mat-icon-button routerLink="/claims" aria-label="Back to claims"
+    ><mat-icon>arrow_back</mat-icon></a
+  >
+  <h1>Log new claim</h1>
+  <span class="page-header__spacer"></span>
+  <span class="muted">First notice of loss</span>
+</header>
+
+<div class="card fnol">
+  <mat-stepper linear #stepper class="fnol__stepper" animationDuration="200">
+    <mat-step [stepControl]="form.controls.policyLoss" label="Policy & loss details">
+      <app-error-summary [messages]="stepErrors()[0]" />
+      <app-policy-loss-step
+        [group]="form.controls.policyLoss"
+        [policy]="policy()"
+        [policyState]="policyState()"
+        [causeText]="causeText()"
+      />
+      <div class="fnol__actions">
+        <span class="spacer"></span>
+        <button
+          mat-flat-button
+          matStepperNext
+          type="button"
+          (click)="form.controls.policyLoss.markAllAsTouched()"
+        >
+          Next
+          <mat-icon iconPositionEnd>arrow_forward</mat-icon>
+        </button>
+      </div>
+    </mat-step>
+
+    <mat-step [stepControl]="form.controls.partiesRisk" label="Parties & risk objects">
+      <app-error-summary [messages]="stepErrors()[1]" />
+      <app-parties-risk-step [group]="form.controls.partiesRisk" />
+      <div class="fnol__actions">
+        <button mat-button matStepperPrevious type="button">Back</button>
+        <span class="spacer"></span>
+        <button
+          mat-flat-button
+          matStepperNext
+          type="button"
+          (click)="form.controls.partiesRisk.markAllAsTouched()"
+        >
+          Next
+          <mat-icon iconPositionEnd>arrow_forward</mat-icon>
+        </button>
+      </div>
+    </mat-step>
+
+    <mat-step [stepControl]="form.controls.reserve" label="Initial reserve & review">
+      <app-error-summary [messages]="stepErrors()[2]" />
+      <app-reserve-review-step
+        [group]="form.controls.reserve"
+        [review]="review()"
+        [policy]="policy()"
+        [causeName]="causeName()"
+        [reserveAmount]="reserveAmount()"
+        [warnings]="warnings()"
+      />
+      <div class="fnol__actions">
+        <button mat-button matStepperPrevious type="button" [disabled]="pending()">Back</button>
+        <span class="spacer"></span>
+        <button
+          mat-flat-button
+          type="button"
+          (click)="create()"
+          [disabled]="!canCreate() || pending()"
+        >
+          @if (pending()) {
+            <mat-spinner diameter="18" class="fnol__spinner" />
+          } @else {
+            <mat-icon>check</mat-icon>
+          }
+          {{ pending() ? 'Creating…' : 'Create claim' }}
+        </button>
+      </div>
+    </mat-step>
+  </mat-stepper>
+</div>
