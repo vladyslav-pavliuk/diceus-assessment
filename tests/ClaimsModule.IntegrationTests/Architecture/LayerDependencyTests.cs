@@ -46,24 +46,27 @@ public sealed class LayerDependencyTests
         result.IsSuccessful.ShouldBeTrue(Describe(result));
     }
 
+    /// <summary>The Hangfire jobs live here, so they can only reach data through Application commands (D-41).</summary>
     [Fact]
-    public void CONV_14_Infrastructure_does_not_depend_on_Persistence_or_API()
+    public void CONV_14_Infrastructure_does_not_depend_on_Persistence_API_or_EF_Core()
     {
         var result = Types.InAssembly(SolutionAssemblies.Infrastructure).ShouldNot().HaveDependencyOnAny(
                 "ClaimsModule.Persistence",
-                "ClaimsModule.API")
+                "ClaimsModule.API",
+                "Microsoft.EntityFrameworkCore")
             .GetResult();
 
         result.IsSuccessful.ShouldBeTrue(Describe(result));
     }
 
     [Fact]
-    public void CONV_14_Persistence_does_not_depend_on_Infrastructure_or_API()
+    public void CONV_14_Persistence_does_not_depend_on_Infrastructure_API_or_Hangfire()
     {
         var result = Types.InAssembly(SolutionAssemblies.Persistence).ShouldNot().HaveDependencyOnAny(
                 "ClaimsModule.Infrastructure",
                 "ClaimsModule.API",
-                "Microsoft.AspNetCore")
+                "Microsoft.AspNetCore",
+                "Hangfire")
             .GetResult();
 
         result.IsSuccessful.ShouldBeTrue(Describe(result));

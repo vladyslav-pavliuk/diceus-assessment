@@ -129,4 +129,35 @@ internal sealed class ClaimsApi(HttpClient client)
         body.PropertyNames().ShouldBe(["type", "title", "status", "errors"], ignoreOrder: true);
         return body.GetProperty("errors").Deserialize<Dictionary<string, string[]>>()!;
     }
+
+    public Task<HttpResponseMessage> PostReserveAsync(Guid claimId, object body) =>
+        client.PostAsJsonAsync($"/api/claims/{claimId}/reserves", body);
+
+    /// <summary>Submits a reserve transaction and expects 201; the type is inferred (Add for a new component, D-05).</summary>
+    public async Task<ReserveSubmittedDto> SubmitReserveAsync(Guid claimId, string component, decimal amount, string changeReason = "Adjuster estimate.")
+    {
+        var response = await PostReserveAsync(claimId, new { component, amount, changeReason });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<ReserveSubmittedDto>(TestAuth.Json))!;
+    }
+
+    public Task<HttpResponseMessage> DecideAsync(Guid claimId, Guid transactionId, string action, object? body = null) =>
+        client.PostAsJsonAsync($"/api/claims/{claimId}/reserves/{transactionId}/{action}", body ?? new { });
+
+    public async Task<ReserveTransactionDto> DecideOkAsync(Guid claimId, Guid transactionId, string action, object? body = null)
+    {
+        var response = await DecideAsync(claimId, transactionId, action, body);
+        response.IsSuccessStatusCode.ShouldBeTrue(await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<ReserveTransactionDto>(TestAuth.Json))!;
+    }
+
+    public async Task<ClaimReservesDto> GetReservesAsync(Guid claimId)
+    {
+        var response = await client.GetAsync($"/api/claims/{claimId}/reserves");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<ClaimReservesDto>(TestAuth.Json))!;
+    }
+
+    public Task<HttpResponseMessage> SetReserveLimitOverrideAsync(Guid claimId, bool? enabled, string? reason) =>
+        client.PutAsJsonAsync($"/api/claims/{claimId}/reserve-limit-override", new { enabled, reason });
 }

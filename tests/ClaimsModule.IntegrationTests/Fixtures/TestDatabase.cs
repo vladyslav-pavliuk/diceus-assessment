@@ -1,10 +1,14 @@
 using ClaimsModule.Application.Abstractions;
 using ClaimsModule.Application.Abstractions.Persistence;
+using ClaimsModule.Domain.Audit;
 using ClaimsModule.Domain.Claims;
+using ClaimsModule.Domain.Reserves;
 using ClaimsModule.Domain.Users;
 using ClaimsModule.Infrastructure.Correlation;
 using ClaimsModule.Infrastructure.Tenancy;
 using ClaimsModule.Persistence;
+using ClaimsModule.Persistence.Conventions;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -14,11 +18,30 @@ namespace ClaimsModule.IntegrationTests.Fixtures;
 /// Direct access to the migrated test database through the API's own DI container, the way a
 /// background job uses it: a scope with an explicit tenant and correlation id (D-31).
 /// </summary>
-internal sealed class TestDatabase(ApiFixture fixture)
+internal sealed class TestDatabase(Func<IServiceProvider> services)
 {
-    public IServiceProvider Services => fixture.Factory.Services;
+    public TestDatabase(ApiFixture fixture)
+        : this(() => fixture.Factory.Services)
+    {
+    }
+
+    public IServiceProvider Services => services();
 
     public const string SeededOrganisationName = "Demo Insurance Company";
+
+    /// <summary>Creates the database named in the connection string, empty.</summary>
+    public static async Task CreateEmptyDatabaseAsync(string connectionString)
+    {
+        var builder = new SqlConnectionStringBuilder(connectionString);
+        var database = builder.InitialCatalog;
+        builder.InitialCatalog = "master";
+
+        await using var connection = new SqlConnection(builder.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"CREATE DATABASE [{database}]";
+        await command.ExecuteNonQueryAsync();
+    }
 
     /// <summary>
     /// The seeded organisation, read from the database rather than from the seed code. Looked up by name,
@@ -82,5 +105,74 @@ internal sealed class TestDatabase(ApiFixture fixture)
                 return claim;
             },
             CancellationToken.None);
+    }
+
+    /// <summary>Runs <paramref name="change"/> on the loaded claim in one unit of work, as a command handler would.</summary>
+    public async Task<TResult> ChangeClaimAsync<TResult>(Guid claimId, Func<Claim, IServiceProvider, Task<TResult>> change)
+    {
+        await using var scope = await TenantScopeAsync();
+        var services = scope.ServiceProvider;
+
+        return await services.GetRequiredService<IUnitOfWork>().ExecuteInTransactionAsync(
+            async cancellationToken =>
+            {
+                var claim = await services.GetRequiredService<IClaimRepository>().GetAsync(claimId, cancellationToken)
+                    ?? throw new InvalidOperationException($"Claim {claimId} not found.");
+                return await change(claim, services);
+            },
+            CancellationToken.None);
+    }
+
+    /// <summary>Submits a reserve transaction through the aggregate; ≤ $10,000 is auto-approved and enqueues the GL job after commit.</summary>
+    public async Task<ReserveTransaction> SubmitReserveAsync(
+        Guid claimId, ReserveComponentType component, decimal amount, string username = "handler.alex")
+    {
+        var submitter = await SeededUserAsync(username);
+        return await ChangeClaimAsync(claimId, (claim, services) => Task.FromResult(
+            claim.SubmitReserveTransaction(
+                component, null, amount, "Test reserve.", submitter, services.GetRequiredService<TimeProvider>().GetUtcNow()).Transaction));
+    }
+
+    public async Task ChangeStatusAsync(Guid claimId, ClaimStatus target, string username = "handler.alex")
+    {
+        var actor = await SeededUserAsync(username);
+        await ChangeClaimAsync(claimId, async (claim, services) =>
+        {
+            var table = await services.GetRequiredService<IStatusTransitionRepository>().GetTableAsync(CancellationToken.None);
+            claim.ChangeStatus(target, null, null, actor, table, services.GetRequiredService<TimeProvider>().GetUtcNow());
+            return true;
+        });
+    }
+
+    public async Task<ReserveTransaction> ReserveTransactionAsync(Guid transactionId)
+    {
+        await using var scope = await TenantScopeAsync();
+        return await scope.ServiceProvider.GetRequiredService<ClaimsDbContext>().ReserveHistory.AsNoTracking()
+            .SingleAsync(transaction => transaction.Id == transactionId);
+    }
+
+    public async Task<IReadOnlyList<ClaimAuditLog>> AuditAsync(Guid claimId, string? eventType = null)
+    {
+        await using var scope = await TenantScopeAsync();
+        return await scope.ServiceProvider.GetRequiredService<ClaimsDbContext>().ClaimAuditLog.AsNoTracking()
+            .Where(entry => entry.ClaimId == claimId && (eventType == null || entry.EventType == eventType))
+            .OrderBy(entry => entry.CreatedAt).ThenBy(entry => entry.Id)
+            .ToListAsync();
+    }
+
+    /// <summary>The claim row's concurrency and SLA columns: RowVer, UpdatedAt and Status.</summary>
+    public async Task<(byte[] RowVer, DateTimeOffset? UpdatedAt, ClaimStatus Status)> ClaimRowAsync(Guid claimId)
+    {
+        await using var scope = await TenantScopeAsync();
+        var row = await scope.ServiceProvider.GetRequiredService<ClaimsDbContext>().Claims.AsNoTracking()
+            .Where(claim => claim.Id == claimId)
+            .Select(claim => new
+            {
+                RowVer = EF.Property<byte[]>(claim, ShadowColumns.RowVer),
+                UpdatedAt = EF.Property<DateTimeOffset?>(claim, ShadowColumns.UpdatedAt),
+                claim.Status,
+            })
+            .SingleAsync();
+        return (row.RowVer, row.UpdatedAt, row.Status);
     }
 }
