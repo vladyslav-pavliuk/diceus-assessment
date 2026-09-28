@@ -1,8 +1,10 @@
 # AI workflow report
 
-> **Status: SKELETON (Phase 8 draft).** Everything outside a `TODO (Vlad)` block is taken from the per-phase logs in
-> [docs/ai-log/](docs/ai-log/) or from [docs/DECISIONS.md](docs/DECISIONS.md), and each entry cites its source. The `TODO (Vlad)` blocks are
-> judgements only the author can make honestly. Claude must not fill them in.
+> **How this report was written.** Phase 8 drafted it from the per-phase logs in [docs/ai-log/](docs/ai-log/) and from
+> [docs/DECISIONS.md](docs/DECISIONS.md), and left `TODO (Vlad)` blocks for the author's judgement. In the refinement phase Vlad asked Claude to
+> complete those blocks. They are written from the logs, the git history and the refinement conversation
+> ([phase-refinement.md](docs/ai-log/phase-refinement.md)), each claim cites its source, and nothing is stated that the record does not show. Vlad owns
+> the final wording.
 
 This report follows brief §4.5.
 
@@ -13,10 +15,10 @@ This report follows brief §4.5.
 | Tool | Used for | Source |
 |---|---|---|
 | Claude Code (desktop app, Code tab), model Claude Opus 5.5 | every phase: analysis (Plan mode in Phase 0), code, tests, docs, Azure infrastructure, this review | `docs/ai-log/phase-0.md` … `phase-7.md` header lines |
-| The desktop app's built-in browser pane | driving the Angular app during Phase 6; this is where the date/time-picker bug (§5, item 6) was found | `docs/ai-log/phase-6.md` §5 item 1 |
+| The desktop app's built-in browser pane | driving the Angular app during Phase 6, where the date/time-picker bug (§5, item 6) was found; measuring the Link policy spacing bug in the refinement phase (§5.1, V3) | `docs/ai-log/phase-6.md` §5 item 1; `phase-refinement.md` §5 |
 
-> **TODO (Vlad):** add any other tools you used (e.g. Copilot or Cursor in the IDE, ChatGPT for research). Or state that Claude Code was the
-> only one.
+Claude Code is the only AI tool recorded in the logs and in the git history: every non-merge commit carries the Claude co-author line. Git, the
+GitHub CLI, Docker, the .NET and Angular CLIs and the Azure CLI were used as ordinary tooling, driven through Claude Code.
 
 ---
 
@@ -67,8 +69,26 @@ This report follows brief §4.5.
 - **Honest log.** Every phase appends `docs/ai-log/phase-N.md`: the verbatim prompt, what was generated, what Vlad decided, and what Claude
   got wrong.
 
-> **TODO (Vlad):** in your own words, describe how you prepared `CLAUDE.md` and `PROMPTS.md` before Phase 0, why you chose "phase gates +
-> numbered questions" over free-form chat, and how the per-phase prompts changed as you learned what Claude does well or badly.
+### 2.4 How the context was prepared, and how the prompts changed
+- **Prepared before Phase 0.** The first commit (`cdc361d`) holds `CLAUDE.md` (127 lines), `docs/PROMPTS.md` (286 lines) and both specs.
+  The prompt pack already contained:
+  - the phase plan with its stop points;
+  - 18 suspected brief/FRS conflicts (D-01..D-18) that Claude had to *verify* rather than accept;
+  - a note on collecting evidence for this report from the start ("Every time you reject or fix Claude's output, one line in
+    `docs/ai-log/phase-N.md` saves you work later").
+- **Why phase gates and numbered questions rather than free-form chat.** `CLAUDE.md` states the constraint: reviewers weigh "correctness,
+  consistency and explainable decisions", and the author "must be able to defend every line in a 90-minute live review". A gate produces a
+  diff small enough to review, a test count, and a written decision (D-xx) for every departure from the specs. Free-form chat would have
+  left those decisions implicit.
+- **How the prompts changed.**
+  - *Phase 0.* After the analysis, Vlad delegated the remaining choices ("Apply the most logical and optimal options for the decisions…").
+  - *Phases 1–7.* The spec-heavy prompts stayed. The context file was updated whenever a decision changed a rule: the D-36 stack line, and the
+    D-41 GL predicate ("Accept Q1 and Q2, update CLAUDE.md accordingly").
+  - *Phase 6.* After approving the plan, Vlad dropped the per-screen stops: "don't stop after each screen, I'll check everything at once and
+    refine if needed" (`phase-6.md` §1). That review happened in the refinement phase (V3, V4 below).
+  - *Phase 8.* A review-only prompt: Claude acted as a strict reviewer of its own output.
+  - *Refinement.* Prompts became short review comments on finished code: noisy comments, a class name, a suspected dead class, inline
+    templates, a screenshot. Specs were no longer needed; the corrections were about quality and consistency (`phase-refinement.md` §1).
 
 ---
 
@@ -135,7 +155,30 @@ Apply the most logical and optimal options for the decisions, I'll adjust the fu
 *Result:* D-36 was rewritten: Container Apps with scale-to-zero, serverless SQL with auto-pause, and the documented consequences (cold start,
 SLA runs only while a replica is up, the `minReplicas 1` runbook step).
 
-> **TODO (Vlad):** pick the 3–4 you want to present live, and say *why* each is representative of how you prompt.
+**Prompt 5: refinement, reviewing finished output** (`phase-refinement.md` §1, verbatim).
+*Purpose:* correct quality problems that no test catches. It asks a question instead of issuing an order ("any reasons for that?"), and it
+puts a guard on the clean-up ("be careful if they are unused for purpose like validator classes").
+
+```
+We need to refactor the solution.
+Let's start from the .NET backend.
+
+* Remove comments in places where code is self-explained and make <summary> blocks shorter to point on significant details only.
+* ApiProblems class name is inappropriate for an enterprise project.
+* ClaimAuditTrail is unused, any reasons for that? + Check fir any other unused imports, classes, properties etc., but be careful if they are unused for purpose like validator classes.
+```
+*Result:* backend comment lines went from 1,739 to 823, and frontend ones from about 450 to 219. A script compared both code versions with the
+comments stripped and proved that nothing else changed. `ApiProblems` became `ErrorResponseFactory`. `ClaimAuditTrail` turned out not to be
+dead: it is registered by an assembly scan, which its summary now says. The unused-code scan found a package reference unused since Phase 1.
+
+**Chosen for the live walkthrough**, and why each is representative:
+1. **Prompt 1 (Phase 0 kickoff).** Context loading done deliberately: the full specs, the rules file, and suspicions seeded for Claude to test,
+   not accept. Claude then pushed back on three of the prompt's own suggestions.
+2. **Prompt 2 (Phase 4, concurrency before code).** In the riskiest area, the prompt demands written reasoning and concurrent tests *before*
+   code. That is how the `= 'Pending'` correction to the human-written `CLAUDE.md` came about.
+3. **Prompt 5 (refinement).** Reviewing generated output rather than generating more: naming, noise, a question, and a guard against an
+   over-eager clean-up.
+4. *(If time allows)* **Prompt 4 (the direction change).** Two sentences that overrode Claude's hosting recommendation on cost.
 
 ---
 
@@ -153,22 +196,34 @@ SLA runs only while a replica is up, the `minReplicas 1` runbook step).
   Q1–Q3.
 - Phase 8: Vlad chose which review findings to fix (F1–F3) and approved D-45 (`phase-8.md` §7).
 - The numbered items of D-38 and D-40..D-44 are still **PROPOSED** in DECISIONS.md (the per-decision questions are accepted; the items are not).
-- **Recorded review comments from Vlad: none yet.** Every "What Vlad changed or rejected in review" section in `docs/ai-log/` is still a
-  placeholder.
+- **Review comments from Vlad** on finished code are recorded in the refinement phase (`phase-refinement.md` §8, and §5.1 below). The §7 sections
+  of phases 1–7 record decisions only, no line-level review comments.
 
-> **TODO (Vlad):** this is the section reviewers weigh most. Write, honestly:
-> - which parts you designed yourself before prompting (e.g. the phase plan, the CLAUDE.md rules, the seeded suspicions in the kickoff prompt);
-> - which generated parts you reviewed line by line, and which you accepted on the strength of tests;
-> - anything you rewrote by hand;
-> - the review comments you gave that are not yet in the logs. Add them to the matching `docs/ai-log/phase-N.md` §7 first, so this section can
->   cite them.
+**Designed by Vlad before prompting** (git history, `cdc361d`):
+- the phase plan and each phase's stop points (`docs/PROMPTS.md`);
+- the 13 engineering rules and the domain cheat-sheet (`CLAUDE.md`);
+- the 18 seeded conflict suspicions of the kickoff prompt;
+- the decision to keep an honest per-phase log from the start.
+
+**Reviewed by eye** (from the logs):
+- the entity/table mapping and the generated migration DDL (Phase 2, which caught the nullable RowVer);
+- the Phase 6 plan;
+- the Phase 8 findings, of which Vlad chose F1–F3;
+- in the refinement phase, the finished code and the running UI. That review found the verbose comments, the `ApiProblems` name, the
+  suspected-unused `ClaimAuditTrail`, the inline templates and the button-spacing bug (§5.1).
+
+**Accepted on the strength of tests and summaries:** the bulk of Phases 1–7. The logs record no line-level comments for those phases. Acceptance
+rested on the phase summaries, the rule-named tests (695 backend, 100 frontend), the mutation checks and the smoke runs.
+
+**Written by hand:** none in git. Every non-merge commit is co-authored by Claude; every change, including the refinement corrections, was
+made by directing Claude rather than by editing files directly.
 
 ---
 
 ## 5. Where AI output was wrong or suboptimal, and how it was corrected
 
-Every item below is recorded in `docs/ai-log/`. Most were caught by Claude's own tests, builds or re-reads, or by the first real Azure run.
-**None came from a review comment by Vlad** (see §4).
+Every item is recorded in `docs/ai-log/`. The first table lists what Claude's own tests, builds or re-reads caught, or the first real Azure run.
+**§5.1 lists what Vlad caught**: those are the corrections the automated checks could not make.
 
 | # | Phase | What Claude got wrong | How it was caught | Fix | Source |
 |---|---|---|---|---|---|
@@ -199,28 +254,66 @@ Every item below is recorded in `docs/ai-log/`. Most were caught by Claude's own
 
 F2 and F3 were Claude's own gaps from Phases 4 and 6, found only when the finished code was read again as a reviewer would.
 
-> **TODO (Vlad):**
-> - Choose the **two or more** examples you will walk through live. Item 1 (keys) and item 5 (a test that passed by luck) show judgement
->   about *why* the output was wrong. Items 8–10 show the limits of local verification.
-> - Add any correction **you** made that is not in the logs. The brief values those most.
+### 5.1 Corrections that came from Vlad, most valuable first
+
+| # | What Claude produced | Vlad's correction | Outcome | Source |
+|---|---|---|---|---|
+| V1 | **Over-documented code across all phases.** 1,739 backend comment lines out of 11,687, with summaries that restated member names, routes and audit events, plus references to internal files a product codebase should not carry (`CLAUDE.md rule 5`, `ARCHITECTURE-PLAN §6.1 R6`, `Phase 4`, even "decided by Vlad 2026-09-28") | "Remove comments in places where code is self-explained … point on significant details only", for the backend and then the frontend | Backend 1,739 → 823 lines, frontend about 450 → 219. Kept: the *why* (races, transaction order, security) and rule/decision IDs. A comment-stripping comparison proved that no code changed | `phase-refinement.md` §1–§3 |
+| V2 | **A hosting recommendation that put a warm demo over cost.** App Service B1 Always On + Azure SQL Basic | "Use azure container apps to reduce db costs" | D-36 rewritten: Container Apps with scale-to-zero and serverless SQL with auto-pause; the cold-start consequences documented and a `minReplicas` input added to deploy | `phase-0.md` §6 |
+| V3 | **A visible UI bug shipped since Phase 6.** The Link policy button touched the field above it (the field's hint area collapses to 0 px, and the component host is inline). It passed 100 tests, lint, the Phase 8 review and the first refinement pass | A screenshot: "please add top margin for the button" | Measured in the browser, fixed on the shared `.tab__actions` rule, which also fixed the Save notes row | `phase-refinement.md` §5 |
+| V4 | **Inconsistent conventions.** 13 of 29 components had inline templates (9 also inline styles) | "I prefer separate files for that" | All 13 moved verbatim to `.html`/`.scss` | `phase-refinement.md` §3 |
+| V5 | **A weak name.** `ApiProblems` (Phase 1) for the error-response builder | "inappropriate for an enterprise project" | `ErrorResponseFactory`. Claude avoided `ProblemDetailsFactory`, which would shadow ASP.NET Core's class | `phase-refinement.md` §2 |
+| V6 | **Unused leftovers the Phase 8 review missed**, and an undocumented registration | "ClaimAuditTrail is unused, any reasons for that? + Check for any other unused …" | `ClaimAuditTrail` was not dead (assembly-scanned), and its summary now says so. The resulting scan removed a package reference unused since Phase 1, an unread test field and 6 unused `using`s | `phase-refinement.md` §2 |
+| V7 | **A "fixed" report without saying where.** After V3, Claude verified the fix only on the local dev server and did not say the Azure site needs a manual deploy | "I still don't see fixed button problem" | The deployed bundle was checked and still held the old CSS rule. Lesson: say where a fix is verified and where it is not yet live | `phase-refinement.md` §5 |
+
+**Chosen for the live walkthrough:**
+- **Item 1 (keys) and item 5 (a test that passed by luck):** judgement about *why* output that looked right was wrong.
+- **Items 8–10 (Azure):** the limits of local verification.
+- **V3 and V7 (the button):** what only a human looking at the screen caught, and how "done" has to name *where* it is done.
+- **V1 (comments):** Claude's systematic bias towards volume, and how the clean-up was proven safe.
 
 ---
 
 ## 6. Honest assessment: where AI helped most, and least
 
-> **TODO (Vlad):** your judgement. Facts from the logs you may want to weigh:
-> - The spec analysis in Phase 0 produced 37 decisions, 19 of them new findings.
-> - There are 695 backend and 100 frontend tests, named after the rule IDs, including forced-interleaving concurrency tests and mutation checks.
-> - All three Azure defects (§5 items 8–10) passed every local check and failed only against real Azure.
-> - The Phase 6 date-picker bug was invisible to the unit tests and found only in the browser.
-> - Where did AI save the most time? Where did reviewing its output cost more than writing it yourself would have?
+**Where AI helped most:**
+- **Reading and reconciling the specs.** Phase 0 turned two long documents into 37 decisions, 19 of them new findings. Claude also pushed back
+  on three of the prompt's own suggestions (D-01, D-06, D-16).
+- **Reasoning about concurrency, and proving it.** It listed 13 races (R1–R13) and gave each a defence and a test, with forced interleavings and
+  mutation checks. It also corrected the human-written GL rule in `CLAUDE.md` (`<> 'Posted'` → `= 'Pending'`).
+- **Consistent volume under explicit rules.** The whole slice was built in two days (27–28 Sep, per git history): 695 backend and 100 frontend
+  tests named after rule IDs, and conventions enforced by architecture tests.
+- **Large mechanical changes that can be verified.** In the refinement phase: a comment clean-up proven safe by a code-equivalence script,
+  255 + 40 documentation line references remapped, and branches merged and pruned.
+
+**Where it helped least, or where reviewing cost more than it saved:**
+- **Anything outside the test harness.** All three Azure defects (§5 items 8–10) passed every local check. The date-picker bug (item 6) and the
+  button spacing (V3) were invisible to the unit tests; only a browser or a human eye found them.
+- **A bias towards volume.** Claude documents everything, including what the code already says and which internal file a rule came from. It
+  took a dedicated refinement pass (V1) to bring the code back to a level a reviewer can read.
+- **Drift between phases.** Conventions set early were not always kept later (inline vs external templates, V4). Leftovers survived a
+  self-review (V6).
+- **Facts from memory.** A licence (item 11), a role id (item 9) and a rule ID (item 12) were stated confidently and were wrong. Anything
+  checkable is now looked up, not recalled.
+- **"Done" without scope.** A fix verified locally was reported as fixed without saying it was not deployed (V7).
+
+**Rules taken forward:**
+- Prompt for reasoning before code in risky areas.
+- Name tests after rule IDs, and use mutation checks to prove a test guards its rule.
+- Look at the running UI, not just the tests.
+- Verify identifiers and licences against their source.
+- Ask for "why" comments only.
+- When reporting a fix, say where it has been verified.
 
 ---
 
 ## 7. AI interaction history (brief §4.6)
 
-- Per-phase logs with the verbatim prompts, the decisions and the corrections: [docs/ai-log/](docs/ai-log/) (phases 0–8).
+- Per-phase logs with the verbatim prompts, the decisions and the corrections: [docs/ai-log/](docs/ai-log/) (phases 0–8 and the refinement phase).
 - The prompt set: [docs/PROMPTS.md](docs/PROMPTS.md). The session context file: [CLAUDE.md](CLAUDE.md).
 
-> **TODO (Vlad):** export the Claude Code sessions (`/export`, or the desktop app's transcript export), commit them under
-> `docs/ai-log/exports/`, and link them here. The requirements matrix marks this deliverable (DEL-04) as **Missing** until then.
+- The refinement phase: [docs/ai-log/phase-refinement.md](docs/ai-log/phase-refinement.md).
+- **Session exports (DEL-04), still open.** The project ran in 11 Claude Code sessions: Phase 0 analysis, Phases 1–8, one branch-merge session, and
+  the refinement session. The raw transcripts are not yet committed. The desktop app exports them as zip files, at most six per hour, and they
+  include full command output (for example from the Azure sessions). They should be checked for secrets before they are committed under
+  `docs/ai-log/exports/`.
