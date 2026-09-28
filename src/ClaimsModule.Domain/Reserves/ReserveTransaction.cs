@@ -9,6 +9,12 @@ namespace ClaimsModule.Domain.Reserves;
 /// fixed at submission and guarded by a SaveChanges interceptor; only the approval and posting
 /// columns move, once, through the methods below. A change of amount is always a new row.
 /// </para>
+/// <para>
+/// GL posting (FRS §6.5, §12.1): Pending → Posted, or Pending → Failed once the job's retries are
+/// exhausted. Those two moves are made by the GL job as compare-and-set UPDATEs in the database
+/// (ARCHITECTURE-PLAN §6.1 R6/R8), not through this class, because the check and the write must be one
+/// atomic statement. The only move made here is the user's retry, Failed → Pending.
+/// </para>
 /// </summary>
 public sealed class ReserveTransaction : Entity
 {
@@ -69,6 +75,9 @@ public sealed class ReserveTransaction : Entity
     /// <summary>Approved and AutoApproved both count toward the balance (D-11, D-21).</summary>
     public bool IsApproved => ApprovalStatus is ReserveApprovalStatus.Approved or ReserveApprovalStatus.AutoApproved;
 
+    /// <summary>The GL job gave up on this approved transaction; a user may retry it (D-08).</summary>
+    public bool IsPostingFailed => IsApproved && PostingStatus == PostingStatus.Failed;
+
     internal static ReserveTransaction Submit(
         ReserveComponent component,
         ReserveTransactionType transactionType,
@@ -123,6 +132,17 @@ public sealed class ReserveTransaction : Entity
         RejectedAt = now;
         RejectionReason = reason;
         PostingStatus = PostingStatus.Cancelled;
+    }
+
+    /// <summary>A failed GL posting goes back to Pending, so the GL job can post it again (D-08 retry-posting).</summary>
+    internal void RequeuePosting()
+    {
+        if (!IsPostingFailed)
+        {
+            throw new InvalidOperationException($"Reserve transaction {Id} has GL posting status {PostingStatus}, not a failed posting of an approved transaction.");
+        }
+
+        PostingStatus = PostingStatus.Pending;
     }
 
     internal void Cancel()

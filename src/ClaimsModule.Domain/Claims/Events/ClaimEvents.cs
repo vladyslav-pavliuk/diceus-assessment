@@ -3,8 +3,8 @@ using ClaimsModule.Domain.Reserves;
 
 namespace ClaimsModule.Domain.Claims.Events;
 
-// Raised by the Claim aggregate. Before commit each one becomes an audit row; ReserveAutoApproved and
-// ReserveApproved also enqueue the GL posting job after commit (ARCHITECTURE-PLAN §2.5).
+// Raised by the Claim aggregate. Before commit each one becomes an audit row; ReserveAutoApproved,
+// ReserveApproved and GlPostingRetryRequested also enqueue the GL posting job after commit (ARCHITECTURE-PLAN §2.5).
 
 public sealed record ClaimCreated(Guid ClaimId, string ClaimNumber) : IDomainEvent;
 
@@ -56,6 +56,9 @@ public sealed record ReserveAutoApproved(Guid ClaimId, Guid TransactionId, strin
 public sealed record ReserveApproved(Guid ClaimId, Guid TransactionId, string IdempotencyKey, decimal Amount) : IDomainEvent;
 
 public sealed record ReserveRejected(Guid ClaimId, Guid TransactionId, decimal Amount, string Reason) : IDomainEvent;
+
+/// <summary>A failed GL posting was put back to Pending by a user; enqueues the GL posting job after commit (D-08).</summary>
+public sealed record GlPostingRetryRequested(Guid ClaimId, Guid TransactionId, string IdempotencyKey, decimal Amount) : IDomainEvent;
 
 public sealed record ReserveRetracted(Guid ClaimId, Guid TransactionId, decimal Amount) : IDomainEvent;
 

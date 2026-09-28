@@ -32,6 +32,7 @@ public static class ErrorKeys
     public const string RejectionReason = "RejectionReason";
     public const string ReserveRetraction = "ReserveRetraction";
     public const string ReserveLimitOverride = "ReserveLimitOverride";
+    public const string GlPosting = "GlPosting";
     public const string ValidationIssue = "ValidationIssue";
     public const string Note = "Note";
     public const string Document = "Document";

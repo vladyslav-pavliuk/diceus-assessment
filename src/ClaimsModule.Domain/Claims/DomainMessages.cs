@@ -53,6 +53,7 @@ public static class DomainMessages
     public const string NoRejectionAuthority = "Your role does not have authority to reject this reserve amount.";
     public const string OnlySubmitterCanRetract = "Only the submitter may retract a pending reserve.";
     public const string OverrideReasonRequired = "A reason is required to change the reserve limit override.";
+    public const string OnlyFailedPostingCanBeRetried = "Only an approved transaction whose GL posting failed can be retried.";
     public const string LastClaimantCannotBeRemoved = "The last active Claimant cannot be removed.";
     public const string PartyAlreadyRemoved = "The party has already been removed from the claim.";
     public const string OnlyWarningsCanBeAcknowledged = "Only a Warning can be acknowledged.";

@@ -209,6 +209,27 @@ public sealed partial class Claim
         Raise(new ReserveLimitOverrideSet(Id, enabled, trimmedReason));
     }
 
+    /// <summary>
+    /// POST /claims/{id}/reserves/{txnId}/retry-posting (FRS §11.3 "retry button for Failed", D-08): puts a
+    /// failed GL posting back to Pending; the GL job is enqueued after commit. Any role may retry: the change
+    /// was already approved, and posting it is idempotent. Allowed on Closed and Withdrawn claims too, because
+    /// it completes the accounting of a change that was approved before the claim closed (D-41).
+    /// </summary>
+    public ReserveTransaction RetryGlPosting(Guid transactionId, Actor actor)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+
+        var transaction = FindReserveTransaction(transactionId) ?? throw new NotFoundException("Reserve transaction", transactionId);
+        if (!transaction.IsPostingFailed)
+        {
+            throw new BusinessRuleViolationException(ErrorKeys.GlPosting, DomainMessages.OnlyFailedPostingCanBeRetried);
+        }
+
+        transaction.RequeuePosting();
+        Raise(new GlPostingRetryRequested(Id, transaction.Id, transaction.IdempotencyKey, transaction.Amount));
+        return transaction;
+    }
+
     public ReserveTransaction? FindReserveTransaction(Guid transactionId) =>
         _reserveComponents.Select(component => component.FindTransaction(transactionId)).FirstOrDefault(found => found is not null);
 
