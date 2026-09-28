@@ -4,5 +4,10 @@ import { Routes } from '@angular/router';
 // 'claims/new' is listed before 'claims/:id' so "new" is never read as a claim id.
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'claims' },
+  {
+    path: 'claims',
+    pathMatch: 'full',
+    loadChildren: () => import('./features/claims-list/claims-list.routes'),
+  },
   { path: '**', redirectTo: 'claims' },
 ];
