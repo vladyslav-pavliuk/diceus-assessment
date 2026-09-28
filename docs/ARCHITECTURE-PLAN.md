@@ -1,6 +1,6 @@
 # Architecture plan (draft → becomes ARCHITECTURE.md in Phase 8)
 
-Status: **DRAFT, Phase 0; §2.2, §2.3 and §3 revised in Phase 2 (D-39); §2.5, §3, §4.1 and §5 revised in Phase 3 (D-40)**. Based on the entries in `docs/DECISIONS.md`, all ACCEPTED on 2026-09-27 (D-36 changed to Container Apps).
+Status: **DRAFT, Phase 0; §2.2, §2.3 and §3 revised in Phase 2 (D-39); §2.5, §3, §4.1 and §5 revised in Phase 3 (D-40); §6 revised and §6.1 (race conditions) added in Phase 4 (D-41)**. Based on the entries in `docs/DECISIONS.md`, all ACCEPTED on 2026-09-27 (D-36 changed to Container Apps).
 Spec references: FRS = `docs/spec/claims-frs.md`, Brief = `docs/spec/assessment-brief.md`.
 
 ---
@@ -208,19 +208,63 @@ Not a MediatR behaviour:
 
 ---
 
-## 6. Hangfire design (FRS §12, Brief §3.5)
+## 6. Hangfire design (FRS §12, Brief §3.5) — revised in Phase 4 (D-41)
 
 | Job | Trigger | Idempotency / safety | Failure |
 |---|---|---|---|
-| `PostGLReserveChangeJob(reserveHistoryId, claimId, idempotencyKey)` | after-commit enqueue on AutoApproved/Approved; retry endpoint; sweeper | One transaction: `UPDATE ReserveHistory SET PostingStatus='Posted', PostingJobId=@job WHERE Id=@id AND IdempotencyKey=@key AND PostingStatus<>'Posted'`, then write GL_POSTING_SIMULATED **only if @@ROWCOUNT = 1**, then commit. A concurrent duplicate blocks on the row lock, then updates 0 rows → no-op. The unique IdempotencyKey index is the backstop. Never check-then-act. | `[AutomaticRetry(Attempts = 3)]`. On the final attempt: catch, set PostingStatus='Failed' (conditional on not Posted), write GL_POSTING_FAILED with the reason, swallow (D-35) |
-| `SlaMonitoringJob` | recurring `*/15 * * * *`, registered at startup (`RecurringJob.AddOrUpdate`) | Per organisation (D-31): select Draft/Open claims with `COALESCE(UpdatedAt, CreatedAt) < now-48h` and NOT EXISTS an SLA_BREACH_DETECTED row in the last 24h; insert one audit row each; never touches Claims (D-01) | default retries; the next run re-evaluates anyway |
-| `GlPostingSweeperJob` | recurring every 5 min | re-enqueues Approved/AutoApproved rows with PostingStatus=Pending and ApprovedAt < now-5 min; safe because the GL job is idempotent (D-15) | default retries |
+| `PostGLReserveChangeJob(reserveHistoryId, claimId, idempotencyKey)` | after-commit enqueue on ReserveAutoApproved / ReserveApproved / GlPostingRetryRequested; the sweeper | One transaction (the command's unit of work): `UPDATE ReserveHistory SET PostingStatus='Posted', PostingJobId=@job WHERE Id=@id AND ClaimId=@claim AND IdempotencyKey=@key AND PostingStatus='Pending' AND ApprovalStatus IN ('Approved','AutoApproved')`; only if **exactly 1 row** changed: call the (simulated) ledger with the key, stage GL_POSTING_SIMULATED, commit. 0 rows → no-op. Never check-then-act. Backstop: unique filtered index on `ClaimAuditLog(RelatedEntityId) WHERE EventType='GL_POSTING_SIMULATED'`. | `[AutomaticRetry(Attempts = 3)]`, delays 10 s / 30 s / 60 s. On the final attempt: a new unit of work sets `Failed` (same compare-and-set: `WHERE PostingStatus='Pending'`) and writes GL_POSTING_FAILED with the reason, then the exception is rethrown so Hangfire shows the job as Failed (D-41 amends D-35). Recovery: `POST …/retry-posting` (Failed → Pending, audited, re-enqueued) |
+| `SlaMonitoringJob` | recurring `*/15 * * * *`, registered at startup | Per organisation (D-31): Draft/Open claims with `COALESCE(UpdatedAt, CreatedAt) < now − 48h` and no SLA_BREACH_DETECTED in the last 24h get one audit row each; never touches Claims (D-01). `[DisableConcurrentExecution]` so two runs never overlap | default retries; the next run re-evaluates anyway |
+| `GlPostingSweeperJob` | recurring every 5 min | Per organisation: re-enqueues approved rows with `PostingStatus='Pending'` and `ApprovedAt < now − 5 min` (at most 100 per run); safe because the GL job is idempotent (D-15) | default retries |
 | `IdempotencyCleanupJob` | recurring daily | deletes IdempotencyRecords older than 24h (D-24) | — |
 
-- Jobs are resolved from DI through the `IBackgroundJobScheduler` adapter (in Application). Only Infrastructure references Hangfire.
-- Each job execution creates its own DI scope, correlation id and tenant scope.
-- Time comes from `TimeProvider` everywhere, which makes the 48h and 24h rules testable with `FakeTimeProvider`.
-- The Hangfire dashboard is enabled in Development, and in Azure only behind an authorization filter (Manager role via a cookie issued from the dev token, or basic auth). Decided in Phase 4.
+- Hangfire lives in Infrastructure; Application sees only `IBackgroundJobScheduler`. The job classes are thin: they open a DI scope, set the tenant
+  (D-31) and a fresh correlation id, and send an Application command, so the business steps run through the same pipeline (logging, unit of
+  work) as HTTP commands.
+- Each job execution has its own DI scope, correlation id (in the log scope and on every audit row it writes) and tenant scope. The system actor
+  writes `CreatedByUserId = null` (D-33).
+- Time comes from `TimeProvider` everywhere, which makes the 48h / 24h / 5 min rules testable with `FakeTimeProvider`.
+- The Hangfire dashboard is at `/hangfire`, **Manager role only**, and **read-only** (D-41).
+
+### 6.1 Race conditions we defend against (Phase 4)
+
+Written before the Phase 4 code, as the prompt requires. "Loser" is the request that commits second.
+
+**Mechanisms (named once, referenced below).**
+- **M1 — optimistic concurrency on the aggregate.** Every command that changes anything inside a claim also touches the `Claims` row (the
+  `AuditColumnsInterceptor` marks `UpdatedAt` modified), so EF adds `WHERE RowVer = @original` to the claim UPDATE. A reserve change also
+  updates its component, which has its own RowVer. On SQL Server the loser's UPDATE waits for the winner's row lock, then matches 0 rows →
+  `DbUpdateConcurrencyException` → **409**. The loser's transaction rolls back with its audit rows, and nothing was enqueued, because
+  enqueueing happens after commit.
+- **M2 — unique indexes as the last word.** `UX (ReserveComponentId, ChangeSequence)`, `UX IdempotencyKey`, `UX ReserveComponentId WHERE
+  PendingApproval` (D-22). A duplicate-key error at commit is also a lost race, so the unit of work maps SQL errors 2601/2627 to **409** as
+  well (otherwise it would be a 500).
+- **M3 — compare-and-set in one statement.** A background writer never reads a status and then writes it. It issues one conditional UPDATE and
+  acts only on "exactly 1 row changed", inside the transaction that also writes the audit row.
+- **M4 — after-commit side effects + the sweeper** (D-15).
+
+| # | Race | What would go wrong without a defence | Defence | Proven by |
+|---|---|---|---|---|
+| R1 | Two approvers approve the **same** pending transaction at the same moment (also approve vs reject, approve vs retract) | Both see PendingApproval; both write APPROVED audit rows; two GL jobs; CurrentAmount counted once or twice depending on timing | M1: component + claim RowVer; loser → 409, no audit row, no job. A retry by the loser reloads and gets 422 "only a pending transaction can be decided" | `RSV_07_Concurrent_approvals_one_wins` (both requests forced to load before either writes) |
+| R2 | Two adjustments on the **same component** at once | Both read `LastChangeSequence = n` and `CurrentAmount = x`; both insert sequence n+1 with PreviousBalance x: a forked balance chain and a duplicate GL key | M1 (component RowVer) and M2 (`UX (ReserveComponentId, ChangeSequence)`, `UX IdempotencyKey`, one pending per component). Whichever statement runs first, the loser gets 409 | `RSV_05_Concurrent_submissions_on_same_component_one_gets_409` |
+| R3 | **Write skew** on the $10M limit: two approvals on **different components** of one claim (e.g. $6M Indemnity + $6M Expense with $0 approved) | Each approval checks 0 + 6M ≤ 10M against its own snapshot; they update different component rows, so component RowVers never collide: the claim ends at $12M | M1 on the **claim** row: both commands touch `Claims`, so the second conflicts → 409; its retry re-checks the limit and gets 422. The same argument covers approve vs "disable override" and approve vs "close claim" (CC-01) | `BR_R_05_Concurrent_approvals_cannot_jointly_exceed_limit` |
+| R4 | The process dies **between COMMIT and enqueue** (or Hangfire storage is briefly unavailable) | An approved transaction stays `PostingStatus = Pending` forever | M4: `GlPostingSweeperJob` re-enqueues approved/Pending rows older than 5 minutes. A duplicate enqueue is harmless (R6) | `JOB_11_Sweeper_enqueues_stranded_postings` |
+| R5 | A job runs **before the approval commits**, or for an approval that **rolls back** | The job finds nothing (or posts something that never happened) | M4: enqueue is an after-commit handler; a rolled-back unit dispatches nothing | `RSV_03_Approval_enqueues_gl_job_after_commit`; the loser in R1 enqueues nothing |
+| R6 | The GL job runs **twice** for one transaction: a retry after an unclear failure, the sweeper + the original enqueue, a worker killed by scale-in and re-fetched, two workers **concurrently** | Check-then-act ("is it Posted? no → write audit, set Posted") lets both runs pass the check: two GL_POSTING_SIMULATED rows, two ledger postings | M3: `UPDATE … WHERE PostingStatus = 'Pending'` claims the row. A concurrent second run blocks on the row lock, then re-evaluates the predicate against the committed row → 0 rows → no-op. Sequential repeats also get 0 rows. The audit row is written in the same transaction, only after "1 row". Backstop: unique filtered index on `ClaimAuditLog(RelatedEntityId) WHERE EventType = 'GL_POSTING_SIMULATED'` | `BR_R_06_Job_run_twice_writes_one_gl_audit_entry`; `BR_R_06_Job_run_concurrently_writes_one_gl_audit_entry` (the second run is observed **blocked** on the first run's lock before the first commits) |
+| R7 | **Partial failure inside one run**: the status is updated but the audit insert (or the ledger call) fails | Posted with no audit row, or an audit row for a posting that did not happen; a retry then skips it | The UPDATE, the ledger call and the audit insert are one transaction; any failure rolls all of it back to Pending, and the retry starts clean | `JOB_03_Retry_after_failure_writes_single_entry` |
+| R8 | The **final failing attempt** races a successful run of the same transaction (e.g. the sweeper's duplicate) | "Failed" overwrites "Posted", plus a GL_POSTING_FAILED for a transaction that was posted | M3 again: `SET Failed WHERE PostingStatus = 'Pending'`; GL_POSTING_FAILED is written only if that changed 1 row | `JOB_06_Final_attempt_failure_marks_failed_and_audits`; `JOB_06_Failure_never_overwrites_a_posted_transaction` |
+| R9 | A **manual retry** (Failed → Pending) races another retry, or a stale job | Two users re-enqueue twice (harmless, R6), or a retry overwrites a status that changed after it was read | The retry goes through the aggregate (M1 on the claim). `PostingStatus` is also an EF **concurrency token**, so the retry's UPDATE is itself a compare-and-set (`WHERE PostingStatus = 'Failed'`). Jobs only post `Pending` rows (not `<> 'Posted'`), so a stray job can never post a Failed row behind the user's back: the only way back is the audited retry | `API_25_Retry_failed_posting`; `JOB_02_A_failed_posting_is_not_posted_by_a_stray_job` |
+| R10 | The GL job and a user **edit the same claim** at the same time | If the job touched the claim row, the user would get a spurious 409, and the SLA clock (UpdatedAt) would be reset by a system action | The job updates only its ReserveHistory row, with `ExecuteUpdate` (no tracked claim, so no claim touch). Users never update an approved row except the retry, which needs `Failed` (disjoint from the job's `Pending`) | `JOB_05_Success_sets_posted_and_job_id` asserts the claim's RowVer and UpdatedAt are unchanged |
+| R11 | Two **SLA runs overlap** (a run longer than 15 minutes, or two replicas) | Both see "no breach in the last 24h" for the same claim and both insert SLA_BREACH_DETECTED | `[DisableConcurrentExecution]`: a Hangfire distributed lock (an `sp_getapplock` in SQL storage) around the run. Recurring triggers fire each occurrence once across servers | `JOB_09_Second_run_within_24h_adds_nothing` (sequential); overlap is Hangfire's lock, documented rather than re-tested |
+| R12 | The SLA job flags a claim **while a user updates it** | — | Benign by design: the job never writes Claims (no conflict, no clock reset). At worst one breach entry lands moments after an update; `isSlaBreached` compares timestamps (D-01) and the next run applies the rule again | `JOB_10_Sla_job_does_not_modify_claim_row` |
+| R13 | A **transient SQL error** mid-unit (serverless resume, deadlock victim 1205) | Half-done work, or an enqueue for a unit that is then replayed | The execution strategy replays the whole unit from a clean change tracker; after-commit dispatch happens once, outside the replayed block (ARCHITECTURE-PLAN §4) | Phase 3 `CONV_15_After_commit_handlers_run_after_the_commit_and_never_after_a_rollback` |
+
+**Isolation level.** SQL Server 2022 in Docker runs locking READ COMMITTED; Azure SQL has READ_COMMITTED_SNAPSHOT on. M1–M3 hold under both:
+an UPDATE always takes an exclusive row lock and evaluates its WHERE clause against the latest *committed* row after waiting, it never updates
+a stale snapshot row (that would be SNAPSHOT isolation, which fails with error 3960 instead). The tests run on the former; the argument covers the
+latter.
+
+**Races handled in earlier phases (for completeness).** Gap-free claim numbers (D-10: counter row lock inside the creating transaction);
+duplicate `Idempotency-Key` requests (D-24: placeholder row + unique index, in-flight → 409).
 
 ---
 
