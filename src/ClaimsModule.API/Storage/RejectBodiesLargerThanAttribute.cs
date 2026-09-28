@@ -19,7 +19,7 @@ internal sealed class RejectBodiesLargerThanAttribute(long maxBytes) : Attribute
     {
         if (context.HttpContext.Request.ContentLength > maxBytes)
         {
-            context.Result = new ObjectResult(ApiProblems.Create(
+            context.Result = new ObjectResult(ErrorResponseFactory.Create(
                 StatusCodes.Status413PayloadTooLarge, "The request body is too large.", $"The limit is {maxBytes} bytes; a document may be at most 50 MB."))
             {
                 StatusCode = StatusCodes.Status413PayloadTooLarge,

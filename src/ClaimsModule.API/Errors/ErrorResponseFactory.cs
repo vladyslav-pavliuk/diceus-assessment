@@ -9,7 +9,7 @@ namespace ClaimsModule.API.Errors;
 /// The correlation id is returned in the X-Correlation-Id header, not in the body, so the 422 body
 /// stays exactly as specified.
 /// </summary>
-internal static class ApiProblems
+internal static class ErrorResponseFactory
 {
     public const string ValidationTitle = "One or more validation errors occurred.";
 

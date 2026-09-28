@@ -27,7 +27,7 @@ internal static class LocalFileDownloads
                 if (download is null)
                 {
                     return Results.Json(
-                        ApiProblems.Create(StatusCodes.Status403Forbidden, "The download link is invalid or has expired."),
+                        ErrorResponseFactory.Create(StatusCodes.Status403Forbidden, "The download link is invalid or has expired."),
                         statusCode: StatusCodes.Status403Forbidden,
                         contentType: "application/problem+json");
                 }

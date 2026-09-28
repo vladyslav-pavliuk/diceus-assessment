@@ -45,27 +45,27 @@ internal sealed class ExceptionHandlingMiddleware(
 
     private ProblemDetails ToProblem(Exception exception) => exception switch
     {
-        ValidationException validation => ApiProblems.Validation(ToDictionary(validation.Errors)),
+        ValidationException validation => ErrorResponseFactory.Validation(ToDictionary(validation.Errors)),
 
-        BusinessRuleViolationException violation => ApiProblems.Validation(ToDictionary(violation.Errors)),
+        BusinessRuleViolationException violation => ErrorResponseFactory.Validation(ToDictionary(violation.Errors)),
 
-        NotFoundException notFound => ApiProblems.Create(
+        NotFoundException notFound => ErrorResponseFactory.Create(
             StatusCodes.Status404NotFound, "The requested resource was not found.", notFound.Message),
 
-        ForbiddenAccessException forbidden => ApiProblems.Create(
+        ForbiddenAccessException forbidden => ErrorResponseFactory.Create(
             StatusCodes.Status403Forbidden, "You do not have permission to perform this action.", forbidden.Message),
 
-        ConflictException conflict => ApiProblems.Create(
+        ConflictException conflict => ErrorResponseFactory.Create(
             StatusCodes.Status409Conflict, "The request conflicts with the current state of the resource.", conflict.Message),
 
-        DbUpdateConcurrencyException => ApiProblems.Create(
+        DbUpdateConcurrencyException => ErrorResponseFactory.Create(
             StatusCodes.Status409Conflict,
             "The resource was changed by another request. Reload it and try again."),
 
-        BadHttpRequestException badRequest => ApiProblems.Create(
+        BadHttpRequestException badRequest => ErrorResponseFactory.Create(
             badRequest.StatusCode, "The request could not be processed.", badRequest.Message),
 
-        _ => ApiProblems.Create(
+        _ => ErrorResponseFactory.Create(
             StatusCodes.Status500InternalServerError,
             "An unexpected error occurred.",
             environment.IsDevelopment() ? exception.ToString() : null),

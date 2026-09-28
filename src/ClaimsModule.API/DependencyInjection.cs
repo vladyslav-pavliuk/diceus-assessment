@@ -57,14 +57,14 @@ internal static class DependencyInjection
                             entry => entry.Value!.Errors.Select(error => error.ErrorMessage).ToArray(),
                             StringComparer.Ordinal);
 
-                    return new UnprocessableEntityObjectResult(ApiProblems.Validation(errors))
+                    return new UnprocessableEntityObjectResult(ErrorResponseFactory.Validation(errors))
                     {
                         ContentTypes = { "application/problem+json" },
                     };
                 };
             });
 
-        services.AddProblemDetails(options => options.CustomizeProblemDetails = ApiProblems.Normalise);
+        services.AddProblemDetails(options => options.CustomizeProblemDetails = ErrorResponseFactory.Normalise);
 
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, HttpCurrentUser>();
