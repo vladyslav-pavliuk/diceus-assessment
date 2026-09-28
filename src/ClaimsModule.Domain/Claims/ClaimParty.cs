@@ -59,12 +59,12 @@ public sealed class ClaimParty : Entity
 
         if (!Enum.IsDefined(details.Role))
         {
-            violations.Add(ErrorKeys.ClaimParties, "Invalid party role.");
+            violations.Add(ErrorKeys.ClaimParties, DomainMessages.InvalidPartyRole);
         }
 
         if (!Enum.IsDefined(details.Type))
         {
-            violations.Add(ErrorKeys.ClaimParties, "Invalid party type.");
+            violations.Add(ErrorKeys.ClaimParties, DomainMessages.InvalidPartyType);
         }
 
         var firstName = Text.NullIfBlank(details.FirstName);
@@ -74,18 +74,18 @@ public sealed class ClaimParty : Entity
         // FRS §9.3: first/last name "for person parties", company name "for company parties".
         if (details.Type == PartyType.Person && (firstName is null || lastName is null))
         {
-            violations.Add(ErrorKeys.ClaimParties, "First name and last name are required for a person.");
+            violations.Add(ErrorKeys.ClaimParties, DomainMessages.PersonNameRequired);
         }
 
         if (details.Type == PartyType.Company && companyName is null)
         {
-            violations.Add(ErrorKeys.ClaimParties, "Company name is required for a company.");
+            violations.Add(ErrorKeys.ClaimParties, DomainMessages.CompanyNameRequired);
         }
 
         var email = Text.NullIfBlank(details.Email);
-        if (email is not null && !LooksLikeEmail(email))
+        if (email is not null && !IsPlausibleEmail(email))
         {
-            violations.Add(ErrorKeys.ClaimParties, "Email address is not valid.");
+            violations.Add(ErrorKeys.ClaimParties, DomainMessages.EmailInvalid);
         }
 
         violations.ThrowIfAny();
@@ -107,9 +107,11 @@ public sealed class ClaimParty : Entity
 
     internal void Deactivate() => IsActive = false;
 
-    // A deliberately loose shape check: one @ with text on both sides and a dot in the domain.
-    // Deliverability is not a domain rule.
-    private static bool LooksLikeEmail(string email)
+    /// <summary>
+    /// A deliberately loose shape check: one @ with text on both sides and a dot in the domain.
+    /// Deliverability is not a domain rule. Public so the request validator applies the same check.
+    /// </summary>
+    public static bool IsPlausibleEmail(string email)
     {
         var at = email.IndexOf('@', StringComparison.Ordinal);
         return at > 0

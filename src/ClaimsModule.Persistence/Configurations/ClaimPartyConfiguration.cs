@@ -1,4 +1,5 @@
 using ClaimsModule.Domain.Claims;
+using ClaimsModule.Domain.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -14,11 +15,11 @@ internal sealed class ClaimPartyConfiguration : IEntityTypeConfiguration<ClaimPa
 
         builder.Property(party => party.PartyRole).IsRequired();
         builder.Property(party => party.PartyType).HasMaxLength(20).IsRequired(); // FRS §9.3: NVARCHAR(20)
-        builder.Property(party => party.FirstName).HasMaxLength(100);
-        builder.Property(party => party.LastName).HasMaxLength(100);
-        builder.Property(party => party.CompanyName).HasMaxLength(255);
-        builder.Property(party => party.Email).HasMaxLength(255);
-        builder.Property(party => party.Phone).HasMaxLength(50);
+        builder.Property(party => party.FirstName).HasMaxLength(FieldLengths.PersonName);
+        builder.Property(party => party.LastName).HasMaxLength(FieldLengths.PersonName);
+        builder.Property(party => party.CompanyName).HasMaxLength(FieldLengths.Name);
+        builder.Property(party => party.Email).HasMaxLength(FieldLengths.Email);
+        builder.Property(party => party.Phone).HasMaxLength(FieldLengths.Phone);
         builder.Property(party => party.Notes);
         builder.Property(party => party.IsActive).IsRequired().HasDefaultValue(false);
 

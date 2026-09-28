@@ -1,4 +1,5 @@
 using ClaimsModule.Domain.Claims;
+using ClaimsModule.Domain.Common;
 using ClaimsModule.Domain.Reserves;
 using ClaimsModule.Persistence.Conventions;
 using Microsoft.EntityFrameworkCore;
@@ -25,7 +26,7 @@ internal sealed class ReserveTransactionConfiguration : IEntityTypeConfiguration
         builder.Property(transaction => transaction.RequiredAuthority).IsRequired();
         builder.Property(transaction => transaction.ExceedsAggregateLimit).IsRequired().HasDefaultValue(false);
         builder.Property(transaction => transaction.RejectionReason);
-        builder.Property(transaction => transaction.ChangeReason).HasMaxLength(500).IsRequired();
+        builder.Property(transaction => transaction.ChangeReason).HasMaxLength(FieldLengths.Reason).IsRequired();
         builder.Property(transaction => transaction.PostingStatus).IsRequired();
         builder.Property(transaction => transaction.PostingJobId).HasMaxLength(100);
         builder.Property(transaction => transaction.IdempotencyKey).HasMaxLength(GlIdempotencyKey.MaxLength).IsRequired();

@@ -39,13 +39,13 @@ public sealed class ClaimRiskObject : Entity
         var violations = new RuleViolations();
         if (!Enum.IsDefined(details.AssetType))
         {
-            violations.Add(ErrorKeys.RiskObjects, "Invalid asset type.");
+            violations.Add(ErrorKeys.RiskObjects, DomainMessages.InvalidAssetType);
         }
 
         var description = Text.NullIfBlank(details.AssetDescription);
         if (description is null)
         {
-            violations.Add(ErrorKeys.RiskObjects, "Asset description is required.");
+            violations.Add(ErrorKeys.RiskObjects, DomainMessages.AssetDescriptionRequired);
         }
 
         violations.ThrowIfAny();

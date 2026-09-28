@@ -60,6 +60,17 @@ public static class DomainMessages
     public const string AcknowledgementNoteRequired = "An acknowledgement note is required.";
     public const string AssigneeMustBeActive = "The assigned handler must be an active user.";
 
+    // Shape rules shared by the FluentValidation validators and the entities (ASSUMPTION wordings, D-40).
+    public const string InvalidClaimSeverity = "Invalid claim severity.";
+    public const string InvalidPartyRole = "Invalid party role.";
+    public const string InvalidPartyType = "Invalid party type.";
+    public const string PersonNameRequired = "First name and last name are required for a person.";
+    public const string CompanyNameRequired = "Company name is required for a company.";
+    public const string EmailInvalid = "Email address is not valid.";
+    public const string InvalidAssetType = "Invalid asset type.";
+    public const string AssetDescriptionRequired = "Asset description is required.";
+    public const string InvalidTransactionType = "Invalid reserve transaction type.";
+
     public static string ValidNextStatuses(IReadOnlyCollection<ClaimStatus> statuses) =>
         statuses.Count == 0
             ? "Valid next statuses: none."

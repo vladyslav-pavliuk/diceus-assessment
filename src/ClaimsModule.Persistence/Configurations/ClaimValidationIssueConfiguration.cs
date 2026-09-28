@@ -1,4 +1,5 @@
 using ClaimsModule.Domain.Claims;
+using ClaimsModule.Domain.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -18,7 +19,7 @@ internal sealed class ClaimValidationIssueConfiguration : IEntityTypeConfigurati
         builder.Property(issue => issue.Message).HasMaxLength(500).IsRequired();
         builder.Property(issue => issue.Status).IsRequired();
         builder.Property(issue => issue.RaisedAt).IsRequired();
-        builder.Property(issue => issue.ResolutionNote).HasMaxLength(500);
+        builder.Property(issue => issue.ResolutionNote).HasMaxLength(FieldLengths.Reason);
 
         // At most one active (Open or Acknowledged) issue per rule and claim: re-validation cannot duplicate one.
         builder.HasIndex([nameof(ClaimValidationIssue.ClaimId), nameof(ClaimValidationIssue.RuleCode)], "UX_ClaimValidationIssues_ClaimId_RuleCode_Active")

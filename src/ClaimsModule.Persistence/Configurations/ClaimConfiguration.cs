@@ -1,4 +1,5 @@
 using ClaimsModule.Domain.Claims;
+using ClaimsModule.Domain.Common;
 using ClaimsModule.Domain.Organisations;
 using ClaimsModule.Domain.Policies;
 using ClaimsModule.Domain.Users;
@@ -22,10 +23,10 @@ internal sealed class ClaimConfiguration : IEntityTypeConfiguration<Claim>
         builder.Property(claim => claim.Status).IsRequired();
         builder.Property(claim => claim.Severity).IsRequired();
         builder.Property(claim => claim.ReportedDate).IsRequired();
-        builder.Property(claim => claim.ClosureReason).HasMaxLength(500);
+        builder.Property(claim => claim.ClosureReason).HasMaxLength(FieldLengths.Reason);
         builder.Property(claim => claim.Notes);
         builder.Property(claim => claim.ReserveLimitOverride).IsRequired().HasDefaultValue(false);
-        builder.Property(claim => claim.ReserveLimitOverrideReason).HasMaxLength(500);
+        builder.Property(claim => claim.ReserveLimitOverrideReason).HasMaxLength(FieldLengths.Reason);
 
         // Optimistic concurrency for the whole aggregate: every change inside it also touches this row
         // (AuditColumnsInterceptor), so concurrent commands on one claim conflict here (ARCHITECTURE-PLAN §2.2).

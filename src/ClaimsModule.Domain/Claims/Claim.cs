@@ -103,7 +103,7 @@ public sealed partial class Claim : AggregateRoot
         ArgumentNullException.ThrowIfNull(claimNumber);
         if (!Enum.IsDefined(severity))
         {
-            throw new BusinessRuleViolationException(ErrorKeys.Severity, "Invalid claim severity.");
+            throw new BusinessRuleViolationException(ErrorKeys.Severity, DomainMessages.InvalidClaimSeverity);
         }
 
         var claim = new Claim(SequentialGuid.NewGuid())
@@ -228,7 +228,7 @@ public sealed partial class Claim : AggregateRoot
 
         if (!Enum.IsDefined(severity))
         {
-            throw new BusinessRuleViolationException(ErrorKeys.Severity, "Invalid claim severity.");
+            throw new BusinessRuleViolationException(ErrorKeys.Severity, DomainMessages.InvalidClaimSeverity);
         }
 
         if (severity == Severity)

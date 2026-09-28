@@ -1,4 +1,5 @@
 using ClaimsModule.Domain.Claims;
+using ClaimsModule.Domain.Common;
 using ClaimsModule.Persistence.Conventions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -16,10 +17,10 @@ internal sealed class LossEventConfiguration : IEntityTypeConfiguration<LossEven
 
         builder.Property(lossEvent => lossEvent.LossDate).IsRequired();
         builder.Property(lossEvent => lossEvent.LossDescription).IsRequired();
-        builder.Property(lossEvent => lossEvent.LossLocation).HasMaxLength(500);
-        builder.Property(lossEvent => lossEvent.CauseOfLossCode).HasMaxLength(50).IsRequired();
+        builder.Property(lossEvent => lossEvent.LossLocation).HasMaxLength(FieldLengths.LossLocation);
+        builder.Property(lossEvent => lossEvent.CauseOfLossCode).HasMaxLength(FieldLengths.ShortCode).IsRequired();
         builder.Property(lossEvent => lossEvent.ReportDate).IsRequired();
-        builder.Property(lossEvent => lossEvent.PoliceReportNumber).HasMaxLength(100);
+        builder.Property(lossEvent => lossEvent.PoliceReportNumber).HasMaxLength(FieldLengths.PoliceReportNumber);
 
         // FRS §9.2 "FK to CauseOfLossCodes.Code". Codes are per organisation (D-12), so the key is
         // (OrganisationId, Code): a claim can only use a code of its own organisation (BR-C-05 backstop).

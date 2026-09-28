@@ -55,7 +55,7 @@ public sealed partial class Claim
 
         if (transactionType is { } requested && !Enum.IsDefined(requested))
         {
-            throw new BusinessRuleViolationException(ErrorKeys.TransactionType, "Invalid reserve transaction type.");
+            throw new BusinessRuleViolationException(ErrorKeys.TransactionType, DomainMessages.InvalidTransactionType);
         }
 
         // BR-C-06: no reserves until a policy is linked.
