@@ -22,7 +22,7 @@ export type PartyGroup = FormGroup<{
   notes: FormControl<string>;
 }>;
 
-/** A party's controls with the FRS §9.3 rules (the API's column sizes, D-40 item 13). */
+/** Uses the API's column sizes (D-40). */
 export function createPartyGroup(value: Partial<PartyInput> = {}): PartyGroup {
   const group: PartyGroup = new FormGroup({
     role: new FormControl<PartyRole | null>(
@@ -53,7 +53,7 @@ export function createPartyGroup(value: Partial<PartyInput> = {}): PartyGroup {
     notes: new FormControl(value.notes ?? '', { nonNullable: true }),
   });
 
-  // The name rules read the type: re-check them whenever it changes.
+  // The name rules read the type, so re-check them whenever it changes.
   group.controls.type.valueChanges.subscribe(() => {
     for (const name of ['firstName', 'lastName', 'companyName'] as const) {
       group.controls[name].updateValueAndValidity({ emitEvent: false });
@@ -62,7 +62,7 @@ export function createPartyGroup(value: Partial<PartyInput> = {}): PartyGroup {
   return group;
 }
 
-/** The request body for a valid party group: blank optional fields become null. */
+/** Blank optional fields become null. */
 export function toPartyInput(group: PartyGroup): PartyInput {
   const value = group.getRawValue();
   const person = value.type === 'Person';
@@ -86,10 +86,7 @@ export function partyDisplayName(
     : [party.firstName, party.lastName].filter(Boolean).join(' ');
 }
 
-/**
- * The inline "Add party" row (FRS §11.2 step 2, §11.3 Tab 2). Emits a valid party; the parent adds it
- * to the FNOL list or sends it to the API, then calls reset().
- */
+/** Emits a valid party; the parent stores or sends it, then calls reset(). */
 @Component({
   selector: 'app-party-form',
   imports: [
@@ -138,7 +135,7 @@ export class PartyForm {
     });
   }
 
-  /** Shows an "add party" 422 next to the fields (keys are top-level: FirstName, Email, …; D-40 item 4). */
+  /** The 422 keys are top-level here (FirstName, Email, …). */
   showServerErrors(errors: Readonly<Record<string, string[]>>): string[] {
     return applyServerErrors(this.group, errors, { Role: 'role', Type: 'type' })
       .filter((placement) => placement.path === null)

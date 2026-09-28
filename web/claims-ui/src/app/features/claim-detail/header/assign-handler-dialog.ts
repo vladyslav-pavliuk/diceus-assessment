@@ -17,7 +17,6 @@ export interface AssignHandlerDialogData {
   currentHandlerId: string | null;
 }
 
-/** Reassigns the claim's handler: supervisors and managers only (D-18, PUT /claims/{id}/assignee). */
 @Component({
   selector: 'app-assign-handler-dialog',
   imports: [

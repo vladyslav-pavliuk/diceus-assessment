@@ -25,9 +25,8 @@ import { prompt } from '../../../shared/ui/prompt-dialog';
 import { ClaimDetailStore } from '../claim-detail.store';
 
 /**
- * Tab 1 (FRS §11.3): loss event details, severity badge, estimated loss and editable notes. Also the
- * claim's validation issues with Acknowledge (D-07, D-19) and "Link policy" for a claim taken without
- * one (BR-C-06, D-08): without them a Harborview-style or Unknown-policy claim could never progress.
+ * Also hosts Acknowledge (D-19) and Link policy (BR-C-06): without them an out-of-period or Unknown-policy claim could
+ * never progress.
  */
 @Component({
   selector: 'app-overview-tab',
@@ -59,7 +58,7 @@ export class OverviewTab {
   protected readonly severityTones = SEVERITY_TONES;
   protected readonly issueTones = ISSUE_SEVERITY_TONES;
 
-  // Claims.Notes is NVARCHAR(MAX): the API sets no length limit, so neither does the form.
+  // NVARCHAR(MAX) in the API, so no length limit.
   protected readonly notes = new FormControl('', { nonNullable: true });
   protected readonly severity = new FormControl<ClaimSeverity>('Standard', { nonNullable: true });
   protected readonly policy = new FormControl<Policy | string | null>(
@@ -82,7 +81,7 @@ export class OverviewTab {
   protected readonly notesChanged = signal(false);
 
   constructor() {
-    // Show the server's values whenever the claim is (re)loaded; a local edit is kept until saved.
+    // A reload shows the server's values; a local edit is kept until saved.
     effect(() => {
       const claim = this.claim();
       if (!this.notesChanged()) {

@@ -22,7 +22,7 @@ import { FileSizePipe } from '../../../shared/ui/file-size.pipe';
 import { ErrorSummary } from '../../../shared/ui/error-summary';
 import { ClaimDetailStore } from '../claim-detail.store';
 
-/** FRS §13: 50 MB (52,428,800 bytes) and the MIME allowlist, by extension (D-42 item 1). */
+/** The API's limit and allowlist, by extension (D-42). */
 export const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
 export const ALLOWED_EXTENSIONS = [
   '.pdf',
@@ -35,10 +35,7 @@ export const ALLOWED_EXTENSIONS = [
   '.csv',
 ];
 
-/**
- * A quick check before uploading, so an obviously wrong file fails without a 50 MB round trip. The API
- * is authoritative: it also sniffs the content (DOC-05), which a browser cannot do reliably.
- */
+/** Saves a 50 MB round trip for an obviously wrong file. The API also sniffs the content, which a browser cannot. */
 export function precheckDocument(file: Pick<File, 'name' | 'size'>): string | null {
   const dot = file.name.lastIndexOf('.');
   const extension = dot >= 0 ? file.name.slice(dot).toLowerCase() : '';
@@ -54,10 +51,6 @@ export function precheckDocument(file: Pick<File, 'name' | 'size'>): string | nu
   return null;
 }
 
-/**
- * Tab 4 (FRS §11.3): the claim's documents with a download button (a one-hour SAS URL, BR-D-02) and a
- * file-picker upload with a progress bar (multipart POST /claims/{id}/documents).
- */
 @Component({
   selector: 'app-documents-tab',
   imports: [
@@ -93,7 +86,7 @@ export class DocumentsTab implements OnInit {
   protected readonly accept = ALLOWED_EXTENSIONS.join(',');
 
   protected readonly documentType = new FormControl<DocumentType>('Other', { nonNullable: true });
-  /** Upload progress 0–100, or null when no upload is running. */
+  /** 0–100, or null when no upload is running. */
   protected readonly progress = signal<number | null>(null);
   protected readonly uploadingName = signal<string | null>(null);
   protected readonly errors = signal<string[]>([]);
@@ -151,9 +144,8 @@ export class DocumentsTab implements OnInit {
   }
 
   /**
-   * Opens the document in a new tab through its signed URL (BR-D-02: the bytes never pass through the
-   * API). The listed URL is used while it is valid; otherwise a fresh one is fetched (D-08). The tab is
-   * opened before the request, because browsers block a window.open that follows an async call.
+   * The tab opens before the request for a fresh URL, because browsers block a window.open that follows an async
+   * call. The listed URL is reused while it is valid.
    */
   protected download(document: ClaimDocumentWithUrl): void {
     const stillValid =

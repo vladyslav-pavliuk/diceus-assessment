@@ -16,9 +16,8 @@ export const DETAIL_TABS = ['overview', 'parties', 'reserves', 'documents', 'aud
 export type DetailTab = (typeof DETAIL_TABS)[number];
 
 /**
- * The claim detail (FRS §11.3, brief §3.7.3): an always-visible header and five tabs. The selected tab
- * is in the URL (?tab=reserves), so audit entries can link to it and a refresh keeps the place. The
- * Reserves, Documents and Audit tabs load their data the first time they are opened.
+ * The selected tab is in the URL, so audit entries can link to it and a refresh keeps the place. The Reserves,
+ * Documents and Audit tabs load their data on first open.
  */
 @Component({
   selector: 'app-claim-detail',
@@ -44,9 +43,7 @@ export class ClaimDetailPage {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
-  /** Route parameter :id. */
   readonly id = input.required<string>();
-  /** Query parameter ?tab=. */
   readonly tab = input<string | undefined>();
 
   protected readonly tabIndex = computed(() => {

@@ -16,8 +16,7 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes, withComponentInputBinding()),
-    // Order matters: auth adds the headers, loading wraps the call, and the error interceptor sees the
-    // final response.
+    // Auth adds the headers, loading wraps the call, and the error interceptor sees the final response.
     provideHttpClient(withInterceptors([authInterceptor, loadingInterceptor, errorInterceptor])),
     provideAppInitializer(() => inject(AuthService).restore()),
     provideNativeDateAdapter(),

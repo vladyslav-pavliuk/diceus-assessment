@@ -20,10 +20,7 @@ export interface PromptDialogData {
   maxLength?: number;
 }
 
-/**
- * Asks for one piece of text: a rejection reason, an acknowledgement note, an override reason. Resolves
- * with the trimmed text, or not at all when cancelled.
- */
+/** Resolves with the trimmed text, or not at all when cancelled. */
 @Component({
   selector: 'app-prompt-dialog',
   imports: [

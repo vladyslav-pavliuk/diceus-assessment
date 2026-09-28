@@ -2,7 +2,7 @@ import { ClaimDetail } from '../../core/models/claim.models';
 import { ClaimStatusDefinition } from '../../core/models/reference.models';
 import { closureChecklist, nextTransitions, transitionPreflight } from './transitions';
 
-// A slice of GET /api/reference/claim-statuses as the API seeds it (D-09).
+// A slice of the seeded transition table (D-09).
 const table: ClaimStatusDefinition[] = [
   {
     status: 'Open',

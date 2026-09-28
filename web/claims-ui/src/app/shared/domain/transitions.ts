@@ -3,11 +3,7 @@ import { ClaimDetail } from '../../core/models/claim.models';
 import { ClaimStatus, UserRole } from '../../core/models/enums';
 import { ClaimStatusDefinition, ClaimStatusTransition } from '../../core/models/reference.models';
 
-/**
- * The statuses the header's transition menu offers (FRS §11.3): the rows of the ClaimStatusTransitions
- * table (D-09) out of the current status that a user may request. System-only rows (Reopened → Open)
- * are applied by the API itself, and rows above the user's role are hidden (the API would answer 403).
- */
+/** Hides system-only rows and rows above the user's role, which the API would answer with 403 (D-09). */
 export function nextTransitions(
   definitions: readonly ClaimStatusDefinition[],
   current: ClaimStatus,
@@ -26,16 +22,11 @@ export interface PreflightItem {
   code: string;
   label: string;
   satisfied: boolean;
-  /** False for CC-04: open reserves only need a justification note, they do not block. */
+  /** False for CC-04: open reserves need a justification note, not a fix. */
   blocking: boolean;
 }
 
-/**
- * The pre-flight checklist of the transition dialog, computed from the loaded claim. It mirrors the
- * checks of Claim.Status.cs so the user sees what will fail before asking; the API still decides.
- * - Closed: FRS §4.3 CC-01..04 (BR-ST-03).
- * - Open (from Draft): BR-ST-02 plus D-18 (handler) and D-19 (acknowledged BR-C-02).
- */
+/** Mirrors Claim.Status.cs so the user sees what will fail before asking; the API still decides. */
 export function transitionPreflight(claim: ClaimDetail, target: ClaimStatus): PreflightItem[] {
   if (target === 'Closed') {
     return closureChecklist(claim);
@@ -113,7 +104,7 @@ function openChecklist(claim: ClaimDetail): PreflightItem[] {
   ];
 }
 
-/** Mirrors Claim.OpenReserveTotal: the sum of the positive component balances. */
+/** Mirrors Claim.OpenReserveTotal. */
 export function openReservesTotal(claim: ClaimDetail): number {
   return claim.reserveComponents
     .filter((component) => component.currentAmount > 0)

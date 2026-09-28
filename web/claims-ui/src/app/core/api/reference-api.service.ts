@@ -12,16 +12,11 @@ import {
 } from '../models/reference.models';
 import { apiUrl } from './api-url';
 
-/**
- * Reference data, policy lookup and users (FRS §10.3, D-08). One of the three classes allowed to use
- * HttpClient (FRS §11 "typed service layer"; enforced by ESLint).
- */
 @Injectable({ providedIn: 'root' })
 export class ReferenceApiService {
   private readonly http = inject(HttpClient);
 
-  // Reference data does not change while the app runs: fetched once, shared by every screen.
-  // A failed fetch is not cached, so the next subscriber tries again.
+  // Fetched once and shared. A failed fetch is not cached, so the next subscriber tries again.
   private readonly causeCodes$ = this.http
     .get<CauseOfLossCode[]>(apiUrl('reference', 'cause-of-loss-codes'))
     .pipe(shareReplay({ bufferSize: 1, refCount: false }));
@@ -38,7 +33,7 @@ export class ReferenceApiService {
     return this.statuses$;
   }
 
-  /** Typeahead search by policy number or client name (at most 20 results, D-40 item 10). */
+  /** At most 20 results (D-40). */
   searchPolicies(q: string): Observable<Policy[]> {
     return this.http.get<Policy[]>(apiUrl('policies', 'search'), {
       params: new HttpParams().set('q', q),
@@ -50,7 +45,7 @@ export class ReferenceApiService {
     return this.http.get<PolicyCoverage>(apiUrl('policies', policyId, 'coverage'));
   }
 
-  /** Active users of the caller's organisation; all roles when `role` is omitted (D-43). */
+  /** All roles when `role` is omitted (D-43). */
   users(role?: UserRole): Observable<User[]> {
     const params = role ? new HttpParams().set('role', role) : undefined;
     return this.http.get<User[]>(apiUrl('users'), { params });

@@ -17,7 +17,7 @@ export type RiskObjectGroup = FormGroup<{
   assetReference: FormControl<string>;
 }>;
 
-/** A damaged asset's controls (FRS §9.4, the API's column sizes). */
+/** Uses the API's column sizes. */
 export function createRiskObjectGroup(value: Partial<RiskObjectInput> = {}): RiskObjectGroup {
   return new FormGroup({
     assetType: new FormControl<AssetType | null>(
@@ -39,7 +39,7 @@ export function createRiskObjectGroup(value: Partial<RiskObjectInput> = {}): Ris
   });
 }
 
-/** The request body; the API makes the first risk object of a claim primary (D-33). */
+/** The API makes the first risk object of a claim primary (D-33). */
 export function toRiskObjectInput(group: RiskObjectGroup): RiskObjectInput {
   const value = group.getRawValue();
   return {
@@ -51,7 +51,6 @@ export function toRiskObjectInput(group: RiskObjectGroup): RiskObjectInput {
   };
 }
 
-/** The inline "Add risk object" row (FRS §11.2 step 2; the Parties tab after intake, D-40 Q1). */
 @Component({
   selector: 'app-risk-object-form',
   imports: [

@@ -1,22 +1,18 @@
 import { AbstractControl } from '@angular/forms';
 
-// Puts a 422's messages next to the controls they belong to (FRS §11.2 "display validation errors
-// inline and at the top of the relevant step"). The API keys each error by the request's property
-// path (D-40 item 4): `LossDate`, `Parties[0].FirstName`, `InitialReserve.Amount`. The form's controls
-// use the same names in camelCase, so a key maps to a control path once its first segment is placed.
+// The API keys each 422 error by request property path (D-40). Controls use the same names in camelCase, so a key
+// maps to a control path once its first segment is placed.
 
 export interface ServerErrorPlacement {
   key: string;
   messages: string[];
-  /** The control path the key resolved to, or null when the form has no such control. */
+  /** Null when the form has no such control. */
   path: string | null;
 }
 
 /**
- * Converts an API error key into a control path: `Parties[0].FirstName` → `parties.0.firstName`.
- * `roots` replaces the key's first segment with a path inside the form, for controls that live in a
- * step group or have a different name: with `{ Parties: 'partiesRisk.parties', PolicyId: 'policyLoss.policy' }`,
- * `Parties[0].FirstName` → `partiesRisk.parties.0.firstName` and `PolicyId` → `policyLoss.policy`.
+ * `Parties[0].FirstName` → `parties.0.firstName`. `roots` remaps the first segment for controls inside a step group,
+ * e.g. `{ Parties: 'partiesRisk.parties' }` gives `partiesRisk.parties.0.firstName`.
  */
 export function toControlPath(key: string, roots: Readonly<Record<string, string>> = {}): string {
   const [first, ...rest] = key
@@ -32,9 +28,8 @@ export function toControlPath(key: string, roots: Readonly<Record<string, string
 }
 
 /**
- * Sets a `server` error on every control a key resolves to and marks it touched, so mat-error shows it.
- * Angular replaces the error the next time the control's value changes. Returns every key with its
- * messages, resolved or not, so the caller can also list them at the top of the step.
+ * Marks the controls touched so mat-error shows the message. Returns every key, resolved or not, so the caller can
+ * also list them at the top of the step.
  */
 export function applyServerErrors(
   root: AbstractControl,

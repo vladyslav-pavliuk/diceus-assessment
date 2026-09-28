@@ -46,11 +46,7 @@ import { Amount } from '../../../shared/ui/amount';
 import { AuthorityIndicator } from '../../../shared/ui/authority-indicator';
 import { ErrorSummary } from '../../../shared/ui/error-summary';
 
-/**
- * The slide-in Add Reserve panel (FRS §11.3): component, amount, reason and the live authority indicator.
- * The transaction type is inferred as the API does (D-05): Add opens a component, Adjust changes it by a
- * signed amount, Reverse releases its whole balance.
- */
+/** The transaction type is inferred as the API does (D-05). */
 @Component({
   selector: 'app-add-reserve-panel',
   imports: [
@@ -81,7 +77,7 @@ export class AddReservePanel {
   protected readonly label = enumLabel;
   protected readonly error = errorMessage;
 
-  /** One Idempotency-Key per submission attempt; renewed after a success (D-24). */
+  /** Renewed after a success (D-24). */
   private idempotencyKey = crypto.randomUUID();
 
   protected readonly form = new FormGroup({
@@ -124,7 +120,7 @@ export class AddReservePanel {
   protected readonly amount = computed(() =>
     effectiveAmount(this.transactionType(), toNumber(this.value().amount), this.existing()),
   );
-  /** BR-R-05: lets the authority preview show the escalation to Manager, as the API will. */
+  /** Lets the preview show the BR-R-05 escalation to Manager, as the API will. */
   protected readonly aggregate = computed<AggregateContext | null>(() => {
     const component = this.value().component;
     const reserves = this.reserves();
@@ -151,8 +147,7 @@ export class AddReservePanel {
   });
 
   constructor() {
-    // The amount rule depends on the component and the mode: re-check it when they change. Reverse
-    // computes its own amount, so the amount field is off for it.
+    // The amount rule reads the component and the mode. Reverse computes its own amount, so the field is off.
     effect(() => {
       const reverse = this.transactionType() === 'Reverse';
       const amount = this.form.controls.amount;

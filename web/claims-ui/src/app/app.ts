@@ -5,7 +5,6 @@ import { RouterLink, RouterOutlet } from '@angular/router';
 import { LoadingService } from './core/loading/loading.service';
 import { UserSwitcher } from './core/shell/user-switcher';
 
-/** The shell: toolbar with the signed-in user (FRS §11.4), a global progress bar and the routed screen. */
 @Component({
   selector: 'app-root',
   imports: [RouterOutlet, RouterLink, MatToolbarModule, MatProgressBarModule, UserSwitcher],

@@ -13,7 +13,7 @@ import { EmptyState } from '../../../shared/ui/empty-state';
 
 export const AUDIT_PAGE_SIZE = 50;
 
-/** The tab that shows an audit entry's related entity (ClaimAuditTrail's RelatedEntityType names). */
+/** Keyed by ClaimAuditTrail's RelatedEntityType names. */
 export function relatedTab(relatedEntityType: string | null): string | null {
   switch (relatedEntityType) {
     case 'ReserveTransaction':
@@ -31,10 +31,7 @@ export function relatedTab(relatedEntityType: string | null): string | null {
   }
 }
 
-/**
- * Tab 5 (FRS §11.3): the append-only audit log, newest first, 50 per page (D-33). Read-only: nothing
- * here can edit or delete an entry. A null user is the system actor (D-33).
- */
+/** Read-only, 50 per page (D-33). */
 @Component({
   selector: 'app-audit-tab',
   imports: [
@@ -53,7 +50,7 @@ export class AuditTab {
   private readonly api = inject(ClaimsApiService);
 
   readonly claimId = input.required<string>();
-  /** The claim's last update: a change reloads the current page, so new entries appear. */
+  /** A change reloads the current page, so new entries appear. */
   readonly claimUpdatedAt = input<string | null>(null);
 
   protected readonly page = signal<PagedResult<AuditEntry> | null>(null);

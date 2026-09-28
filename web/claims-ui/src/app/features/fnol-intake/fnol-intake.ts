@@ -30,11 +30,7 @@ import { PartiesRiskStep } from './steps/parties-risk-step';
 import { PolicyLossStep } from './steps/policy-loss-step';
 import { ReserveReviewStep } from './steps/reserve-review-step';
 
-/**
- * FNOL intake (FRS §5, §11.2; brief §3.7.2): a linear MatStepper, one FormGroup per step. Everything the
- * steps show that depends on several fields (in-force badge, authority tier, warnings, review) is a
- * computed signal over the form's events, so it recomputes as the user types.
- */
+/** Anything that depends on several fields is a computed signal over the form's events, so it updates as the user types. */
 @Component({
   selector: 'app-fnol-intake',
   imports: [
@@ -60,15 +56,14 @@ export class FnolIntake {
   protected readonly form = createFnolForm(inject(CLOCK));
   private readonly stepper = viewChild.required(MatStepper);
 
-  /** One Idempotency-Key per claim being logged (D-24): a double submit or retry replays, never duplicates. */
+  /** One per claim being logged, so a double submit replays instead of duplicating (D-24). */
   private readonly idempotencyKey = crypto.randomUUID();
   private created = false;
 
   protected readonly pending = signal(false);
-  /** Server messages per step, shown at the top of that step (FRS §11.2). */
   protected readonly stepErrors = signal<string[][]>([[], [], []]);
 
-  // Any value or status change anywhere in the form (including a server error set on a control).
+  // Includes a server error set on a control.
   private readonly formState = toSignal(
     this.form.events.pipe(
       startWith(null),
@@ -98,7 +93,7 @@ export class FnolIntake {
   protected readonly reserveAmount = computed(() =>
     this.form.controls.reserve.enabled ? toNumber(this.formState().reserve.amount) : null,
   );
-  /** FRS §11.2 "confirmation dialog if any Warning validation issues exist" (D-06). */
+  /** FRS §11.2: confirm when any Warning would be recorded (D-06). */
   protected readonly warnings = computed(() =>
     intakeWarnings({
       policy: this.policy(),
@@ -110,7 +105,6 @@ export class FnolIntake {
     this.formState();
     return toCreateClaimRequest(this.form);
   });
-  /** FRS §11.2: "Create Claim button: disabled until Step 1 and Step 2 are valid". */
   protected readonly canCreate = computed(() => {
     this.formState();
     const { policyLoss, partiesRisk, reserve } = this.form.controls;
@@ -152,7 +146,7 @@ export class FnolIntake {
       });
   }
 
-  /** The route guard: a started, unsaved claim asks before it is thrown away. */
+  /** For the route guard. */
   canLeave(): boolean | Observable<boolean> {
     const { parties, riskObjects } = this.form.controls.partiesRisk.controls;
     const started = this.form.dirty || parties.length > 0 || riskObjects.length > 0;

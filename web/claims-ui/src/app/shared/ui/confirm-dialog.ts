@@ -10,11 +10,10 @@ export interface ConfirmDialogData {
   items?: readonly string[];
   confirmText?: string;
   cancelText?: string;
-  /** Shows the items as warnings (amber) rather than plain text. */
   warning?: boolean;
 }
 
-/** A yes/no confirmation. Resolves true only when the user presses the confirm button. */
+/** Resolves true only when the user presses the confirm button. */
 @Component({
   selector: 'app-confirm-dialog',
   imports: [MatDialogModule, MatButtonModule, MatIconModule],

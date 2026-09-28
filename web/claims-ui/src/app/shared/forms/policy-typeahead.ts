@@ -27,7 +27,7 @@ import { ReferenceApiService } from '../../core/api/reference-api.service';
 import { Policy } from '../../core/models/reference.models';
 import { MESSAGES, errorMessage } from './validators';
 
-/** The control holds the typed text while searching and the Policy once one is picked. */
+/** Typed text while searching, the Policy once one is picked. */
 export type PolicyControl = FormControl<Policy | string | null>;
 
 export const MIN_POLICY_QUERY_LENGTH = 2;
@@ -41,11 +41,7 @@ export function isPolicy(value: unknown): value is Policy {
   return typeof value === 'object' && value !== null && 'policyNumber' in value;
 }
 
-/**
- * Policy typeahead (FRS §11.2 step 1): searches by policy number or client name as the user types,
- * debounced, and switchMap cancels the previous search so an older, slower answer never replaces a
- * newer one. Reused by "Link policy" on the claim detail (BR-C-06, D-08).
- */
+/** switchMap cancels the previous search, so an older, slower answer never replaces a newer one. */
 @Component({
   selector: 'app-policy-typeahead',
   imports: [

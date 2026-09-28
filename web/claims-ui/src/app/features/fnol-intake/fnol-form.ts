@@ -26,17 +26,15 @@ import {
   toNumber,
 } from '../../shared/forms/validators';
 
-// The FNOL form (FRS §5.2, §11.2): one FormGroup per MatStepper step, so each step validates on its own
-// and the stepper cannot advance past an invalid one (brief §3.7.2).
+// One FormGroup per step, so the stepper cannot advance past an invalid one.
 
 export type CauseControl = FormControl<CauseOfLossCode | string | null>;
 
 export function createFnolForm(now: () => Date) {
   const policyLoss = new FormGroup({
-    /** FRS §11.2 "Unknown Policy toggle": proceed without a policy link (BR-C-06 warning). */
     unknownPolicy: new FormControl(false, { nonNullable: true }),
     policy: new FormControl<Policy | string | null>(null, policySelectedValidator) as PolicyControl,
-    /** The loss instant: the picked day with the picked time of day (FRS §11.2 "date-time picker"). */
+    /** The picked day with the picked time of day. */
     lossDate: new FormControl<Date | null>(null, lossDateValidator(now)),
     /** The time-of-day picker; merged into lossDate, never sent on its own. */
     lossTime: new FormControl<Date | null>(null),
@@ -54,7 +52,7 @@ export function createFnolForm(now: () => Date) {
 
   const partiesRisk = new FormGroup({
     parties: new FormArray<PartyGroup>([], atLeastOneClaimant),
-    // No validator: a risk object is recommended, not required (FRS §11.2 advisory, §5.4 Warning).
+    // Recommended, not required (a Warning, FRS §5.4).
     riskObjects: new FormArray<RiskObjectGroup>([]),
   });
 
@@ -69,7 +67,7 @@ export function createFnolForm(now: () => Date) {
     ]),
   });
 
-  // The two reserve fields validate each other: re-check the other one whenever one changes.
+  // The two reserve fields validate each other.
   reserve.controls.component.valueChanges.subscribe(() =>
     reserve.controls.amount.updateValueAndValidity({ emitEvent: false }),
   );
@@ -77,10 +75,8 @@ export function createFnolForm(now: () => Date) {
     reserve.controls.component.updateValueAndValidity({ emitEvent: false }),
   );
 
-  // Two pickers, one instant. Angular writes a picker's change to the model only, not to the other
-  // picker, so the date and time inputs cannot share one control: the time picker would combine its time
-  // with today. lossTime therefore feeds lossDate, and the merged value is written without touching the
-  // date input's text (emitModelToViewChange: false), so typing a date is never reformatted mid-keystroke.
+  // The pickers cannot share one control: the time picker would combine its time with today. lossTime feeds
+  // lossDate without touching the date input's text, so typing a date is never reformatted mid-keystroke.
   const { lossDate, lossTime } = policyLoss.controls;
   const mergeTime = () => {
     const merged = withTimeOfDay(lossDate.value, lossTime.value);
@@ -94,8 +90,7 @@ export function createFnolForm(now: () => Date) {
     lossDate.markAsTouched();
   });
 
-  // "Unknown policy" switches the policy field off, and with it the initial reserve: the API refuses
-  // a reserve on a claim with no policy (BR-C-06, D-06), so the form does not offer one.
+  // "Unknown policy" also switches off the initial reserve, which the API refuses without a policy (BR-C-06).
   policyLoss.controls.unknownPolicy.valueChanges.subscribe((unknown) => {
     if (unknown) {
       policyLoss.controls.policy.reset(null);
@@ -113,7 +108,7 @@ export function createFnolForm(now: () => Date) {
 
 export type FnolForm = ReturnType<typeof createFnolForm>;
 
-/** Where each API error key belongs in the form (D-40 item 4 keys → control paths). */
+/** API error key → control path (D-40). */
 export const FNOL_ERROR_ROOTS: Readonly<Record<string, string>> = {
   PolicyId: 'policyLoss.policy',
   LossDate: 'policyLoss.lossDate',
@@ -127,7 +122,7 @@ export const FNOL_ERROR_ROOTS: Readonly<Record<string, string>> = {
   InitialReserve: 'reserve',
 };
 
-/** The step (0, 1, 2) an error key belongs to; unknown keys go to the last step, next to Create. */
+/** Unknown keys go to the last step, next to Create. */
 export function stepOfErrorKey(key: string): number {
   const path = FNOL_ERROR_ROOTS[key.split(/[.[]/)[0]] ?? '';
   if (path.startsWith('policyLoss')) {
@@ -139,10 +134,7 @@ export function stepOfErrorKey(key: string): number {
   return 2;
 }
 
-/**
- * POST /api/claims (CreateClaimCommand) from the form. Also used for the review table while the form is
- * still incomplete, so every field tolerates being empty.
- */
+/** Also feeds the review table while the form is incomplete, so every field tolerates being empty. */
 export function toCreateClaimRequest(form: FnolForm): CreateClaimRequest {
   const step1 = form.controls.policyLoss.getRawValue();
   const reserve = form.controls.reserve;
@@ -171,7 +163,7 @@ export function toCreateClaimRequest(form: FnolForm): CreateClaimRequest {
   };
 }
 
-/** The day of `day` at the hours and minutes of `time`; the day unchanged when there is no time. */
+/** The day unchanged when there is no time. */
 export function withTimeOfDay(day: Date | null, time: Date | null): Date | null {
   if (!day || Number.isNaN(day.getTime())) {
     return null;
@@ -188,7 +180,7 @@ export function isCause(value: unknown): value is CauseOfLossCode {
   return typeof value === 'object' && value !== null && 'code' in value;
 }
 
-/** FRS §11.2 searchable cause dropdown: valid only when a code has been picked from the list. */
+/** Valid only when a code has been picked from the list, not merely typed. */
 export function causeSelectedValidator(control: AbstractControl): ValidationErrors | null {
   const value = control.value;
   if (value == null || value === '') {
@@ -197,7 +189,7 @@ export function causeSelectedValidator(control: AbstractControl): ValidationErro
   return isCause(value) ? null : { causeRequired: { message: MESSAGES.causeOfLossRequired } };
 }
 
-/** The optional initial reserve: component and amount are both given or both left empty. */
+/** Component and amount are both given or both empty. */
 function requiredWhenSiblingSet(sibling: string, message: string) {
   return (control: AbstractControl): ValidationErrors | null => {
     const siblingValue = control.parent?.get(sibling)?.value;

@@ -30,18 +30,12 @@ import { SKIP_GLOBAL_LOADING } from '../http/interceptors';
 import { apiUrl } from './api-url';
 
 /**
- * Every claims endpoint (FRS §10.1, §10.2, D-08, D-40 Q1). One of the three classes allowed to use
- * HttpClient; components never call HTTP directly (FRS §11; enforced by ESLint).
- *
- * Writes that create something take an optional Idempotency-Key (D-24): the caller makes one per form
- * attempt, so a double submit or a network retry replays the first response instead of creating a
- * second claim, reserve or document. The API releases the key after any non-2xx (D-40 item 12).
+ * Creating writes take an optional Idempotency-Key, one per form attempt, so a double submit or a network retry
+ * replays the first response instead of creating a duplicate (D-24).
  */
 @Injectable({ providedIn: 'root' })
 export class ClaimsApiService {
   private readonly http = inject(HttpClient);
-
-  // --- Claims ---------------------------------------------------------------------------------
 
   listClaims(query: ClaimListQuery): Observable<PagedResult<ClaimSummary>> {
     let params = new HttpParams().set('page', query.page).set('pageSize', query.pageSize);
@@ -98,8 +92,6 @@ export class ClaimsApiService {
     });
   }
 
-  // --- Parties, risk objects, validation issues ------------------------------------------------
-
   addParty(claimId: string, party: PartyInput): Observable<ClaimParty> {
     return this.http.post<ClaimParty>(apiUrl('claims', claimId, 'parties'), party);
   }
@@ -119,9 +111,7 @@ export class ClaimsApiService {
     );
   }
 
-  // --- Reserves --------------------------------------------------------------------------------
-
-  /** `background`: a poll the user did not ask for, so it does not drive the global progress bar. */
+  /** `background`: a poll the user did not ask for, so no global progress bar. */
   getReserves(claimId: string, options: { background?: boolean } = {}): Observable<ClaimReserves> {
     return this.http.get<ClaimReserves>(apiUrl('claims', claimId, 'reserves'), {
       context: new HttpContext().set(SKIP_GLOBAL_LOADING, options.background ?? false),
@@ -172,13 +162,11 @@ export class ClaimsApiService {
     );
   }
 
-  // --- Documents -------------------------------------------------------------------------------
-
   listDocuments(claimId: string): Observable<ClaimDocumentWithUrl[]> {
     return this.http.get<ClaimDocumentWithUrl[]>(apiUrl('claims', claimId, 'documents'));
   }
 
-  /** Multipart upload with progress events (FRS §11.3 Tab 4 "shows progress indicator"). */
+  /** Reports upload progress events. */
   uploadDocument(
     claimId: string,
     file: File,

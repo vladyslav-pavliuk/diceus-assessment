@@ -23,10 +23,7 @@ import { ClaimDetailStore } from '../claim-detail.store';
 
 export const LAST_CLAIMANT_MESSAGE = 'The last active Claimant cannot be removed.';
 
-/**
- * Whether a party's Remove button is enabled: active parties only, and never the last active Claimant
- * (FRS §11.3 "disabled for last Claimant"; PTY-01, which the API enforces with a 422).
- */
+/** Never for the last active Claimant, which the API also refuses (PTY-01). */
 export function canRemoveParty(party: ClaimParty, parties: readonly ClaimParty[]): boolean {
   if (!party.isActive) {
     return false;
@@ -40,10 +37,7 @@ export function canRemoveParty(party: ClaimParty, parties: readonly ClaimParty[]
   );
 }
 
-/**
- * Tab 2 (FRS §11.3): every party with role badge, contact details and active/inactive state; inline Add
- * Party; soft Remove (IsActive = false, D-27). Risk objects are listed and added here too (D-40 Q1).
- */
+/** Risk objects are listed and added here too (D-40). */
 @Component({
   selector: 'app-parties-tab',
   imports: [

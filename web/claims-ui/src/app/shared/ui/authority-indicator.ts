@@ -7,11 +7,7 @@ import {
   requiredAuthority,
 } from '../domain/authority';
 
-/**
- * The real-time authority threshold indicator (FRS §11.2 step 3, §11.3 Add Reserve panel; RSV-09).
- * Shows nothing until there is an amount to judge. Given the claim's aggregate context (Add Reserve panel), it also
- * shows the BR-R-05 escalation to Manager and the FRS §8 warning.
- */
+/** RSV-09. With the claim's aggregate context it also shows the BR-R-05 escalation to Manager. */
 @Component({
   selector: 'app-authority-indicator',
   templateUrl: './authority-indicator.html',
@@ -19,7 +15,7 @@ import {
 })
 export class AuthorityIndicator {
   readonly amount = input<number | null>(null);
-  /** BR-R-05 context of an existing claim; omitted at FNOL, where nothing is approved yet. */
+  /** Omitted at FNOL, where nothing is approved yet. */
   readonly aggregate = input<AggregateContext | null>(null);
 
   protected readonly labels = AUTHORITY_LABELS;

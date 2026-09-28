@@ -30,10 +30,7 @@ export type ClaimFilters = Pick<
   'status' | 'dateFrom' | 'dateTo' | 'assignedHandlerId' | 'causeOfLossCode' | 'search'
 >;
 
-/**
- * The dashboard filter bar (FRS §11.1): status multi-select, loss-date range, assigned handler and cause
- * of loss, plus a claim-number/client search. Emits the whole filter set whenever it changes.
- */
+/** Emits the whole filter set whenever it changes. */
 @Component({
   selector: 'app-claims-filter-bar',
   imports: [
@@ -53,7 +50,6 @@ export class ClaimsFilterBar implements OnInit {
   private readonly reference = inject(ReferenceApiService);
   private readonly destroyRef = inject(DestroyRef);
 
-  /** The filters currently in the URL. */
   readonly value = input.required<ClaimFilters>();
   readonly filtersChange = output<ClaimFilters>();
 
@@ -99,7 +95,7 @@ export class ClaimsFilterBar implements OnInit {
   }
 
   ngOnInit(): void {
-    // D-43: every active user, whatever the role; D-18 assigns the creator of any role as the handler.
+    // Every role: the creator of any role becomes the handler (D-18, D-43).
     this.reference.users().subscribe((users) => this.users.set(users));
     this.reference
       .causeOfLossCodes()

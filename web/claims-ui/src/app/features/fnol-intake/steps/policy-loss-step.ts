@@ -21,7 +21,6 @@ import {
 import { PolicyPeriodState } from '../../../shared/domain/policy-period';
 import { FnolForm, isCause } from '../fnol-form';
 
-/** FNOL step 1: policy & loss details (FRS §5.2, §11.2). */
 @Component({
   selector: 'app-policy-loss-step',
   imports: [
@@ -43,7 +42,7 @@ export class PolicyLossStep {
   private readonly reference = inject(ReferenceApiService);
 
   readonly group = input.required<FnolForm['controls']['policyLoss']>();
-  /** The picked policy, or null (FnolIntake derives it from the form). */
+  /** Derived from the form by FnolIntake. */
   readonly policy = input<Policy | null>(null);
   readonly policyState = input<PolicyPeriodState | null>(null);
   readonly causeText = input<string>('');
@@ -58,7 +57,7 @@ export class PolicyLossStep {
     initialValue: [] as CauseOfLossCode[],
   });
 
-  /** FRS §11.2 "searchable dropdown": the codes whose name, code or category contain the typed text. */
+  /** Matches name, code or category. */
   protected readonly causeOptions = computed(() => {
     const text = this.causeText().trim().toLowerCase();
     return [...this.causeCodes()]

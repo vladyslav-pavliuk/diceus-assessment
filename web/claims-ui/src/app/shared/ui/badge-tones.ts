@@ -6,7 +6,7 @@ import {
   ReserveApprovalStatus,
 } from '../../core/models/enums';
 
-/** The status badge colours, exactly as FRS §11.1 lists them. */
+/** Exactly as FRS §11.1 lists them. */
 export type StatusColour = 'grey' | 'blue' | 'orange' | 'purple' | 'green' | 'amber' | 'dark-grey';
 
 export const STATUS_COLOURS: Readonly<Record<ClaimStatus, StatusColour>> = {
@@ -19,7 +19,7 @@ export const STATUS_COLOURS: Readonly<Record<ClaimStatus, StatusColour>> = {
   Withdrawn: 'dark-grey',
 };
 
-/** Tones of the generic badge, for everything that has no colour fixed by the FRS. */
+/** For everything whose colour the FRS does not fix. */
 export type BadgeTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger' | 'accent';
 
 export const SEVERITY_TONES: Readonly<Record<ClaimSeverity, BadgeTone>> = {
@@ -49,7 +49,6 @@ export const ISSUE_SEVERITY_TONES: Readonly<Record<IssueSeverity, BadgeTone>> = 
   Warning: 'warning',
 };
 
-/** Audit event types by family (FRS §14.1 plus the D-08 additions). */
 export function eventTypeTone(eventType: string): BadgeTone {
   if (
     eventType === 'GL_POSTING_FAILED' ||

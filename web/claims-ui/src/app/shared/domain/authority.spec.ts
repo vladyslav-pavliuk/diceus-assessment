@@ -5,9 +5,7 @@ import {
   requiredAuthority,
 } from './authority';
 
-// RSV-09: the live authority indicator (FRS §11.2 step 3, §11.3 Add Reserve panel). The tiers mirror
-// ReserveAuthorityPolicy in the Domain (FRS §6.3, BR-R-02): ≤ $10,000 auto, ≤ $100,000 supervisor,
-// above that manager, by the absolute amount of the single transaction (D-05).
+// RSV-09: tiers mirror ReserveAuthorityPolicy: ≤ $10,000 auto, ≤ $100,000 supervisor, above that manager, by |amount| (D-05).
 
 describe('RSV-09 authority indicator', () => {
   it.each([
@@ -47,7 +45,7 @@ describe('RSV-09 authority indicator', () => {
   });
 });
 
-// BR-R-05 in the Add Reserve preview (Phase 8 finding F3): mirrors Claim.WouldExceedAggregateLimit.
+// BR-R-05 in the Add Reserve preview: mirrors Claim.WouldExceedAggregateLimit.
 describe('RSV-09 / BR-R-05 aggregate escalation in the preview', () => {
   const nearLimit: AggregateContext = {
     component: 'Indemnity',

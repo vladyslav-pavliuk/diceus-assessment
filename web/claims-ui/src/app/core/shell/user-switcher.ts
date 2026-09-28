@@ -10,11 +10,7 @@ import { USER_ROLES } from '../models/enums';
 import { User } from '../models/reference.models';
 import { NotificationService } from '../notify/notification.service';
 
-/**
- * The signed-in user and role (FRS §11.4 "UI shows logged-in user name and role in header") and the
- * role switcher for testing (FRS §11.4, D-16). Switching reloads the current screen, so every
- * role-gated control is recomputed from the new user.
- */
+/** Switching user reloads the current screen, so every role-gated control is recomputed (D-16). */
 @Component({
   selector: 'app-user-switcher',
   imports: [MatButtonModule, MatMenuModule, MatIconModule, MatDividerModule],
@@ -53,7 +49,6 @@ export class UserSwitcher {
       });
   }
 
-  /** Re-creates the routed component so its role-dependent state is rebuilt for the new user. */
   private reloadCurrentScreen(): void {
     const url = this.router.url;
     void this.router

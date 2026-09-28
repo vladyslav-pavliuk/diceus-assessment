@@ -1,5 +1,3 @@
-// Mirrors of ClaimsModule.Application/Claims/ReserveDtos.cs and the reserve request bodies.
-
 import {
   ApprovalAuthority,
   PostingStatus,
@@ -9,7 +7,6 @@ import {
   ReserveTransactionType,
 } from './enums';
 
-/** A reserve summary card (ReserveComponentSummaryDto). */
 export interface ReserveComponentSummary {
   id: string;
   component: ReserveComponentType;
@@ -19,7 +16,6 @@ export interface ReserveComponentSummary {
   status: ReserveComponentStatus;
 }
 
-/** One ReserveHistory row as returned by the reserve commands (ReserveTransactionDto). */
 export interface ReserveTransaction {
   id: string;
   reserveComponentId: string;
@@ -42,14 +38,13 @@ export interface ReserveTransaction {
   rejectionReason: string | null;
 }
 
-/** ReserveSubmittedDto: the new transaction plus non-blocking warnings (BR-R-05). */
+/** Warnings are non-blocking (BR-R-05). */
 export interface ReserveSubmitted {
   component: ReserveComponentType;
   transaction: ReserveTransaction;
   warnings: string[];
 }
 
-/** A row of the Reserves tab history table (ReserveHistoryEntryDto). */
 export interface ReserveHistoryEntry {
   id: string;
   reserveComponentId: string;
@@ -78,7 +73,6 @@ export interface ReserveHistoryEntry {
   rejectionReason: string | null;
 }
 
-/** GET /api/claims/{id}/reserves (ClaimReservesDto). */
 export interface ClaimReserves {
   claimId: string;
   components: ReserveComponentSummary[];
@@ -89,7 +83,7 @@ export interface ClaimReserves {
   reserveLimitOverride: boolean;
 }
 
-/** POST /api/claims/{id}/reserves (SubmitReserveRequest). transactionType may be omitted (D-05). */
+/** transactionType may be omitted (D-05). */
 export interface SubmitReserveRequest {
   component: ReserveComponentType;
   amount: number | null;

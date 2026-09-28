@@ -24,12 +24,6 @@ import { prompt } from '../../../shared/ui/prompt-dialog';
 import { ClaimDetailStore } from '../claim-detail.store';
 import { AddReservePanel } from './add-reserve-panel';
 
-/**
- * Tab 3 (FRS §11.3): a summary card per component (current balance, pending amount in amber), the
- * transaction history with +/- colouring, role-gated Approve/Reject, Retract for the submitter, the GL
- * posting badge with Retry, and the slide-in Add Reserve panel. Also the BR-R-05 aggregate and, for a
- * manager, the reserve-limit override (D-08).
- */
 @Component({
   selector: 'app-reserves-tab',
   imports: [
@@ -71,13 +65,13 @@ export class ReservesTab implements OnInit {
   ];
 
   protected readonly panelOpen = signal(false);
-  /** The row whose command is in flight: its buttons are disabled meanwhile. */
+  /** Its buttons are disabled while the command is in flight. */
   protected readonly busyRow = signal<string | null>(null);
   protected readonly savingOverride = signal(false);
 
   protected readonly reserves = this.store.reserves;
 
-  /** One card per component in FRS §6.2 order; a component not opened yet shows as such. */
+  /** In FRS §6.2 order, including components not opened yet. */
   protected readonly cards = computed(() => {
     const components = this.reserves()?.components ?? [];
     return RESERVE_COMPONENTS.map((type) => ({
@@ -223,7 +217,6 @@ export class ReservesTab implements OnInit {
       });
   }
 
-  /** Runs a row command with the row's buttons disabled, then reloads what it changed. */
   private run<T>(row: ReserveHistoryEntry, command: Observable<T>): Observable<T> {
     this.busyRow.set(row.id);
     return command.pipe(

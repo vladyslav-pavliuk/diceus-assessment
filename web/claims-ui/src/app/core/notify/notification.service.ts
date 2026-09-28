@@ -10,7 +10,6 @@ const DURATION_MS: Record<NotificationSeverity, number> = {
   error: 9000,
 };
 
-/** Snackbars with a severity (FRS §11.4 "snackbar notifications with appropriate severity"). */
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
   private readonly snackBar = inject(MatSnackBar);
