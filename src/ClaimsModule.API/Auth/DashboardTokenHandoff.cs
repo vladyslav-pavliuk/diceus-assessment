@@ -4,17 +4,9 @@ using Microsoft.IdentityModel.JsonWebTokens;
 namespace ClaimsModule.API.Auth;
 
 /// <summary>
-/// Gets a manager's JWT to the Hangfire dashboard (D-41). The dashboard is opened by browser navigation, which
-/// cannot send an Authorization header, and its pages then poll the server on their own. So, only under
-/// <see cref="Path"/>:
-/// <list type="number">
-/// <item>the first visit may carry the token as <c>?access_token=</c> (the same hand-off ASP.NET Core documents
-/// for SignalR);</item>
-/// <item>once that token is valid, it is kept in an HttpOnly, Secure, SameSite=Strict cookie scoped to the
-/// dashboard path and expiring with the token, which later dashboard requests present instead.</item>
-/// </list>
-/// Everywhere else only the Authorization header counts. Authorization (the Manager policy) is unchanged; this
-/// only decides where the token is read from. Request logging records the path without the query string.
+/// Browser navigation cannot send an Authorization header, so under <see cref="Path"/> only, the first visit may carry
+/// <c>?access_token=</c> (as ASP.NET Core documents for SignalR) and a valid token is then kept in an HttpOnly, Secure,
+/// SameSite=Strict cookie scoped to the dashboard. The Manager policy still decides access (D-41).
 /// </summary>
 internal static class DashboardTokenHandoff
 {

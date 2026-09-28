@@ -3,11 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace ClaimsModule.API.Errors;
 
 /// <summary>
-/// One source for the error body shape (FRS §10.4). Every error response is a ProblemDetails
-/// object with a short "type" code instead of a URI. The 422 body is exactly
-/// { type: "ValidationError", title, status, errors: { field: [messages] } }.
-/// The correlation id is returned in the X-Correlation-Id header, not in the body, so the 422 body
-/// stays exactly as specified.
+/// The single source of the FRS §10.4 error shape: ProblemDetails with a short "type" code instead of a URI. The correlation
+/// id travels in a header, so the 422 body stays exactly as specified.
 /// </summary>
 internal static class ErrorResponseFactory
 {
@@ -45,10 +42,7 @@ internal static class ErrorResponseFactory
             Detail = detail,
         };
 
-    /// <summary>
-    /// Applied to ProblemDetails that the framework creates itself (401/403 challenges, 404 for
-    /// unknown routes, [ApiController] client errors), so they match the ones we create.
-    /// </summary>
+    /// <summary>Gives the framework's own ProblemDetails (challenges, unknown routes) the same shape.</summary>
     public static void Normalise(ProblemDetailsContext context)
     {
         var problem = context.ProblemDetails;

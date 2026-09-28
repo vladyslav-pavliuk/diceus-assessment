@@ -9,24 +9,16 @@ using Microsoft.AspNetCore.Mvc.Filters;
 namespace ClaimsModule.API.Idempotency;
 
 /// <summary>
-/// FRS §10: "All write operations are idempotent where an Idempotency-Key header is provided" (D-24).
-/// A resource filter, so it runs before model binding and can read the raw body, and it wraps result
-/// execution, so it can store the exact bytes that were sent. The replayed thing is an HTTP response
-/// (status, body, Location), which a MediatR behaviour never sees (REVIEW-PREP).
-/// <list type="bullet">
-/// <item>New key: run the request. Store a 2xx response; any other outcome frees the key (D-40).</item>
-/// <item>Same key, same request, finished: replay the stored response, marked Idempotency-Replayed.</item>
-/// <item>Same key, same request, still running: 409.</item>
-/// <item>Same key, different method, route or body: 422.</item>
-/// </list>
-/// Only authenticated POST/PUT/PATCH/DELETE requests take part; the key is scoped to the user.
+/// A resource filter rather than a MediatR behaviour, because what it replays is the HTTP response (status, body,
+/// Location). Only 2xx responses are stored; any other outcome frees the key. A request still running gets 409, and
+/// the same key with a different request gets 422 (D-24, D-40).
 /// </summary>
 internal sealed class IdempotencyFilter(IIdempotencyStore store, ICurrentUser currentUser) : IAsyncResourceFilter
 {
     public const string HeaderName = "Idempotency-Key";
     public const string ReplayedHeaderName = "Idempotency-Replayed";
 
-    /// <summary>The IdempotencyRecords.Key column size (D-24).</summary>
+    /// <summary>The Key column size.</summary>
     public const int MaxKeyLength = 200;
 
     private static readonly HashSet<string> WriteMethods = new(StringComparer.OrdinalIgnoreCase) { "POST", "PUT", "PATCH", "DELETE" };
@@ -83,13 +75,11 @@ internal sealed class IdempotencyFilter(IIdempotencyStore store, ICurrentUser cu
         }
         finally
         {
-            // Restore before anything else writes: an exception is rendered by the error middleware
-            // on the real response stream.
+            // The error middleware renders exceptions on the real response stream.
             response.Body = originalBody;
         }
 
-        // Not recorded: exceptions (rendered later as 4xx/5xx by the middleware) and non-2xx results.
-        // Freeing the key lets the client retry, which is what a 409 or a 5xx calls for (D-24, D-40).
+        // Exceptions and non-2xx results free the key, so the client can retry (D-40).
         var succeeded = executed.Exception is null && response.StatusCode is >= 200 and < 300;
         if (succeeded)
         {
@@ -126,10 +116,8 @@ internal sealed class IdempotencyFilter(IIdempotencyStore store, ICurrentUser cu
     }
 
     /// <summary>
-    /// A form is hashed by its content, not its bytes (D-42): a multipart body carries a random boundary, so a client that
-    /// retries an upload with a new FormData sends the same form in different bytes. Every field value and every file (field
-    /// name, file name, content type, SHA-256 of the bytes) goes in, length-prefixed and in a fixed order. The form is parsed
-    /// once here, within the endpoint's form limits; model binding then reuses the parsed form.
+    /// Hashed by content, not bytes, because a retried upload has a new multipart boundary (D-42). Values are length-prefixed
+    /// and ordered, so the hash is canonical.
     /// </summary>
     private static async Task<byte[]> HashFormAsync(HttpRequest request)
     {

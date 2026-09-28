@@ -4,17 +4,10 @@ using System.Text.Json.Serialization;
 
 namespace ClaimsModule.API.Json;
 
-// Model binding only binds; FluentValidation in the MediatR pipeline decides what is valid and words the
-// message (CLAUDE.md rule 2, FRS §8). If System.Text.Json rejected an unknown enum name or a malformed
-// date itself, the client would get a serializer message ("The JSON value could not be converted…")
-// instead of "Invalid reserve component type." or "Loss date is required.". These converters turn such
-// values into "undefined" instead, and the validator reports them (D-40). Output is unchanged.
+// These converters turn an unknown enum name or a malformed date into "undefined", so the validator reports it with
+// the FRS §8 wording instead of a serializer message (D-40). Output is unchanged.
 
-/// <summary>
-/// Reads enums by name, case-insensitively. Anything else (an unknown name, a number, another token)
-/// becomes the value 0, which no domain enum defines (they all start at 1), so IsInEnum() rejects it.
-/// Writes the name.
-/// </summary>
+/// <summary>Anything but a known name becomes 0, which no domain enum defines, so IsInEnum() rejects it.</summary>
 internal sealed class LenientEnumConverterFactory : JsonConverterFactory
 {
     public override bool CanConvert(Type typeToConvert) => typeToConvert.IsEnum;
@@ -49,11 +42,7 @@ internal sealed class LenientEnumConverterFactory : JsonConverterFactory
     }
 }
 
-/// <summary>
-/// Reads an optional date-time leniently: an empty or unparseable string becomes null, so the validator
-/// answers "Loss date is required." (FRS §8 "Must be a valid date"). A value without an offset is taken
-/// as UTC (D-32). Writes the standard ISO 8601 form.
-/// </summary>
+/// <summary>An unparseable value becomes null, which the validator reports. A value without an offset is UTC (D-32).</summary>
 internal sealed class LenientNullableDateTimeOffsetConverter : JsonConverter<DateTimeOffset?>
 {
     public override DateTimeOffset? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)

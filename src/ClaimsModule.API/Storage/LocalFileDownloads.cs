@@ -5,11 +5,8 @@ using Microsoft.Extensions.Options;
 namespace ClaimsModule.API.Storage;
 
 /// <summary>
-/// <c>GET /api/local-files/{token}</c>: the development-only download endpoint of the local storage fallback (FRS §13, D-28).
-/// Mapped only when Storage:Provider is LocalFileSystem, which start-up validation allows only in Development, so it does not
-/// exist in any deployed API. Anonymous like a SAS URL: a browser tab opened by the SPA cannot send the Bearer header, so the
-/// signed, expiring token is the credential. Infrastructure, not a business read, so it does not go through MediatR (the same
-/// reasoning as token issuance, D-08).
+/// Exists only with the local storage fallback, which start-up validation allows only in Development (D-28). Anonymous like a
+/// SAS URL: a browser tab cannot send the Bearer header, so the signed token is the credential.
 /// </summary>
 internal static class LocalFileDownloads
 {
@@ -22,7 +19,7 @@ internal static class LocalFileDownloads
 
         app.MapGet($"/{LocalFileSystemStorageService.DownloadRoutePrefix}{{token}}", (string token, LocalFileSystemStorageService storage, HttpResponse response) =>
             {
-                // Forged, edited, expired or dangling: one answer for all, like Storage's 403 for a bad SAS.
+                // One answer for every bad token, like Storage's 403 for a bad SAS.
                 var download = storage.OpenDownload(token);
                 if (download is null)
                 {

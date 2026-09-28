@@ -13,7 +13,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ClaimsModule.API.Controllers;
 
-/// <summary>Parties of a claim (FRS §10.1, §7.5).</summary>
 [ApiController]
 [Route("api/claims/{claimId:guid}/parties")]
 [Authorize(Policy = AuthorizationPolicies.Handler)]
@@ -33,7 +32,6 @@ public sealed class ClaimPartiesController(ISender sender) : ControllerBase
         return StatusCode(StatusCodes.Status201Created, added);
     }
 
-    /// <summary>Soft-removes a party (IsActive = false, D-27); 422 for the last active Claimant (PTY-01).</summary>
     [HttpDelete("{partyId:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -45,7 +43,6 @@ public sealed class ClaimPartiesController(ISender sender) : ControllerBase
     }
 }
 
-/// <summary>Risk objects of a claim (FRS §9.4; the add-after-intake endpoint of D-40).</summary>
 [ApiController]
 [Route("api/claims/{claimId:guid}/risk-objects")]
 [Authorize(Policy = AuthorizationPolicies.Handler)]
@@ -65,7 +62,6 @@ public sealed class ClaimRiskObjectsController(ISender sender) : ControllerBase
     }
 }
 
-/// <summary>Validation issues of a claim (D-07, D-08).</summary>
 [ApiController]
 [Route("api/claims/{claimId:guid}/validation-issues")]
 [Authorize(Policy = AuthorizationPolicies.Handler)]
@@ -77,7 +73,6 @@ public sealed class ClaimValidationIssuesController(ISender sender) : Controller
     public async Task<ActionResult<IReadOnlyList<ValidationIssueDto>>> List(Guid claimId, CancellationToken cancellationToken) =>
         Ok(await sender.Send(new ListValidationIssuesQuery(claimId), cancellationToken));
 
-    /// <summary>Accepts a Warning with a note; acknowledging BR-C-02 unblocks Draft → Open (D-19).</summary>
     [HttpPost("{issueId:guid}/acknowledge")]
     [ProducesResponseType<ValidationIssueDto>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

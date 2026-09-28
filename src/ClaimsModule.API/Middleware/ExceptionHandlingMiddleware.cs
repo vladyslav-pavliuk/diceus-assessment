@@ -6,12 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ClaimsModule.API.Middleware;
 
-/// <summary>
-/// The single place where exceptions become HTTP responses (CLAUDE.md rule 12):
-/// ValidationException → 422, BusinessRuleViolationException → 422, NotFoundException → 404,
-/// ForbiddenAccessException → 403, ConflictException and DbUpdateConcurrencyException → 409, anything else → 500.
-/// Controllers and handlers never build error responses themselves.
-/// </summary>
+/// <summary>The single place where exceptions become HTTP responses.</summary>
 internal sealed class ExceptionHandlingMiddleware(
     RequestDelegate next,
     ILogger<ExceptionHandlingMiddleware> logger,
@@ -25,7 +20,6 @@ internal sealed class ExceptionHandlingMiddleware(
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
-            // The client disconnected; there is nobody to answer.
             logger.LogInformation("Request was cancelled by the client");
         }
         catch (Exception exception) when (!context.Response.HasStarted)
@@ -79,7 +73,7 @@ internal sealed class ExceptionHandlingMiddleware(
         }
         else
         {
-            // Expected outcomes: no stack trace, the exception type is enough to follow the request.
+            // Expected outcomes: the exception type is enough, no stack trace.
             logger.LogInformation("Request failed with {StatusCode} ({ExceptionType})", statusCode, exception.GetType().Name);
         }
     }

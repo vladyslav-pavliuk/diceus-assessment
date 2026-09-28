@@ -12,9 +12,8 @@ using Microsoft.Extensions.Options;
 namespace ClaimsModule.API.Controllers;
 
 /// <summary>
-/// Mock authentication (D-16). Both endpoints exist only while Auth:DevTokensEnabled is true;
-/// otherwise they answer 404 as if they were not there. The user lookup is a MediatR query;
-/// signing the token is infrastructure (ITokenService), not a business command (D-08).
+/// Mock authentication (D-16): 404 unless Auth:DevTokensEnabled. Signing the token is infrastructure, not a business
+/// command, so it bypasses MediatR (D-08).
 /// </summary>
 [ApiController]
 [Route("api/auth")]
@@ -22,7 +21,6 @@ namespace ClaimsModule.API.Controllers;
 public sealed class AuthController(ISender sender, ITokenService tokenService, IOptions<AuthOptions> authOptions)
     : ControllerBase
 {
-    /// <summary>Issues a signed JWT for a seeded user.</summary>
     [HttpPost("dev-token")]
     [ProducesResponseType<DevTokenResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
@@ -45,7 +43,6 @@ public sealed class AuthController(ISender sender, ITokenService tokenService, I
         return Ok(new DevTokenResponse(token.AccessToken, "Bearer", token.ExpiresAt, user));
     }
 
-    /// <summary>Lists the seeded users for the role switcher (FRS §11.4).</summary>
     [HttpGet("users")]
     [ProducesResponseType<IReadOnlyList<UserDto>>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

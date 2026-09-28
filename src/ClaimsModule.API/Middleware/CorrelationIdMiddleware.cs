@@ -2,11 +2,7 @@ using ClaimsModule.Infrastructure.Correlation;
 
 namespace ClaimsModule.API.Middleware;
 
-/// <summary>
-/// Reads X-Correlation-Id from the request, or creates one when it is absent or not a GUID, then:
-/// stores it in the scoped <see cref="CorrelationContext"/> (stamped on audit rows, FRS §14.2),
-/// echoes it in the response header, and adds it to the logging scope of the whole request.
-/// </summary>
+/// <summary>Reads or creates X-Correlation-Id, echoes it, and puts it on the audit rows and the logging scope.</summary>
 internal sealed class CorrelationIdMiddleware(RequestDelegate next, ILogger<CorrelationIdMiddleware> logger)
 {
     public const string HeaderName = "X-Correlation-Id";
@@ -28,8 +24,7 @@ internal sealed class CorrelationIdMiddleware(RequestDelegate next, ILogger<Corr
         }
     }
 
-    // ClaimAuditLog.CorrelationId is a GUID (FRS §9.8), so only a GUID in the standard 36-character
-    // form is accepted from the client (D-39 Q1). Anything else is replaced rather than rejected: a
-    // tracing header should never fail a business request, and the echoed id still lets the client correlate.
+    // The audit column is a GUID (D-39). Anything else is replaced rather than rejected: a tracing header should
+    // never fail a business request.
     private static bool IsAcceptable(string value) => Guid.TryParseExact(value, "D", out _);
 }
