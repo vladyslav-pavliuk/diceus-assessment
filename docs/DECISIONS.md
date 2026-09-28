@@ -54,7 +54,7 @@ Markers used below:
 | D-39 | Phase 2 domain and schema choices (+ two open questions) | ACCEPTED |
 | D-40 | Phase 3 API, read-side and pipeline choices (+ two decisions by Vlad) | PROPOSED (Q1, Q2 ACCEPTED) |
 | D-41 | Phase 4 reserves, GL posting, SLA job and Hangfire choices (+ two decisions by Vlad) | PROPOSED (Q1, Q2 ACCEPTED) |
-| D-42 | Phase 5 documents: upload orchestration, sanitising, allowlist and sniffing, SAS, local fallback (+ three open questions) | PROPOSED |
+| D-42 | Phase 5 documents: upload orchestration, sanitising, allowlist and sniffing, SAS, local fallback (+ three decisions by Vlad) | PROPOSED (Q1–Q3 ACCEPTED) |
 
 ---
 
@@ -692,7 +692,7 @@ Uploading a second file with the same name would silently **overwrite** the firs
 - **Blob name** `{organisationId}/{claimId}/{documentId}_{sanitisedFileName}` in container `claim-documents`. **DEVIATION:** the `{filename}` segment is
   prefixed with the document id, which prevents overwrites. `DocumentName` keeps the original name for display.
 - **Sanitisation:** strip directory components, reject `..`, control characters and reserved names, normalise Unicode (NFC), and cap the length at 200 characters.
-  **Amended by D-42 Q2 (PROPOSED):** NFKC instead of NFC, and format characters (bidi overrides, zero-width) and slash look-alikes are removed too.
+  **Amended by D-42 Q2 (ACCEPTED 2026-09-28):** NFKC instead of NFC, and format characters (bidi overrides, zero-width) and slash look-alikes are removed too.
 - **Local fallback:** files go under `{ContentRoot}/uploads/{org}/{claim}/…`. Downloads use a dev-only endpoint `GET /api/local-files/{token}`, where the token
   is an HMAC-signed, 1h-expiring token that emulates a SAS. This *does* stream through the API, which is unavoidable for a local filesystem. It is
   documented as a **DEVIATION from BR-D-02, limited to the fallback provider**. The Azure provider never proxies bytes.
@@ -1217,16 +1217,19 @@ One Phase 3 defect was found and fixed (item 18).
   - Before uploading, the handler checks the claim's status through the read model, so a missing, foreign (404) or read-only (TR-13, 422) claim never
     touches storage; the aggregate re-checks inside the transaction, so a claim closed in between still gets a 422 and the blob is removed.
   - **Recommendation: (c).** Tests: `DOC_09_*` (Application, with fakes, and HTTP with a commit forced to fail), mutation-checked.
+  - **Decision (Vlad, 2026-09-28): (c).**
 - **Q2. Sanitising: NFKC instead of D-28's NFC, plus invisible and look-alike characters.** The Phase 5 prompt asks for tests against "unicode
   tricks". NFC does not fold compatibility characters, so a fullwidth `．．／` survives it as three harmless-looking characters that another component
   (a file system, a sync tool, a later NFKC step) may turn into `../`. The sanitiser now: drops unpaired surrogates (which make `string.Normalize` throw:
   a 500), normalises to **NFKC** *before* looking for separators, removes control, format (bidi overrides such as U+202E, zero-width, BOM) and
   line/paragraph separator characters, and replaces the slash look-alikes NFKC keeps (∕ ⁄ ⧸ ⧹ ∖) with `_`. Cost: NFKC also changes some legitimate
   characters (`ﬁ` → `fi`, `²` → `2`, fullwidth letters → ASCII) in the stored name. **Recommendation: accept.** D-28 amended.
+  **Decision (Vlad, 2026-09-28): accepted.**
 - **Q3. `DocumentName` stores the sanitised name, not the raw client string.** FRS §9.7 says "Filename as uploaded". For every ordinary name the two are
   identical. For a name with a path, invisible characters or reserved characters, the raw string would reach the UI and the logs (a bidi override makes
   `invoice‮fdp.exe` display as `invoiceexe.pdf`). **DEVIATION**, minor. **Recommendation: store and show the sanitised name**; the raw string is never
   persisted or echoed. It is also the name offered on download.
+  **Decision (Vlad, 2026-09-28): accepted.**
 
 **Choices (ASSUMPTION unless cited).**
 1. **Allowlist (FRS §13) = `DocumentFormat` in the Domain:** PDF, JPEG, PNG, DOCX, XLSX, TXT, CSV. The **extension** claims the format; the declared
@@ -1287,4 +1290,4 @@ One Phase 3 defect was found and fixed (item 18).
 
 **Rationale.** Each item is small and reversible, and each is covered by a test named after its rule, so none is a silent choice. Q1–Q3 are flagged
 because they change written text (CLAUDE.md rule 4's "every command", D-28's NFC, FRS §9.7's wording).
-**Status:** PROPOSED (2026-09-28): Q1–Q3 and items 1–20 await review.
+**Status:** PROPOSED (2026-09-28). Q1–Q3 ACCEPTED by Vlad (2026-09-28); items 1–20 await review.

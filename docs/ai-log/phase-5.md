@@ -97,7 +97,16 @@ Where Claude departed from written text, it did not decide silently: D-42 **Q1**
 questions for Vlad, implemented as recommended.
 
 ## 6. Open items for Vlad
-- Decide D-42 Q1–Q3; review D-42 items 1–20 (PROPOSED), and the D-38 / D-40 / D-41 items still PROPOSED.
+- ~~Decide D-42 Q1–Q3.~~ Done, see §7. Review D-42 items 1–20 (PROPOSED), and the D-38 / D-40 / D-41 items still PROPOSED.
 - Phase 7: storage account with container `claim-documents` (private), `Storage__AzureBlob__ServiceUri` on the Container App, and RBAC for the managed
   identity to write blobs and obtain user delegation keys (verify whether Storage Blob Data Contributor alone suffices); verify a user-delegation SAS end to end.
 - The local `sqlserver-data` volume still holds the stale Phase 1 database (Phase 4 §5 item 5); the smoke runs use their own database names.
+
+## 7. Vlad's decisions after the summary
+Vlad's reply (verbatim):
+```
+Accept Q1, Q2 and Q3, merge to main
+```
+Applied: D-42 Q1 (blob first, handler owns its unit of work), Q2 (NFKC, D-28 amendment) and Q3 (sanitised `DocumentName`) marked ACCEPTED. No code
+change was needed: all three were already implemented as recommended. CLAUDE.md was not changed: rule 4 still holds for the upload (one transaction, no
+`SaveChanges` in the handler), and the exception is documented in D-42 Q1 and ARCHITECTURE-PLAN §5. The `phase-5-documents` branch was merged into `main`.
