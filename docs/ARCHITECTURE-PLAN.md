@@ -1,5 +1,8 @@
 # Architecture plan (draft → becomes ARCHITECTURE.md in Phase 8)
 
+> **Superseded for readers by [ARCHITECTURE.md](../ARCHITECTURE.md) (Phase 8).** This file is kept as the working record of how the design
+> evolved phase by phase. In particular, the §6.1 race analysis was written before the Phase 4 code.
+
 Status: **DRAFT, Phase 0; §2.2, §2.3 and §3 revised in Phase 2 (D-39); §2.5, §3, §4.1 and §5 revised in Phase 3 (D-40); §6 revised and §6.1 (race conditions) added in Phase 4 (D-41)**. Based on the entries in `docs/DECISIONS.md`, all ACCEPTED on 2026-09-27 (D-36 changed to Container Apps).
 Spec references: FRS = `docs/spec/claims-frs.md`, Brief = `docs/spec/assessment-brief.md`.
 
