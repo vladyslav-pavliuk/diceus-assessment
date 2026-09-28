@@ -1063,7 +1063,7 @@ nothing, or refinements of earlier decisions. None changes an FRS business rule.
    BR-C-06 "No policy linked": the intake is created with `PolicyId = null` (the FNOL "Unknown policy" toggle), and the Draft gets the warning
    issue. A `policyId` that matches no policy is a different case: the client sent a reference that does not exist, which is a malformed
    request. Persisting it as a warning with the id silently dropped would hide client bugs, so it stays **422** on `PolicyId`
-   (`CreateClaimCommandValidator.cs:37-40`; `Int: API_01_Unknown_policy_id_returns_422`). No code change.
+   (`CreateClaimCommandValidator.cs:34-37`; `Int: API_01_Unknown_policy_id_returns_422`). No code change.
 7. **Responses.**
    - Create: 201 with a Location header and `ClaimCreatedDto` (id, number, status, validation issues, initial reserve with its warnings).
    - Status: 200 with `{claimId, previousStatus, status}`.
