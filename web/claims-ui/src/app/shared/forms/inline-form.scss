@@ -1,0 +1,48 @@
+.inline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border: 1px dashed var(--mat-sys-outline);
+  border-radius: 12px;
+  background: var(--mat-sys-surface-container-low);
+}
+
+.inline-form__row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+
+  > mat-form-field {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.inline-form__role {
+  flex: 0 0 180px !important;
+}
+
+.inline-form__type {
+  flex: none;
+  margin-top: 4px;
+}
+
+.inline-form__wide {
+  flex: 2 !important;
+}
+
+.inline-form__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+  padding-top: 8px;
+
+  mat-spinner {
+    display: inline-block;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+}

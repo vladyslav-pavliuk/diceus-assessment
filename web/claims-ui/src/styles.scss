@@ -1,0 +1,214 @@
+// Global theme (FRS §11.4, brief §3.7.4): Material 3 with a custom primary palette generated from the
+// brand colour #1B4F72 (`ng generate @angular/material:theme-color`, see styles/_theme-colors.scss).
+@use '@angular/material' as mat;
+@use './styles/theme-colors' as brand;
+
+html {
+  color-scheme: light;
+  @include mat.theme(
+    (
+      color: (
+        primary: brand.$primary-palette,
+        tertiary: brand.$tertiary-palette,
+        theme-type: light,
+      ),
+      typography: Roboto,
+      density: 0,
+    )
+  );
+
+  // Status colours are fixed by FRS §11.1 and do not follow the theme palette:
+  // Draft grey | Open blue | UnderInvestigation orange | PendingPayment purple | Closed green |
+  // Reopened amber | Withdrawn dark grey. Each pair keeps text contrast at WCAG AA or better.
+  --status-grey-bg: #e3e5e8;
+  --status-grey-fg: #3c4043;
+  --status-blue-bg: #d6e6ff;
+  --status-blue-fg: #0b4db3;
+  --status-orange-bg: #ffe2c7;
+  --status-orange-fg: #9a4300;
+  --status-purple-bg: #ecdcff;
+  --status-purple-fg: #6a1fb0;
+  --status-green-bg: #d5f0dc;
+  --status-green-fg: #17692f;
+  --status-amber-bg: #fff0c2;
+  --status-amber-fg: #7a5600;
+  --status-dark-grey-bg: #4a4f55;
+  --status-dark-grey-fg: #ffffff;
+
+  // Semantic colours shared by badges, amounts and snackbars.
+  --app-positive: #1b7a3a;
+  --app-negative: #b3261e;
+  --app-warning-bg: #fff4d6;
+  --app-warning-fg: #6b4e00;
+  --app-warning-border: #e5b637;
+  --app-success-bg: #dff3e4;
+  --app-success-fg: #17692f;
+  --app-info-bg: #e3eefb;
+  --app-info-fg: #1b4f72;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--mat-sys-surface-container-lowest);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-medium);
+  min-width: 1280px; // FRS §11.4: designed for 1280px and wider.
+}
+
+// --- Page layout helpers -----------------------------------------------------------------------
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 8px 0 16px;
+
+  h1 {
+    margin: 0;
+    font: var(--mat-sys-headline-small);
+  }
+
+  .page-header__spacer {
+    flex: 1;
+  }
+}
+
+.card {
+  background: var(--mat-sys-surface);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.muted {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+
+  > * {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.amount--positive {
+  color: var(--app-positive);
+}
+
+.amount--negative {
+  color: var(--app-negative);
+}
+
+.spacer {
+  flex: 1;
+}
+
+// --- Banners -----------------------------------------------------------------------------------
+
+.banner {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font: var(--mat-sys-body-medium);
+
+  mat-icon {
+    flex: none;
+  }
+
+  ul {
+    margin: 4px 0 0;
+    padding-left: 20px;
+  }
+}
+
+.banner--warning {
+  background: var(--app-warning-bg);
+  color: var(--app-warning-fg);
+  border: 1px solid var(--app-warning-border);
+}
+
+.banner--error {
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+}
+
+.banner--info {
+  background: var(--app-info-bg);
+  color: var(--app-info-fg);
+}
+
+.banner--success {
+  background: var(--app-success-bg);
+  color: var(--app-success-fg);
+}
+
+// --- Snackbars with a severity (FRS §11.4) ------------------------------------------------------
+
+.app-snack--success {
+  @include mat.snack-bar-overrides(
+    (
+      container-color: #17692f,
+      supporting-text-color: #ffffff,
+      button-color: #d5f0dc,
+    )
+  );
+}
+
+.app-snack--warn {
+  @include mat.snack-bar-overrides(
+    (
+      container-color: #7a5600,
+      supporting-text-color: #ffffff,
+      button-color: #fff0c2,
+    )
+  );
+}
+
+.app-snack--error {
+  @include mat.snack-bar-overrides(
+    (
+      container-color: #8c1d18,
+      supporting-text-color: #ffffff,
+      button-color: #ffdad6,
+    )
+  );
+}
+
+// --- Tables ------------------------------------------------------------------------------------
+
+.table-wrap {
+  background: var(--mat-sys-surface);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+tr.clickable-row {
+  cursor: pointer;
+
+  &:hover {
+    background: var(--mat-sys-surface-container-low);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: -2px;
+  }
+}

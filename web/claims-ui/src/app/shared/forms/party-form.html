@@ -1,0 +1,65 @@
+<form class="inline-form" [formGroup]="group" (ngSubmit)="submit()">
+  <div class="inline-form__row">
+    <mat-form-field class="inline-form__role">
+      <mat-label>Party role</mat-label>
+      <mat-select formControlName="role" required>
+        @for (role of roles; track role) {
+          <mat-option [value]="role">{{ label(role) }}</mat-option>
+        }
+      </mat-select>
+      <mat-error>{{ error(group.controls.role) }}</mat-error>
+    </mat-form-field>
+
+    <mat-button-toggle-group
+      formControlName="type"
+      aria-label="Party type"
+      class="inline-form__type"
+    >
+      @for (type of types; track type) {
+        <mat-button-toggle [value]="type">{{ type }}</mat-button-toggle>
+      }
+    </mat-button-toggle-group>
+
+    @if (group.controls.type.value === 'Person') {
+      <mat-form-field>
+        <mat-label>First name</mat-label>
+        <input matInput formControlName="firstName" required autocomplete="off" />
+        <mat-error>{{ error(group.controls.firstName) }}</mat-error>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Last name</mat-label>
+        <input matInput formControlName="lastName" required autocomplete="off" />
+        <mat-error>{{ error(group.controls.lastName) }}</mat-error>
+      </mat-form-field>
+    } @else {
+      <mat-form-field class="inline-form__wide">
+        <mat-label>Company name</mat-label>
+        <input matInput formControlName="companyName" required autocomplete="off" />
+        <mat-error>{{ error(group.controls.companyName) }}</mat-error>
+      </mat-form-field>
+    }
+  </div>
+  <div class="inline-form__row">
+    <mat-form-field>
+      <mat-label>Email</mat-label>
+      <input matInput type="email" formControlName="email" autocomplete="off" />
+      <mat-error>{{ error(group.controls.email) }}</mat-error>
+    </mat-form-field>
+    <mat-form-field>
+      <mat-label>Phone</mat-label>
+      <input matInput type="tel" formControlName="phone" autocomplete="off" />
+      <mat-error>{{ error(group.controls.phone) }}</mat-error>
+    </mat-form-field>
+    <div class="inline-form__actions">
+      <button mat-button type="button" (click)="cancelled.emit()" [disabled]="pending()">
+        Cancel
+      </button>
+      <button mat-flat-button type="submit" [disabled]="pending()">
+        @if (pending()) {
+          <mat-spinner diameter="18" />
+        }
+        {{ submitLabel() }}
+      </button>
+    </div>
+  </div>
+</form>
