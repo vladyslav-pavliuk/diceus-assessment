@@ -109,14 +109,58 @@ internal sealed class IdempotencyFilter(IIdempotencyStore store, ICurrentUser cu
 
     private static async Task<string> HashRequestAsync(HttpRequest request)
     {
-        // Buffered so model binding can read the body again after hashing.
-        request.EnableBuffering();
-        request.Body.Position = 0;
-        var bodyHash = await SHA256.HashDataAsync(request.Body, request.HttpContext.RequestAborted);
-        request.Body.Position = 0;
+        var bodyHash = request.HasFormContentType ? await HashFormAsync(request) : await HashRawBodyAsync(request);
 
         var identity = Encoding.UTF8.GetBytes($"{request.Method}\n{request.Path}{request.QueryString}\n");
         return Convert.ToHexString(SHA256.HashData([.. identity, .. bodyHash]));
+    }
+
+    private static async Task<byte[]> HashRawBodyAsync(HttpRequest request)
+    {
+        // Buffered so model binding can read the body again after hashing.
+        request.EnableBuffering();
+        request.Body.Position = 0;
+        var hash = await SHA256.HashDataAsync(request.Body, request.HttpContext.RequestAborted);
+        request.Body.Position = 0;
+        return hash;
+    }
+
+    /// <summary>
+    /// A form is hashed by its content, not its bytes (D-42): a multipart body carries a random boundary, so a client that
+    /// retries an upload with a new FormData sends the same form in different bytes. Every field value and every file (field
+    /// name, file name, content type, SHA-256 of the bytes) goes in, length-prefixed and in a fixed order. The form is parsed
+    /// once here, within the endpoint's form limits; model binding then reuses the parsed form.
+    /// </summary>
+    private static async Task<byte[]> HashFormAsync(HttpRequest request)
+    {
+        var cancellationToken = request.HttpContext.RequestAborted;
+        var form = await request.ReadFormAsync(cancellationToken);
+        var canonical = new StringBuilder();
+
+        foreach (var field in form.OrderBy(field => field.Key, StringComparer.Ordinal))
+        {
+            foreach (var value in field.Value)
+            {
+                Append(canonical, "field", field.Key, value);
+            }
+        }
+
+        foreach (var file in form.Files.OrderBy(file => file.Name, StringComparer.Ordinal).ThenBy(file => file.FileName, StringComparer.Ordinal))
+        {
+            await using var content = file.OpenReadStream();
+            var contentHash = Convert.ToHexString(await SHA256.HashDataAsync(content, cancellationToken));
+            Append(canonical, "file", file.Name, file.FileName, file.ContentType, contentHash);
+        }
+
+        return SHA256.HashData(Encoding.UTF8.GetBytes(canonical.ToString()));
+
+        static void Append(StringBuilder builder, params string?[] values)
+        {
+            foreach (var value in values)
+            {
+                builder.Append(value?.Length ?? -1).Append(':').Append(value).Append(';');
+            }
+        }
     }
 
     private static async Task WriteReplayAsync(HttpResponse response, StoredResponse stored)
