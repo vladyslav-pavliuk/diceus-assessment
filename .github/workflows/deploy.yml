@@ -1,0 +1,437 @@
+# Deploy to Azure (brief §3.8, D-36, D-44). Manually triggered.
+#
+#   ci ──┬── image ───────────────┐
+#        └── infra ──┬────────── api ──┬── smoke
+#                    └── web ──────────┘
+#
+#   ci     build + test the backend and the frontend (ci.yml)
+#   image  build the API image and push it to ghcr.io (must be a public package, D-36)
+#   infra  infra/main.bicep; create the JWT signing key in Key Vault once; EF Core migrations bundle against Azure SQL;
+#          the API identity's database user (infra/sql/grant-api-identity.sql)
+#   api    infra/api.bicep: the Container App on the new image, after the migrations
+#   web    build Angular with the API's URL and upload it to the Static Web App
+#   smoke  scripts/smoke-test.sh: the brief §7.2 demo flow against the deployed API
+#
+# Azure sign-in is OpenID Connect (azure/login with a federated credential): there is no client secret or publish
+# profile anywhere. The one-time setup is infra/bootstrap.sh; docs/DEPLOYMENT.md lists every manual step.
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      min_replicas:
+        description: "API minimum replicas: 0 = scale to zero (cheap), 1 = always warm (the live review)"
+        type: choice
+        options: ["0", "1"]
+        default: "0"
+      run_smoke_test:
+        description: "Run the smoke test after deploying (creates one demo claim)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  DOTNET_VERSION: 9.0.x
+  NODE_VERSION: 24
+  GO_SQLCMD_VERSION: v1.10.0
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  image:
+    name: API image → ghcr.io
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.name.outputs.image }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Image name
+        id: name
+        run: |
+          repository="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/claims-api"
+          echo "repository=$repository" >> "$GITHUB_OUTPUT"
+          echo "image=$repository:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: runtime
+          push: true
+          tags: |
+            ${{ steps.name.outputs.image }}
+            ${{ steps.name.outputs.repository }}:latest
+          # Links the package to this repository on GitHub.
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Container Apps pulls anonymously (no registry credential exists, D-36). A new package is private until its
+      # visibility is changed by hand, once; fail here with the fix rather than later with an opaque revision error.
+      - name: Check the image is publicly pullable
+        env:
+          REPOSITORY: ${{ steps.name.outputs.repository }}
+        run: |
+          path="${REPOSITORY#ghcr.io/}"
+          # A private package may refuse even the anonymous token; that is the same answer as a 401 on the manifest.
+          token="$(curl -sS "https://ghcr.io/token?scope=repository:${path}:pull" | jq -r '.token // empty' || true)"
+          status="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $token" \
+            -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+            "https://ghcr.io/v2/${path}/manifests/${GITHUB_SHA}")"
+          if [[ "$status" != 200 ]]; then
+            echo "::error title=Package is private::Make ${REPOSITORY} public (GitHub → your profile → Packages → claims-api → Package settings → Change visibility → Public), then re-run this workflow."
+            exit 1
+          fi
+          echo "Anonymous pull OK."
+
+  infra:
+    name: Infrastructure + database
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      containerAppName: ${{ steps.platform.outputs.containerAppName }}
+      containerAppsEnvironmentId: ${{ steps.platform.outputs.containerAppsEnvironmentId }}
+      identityId: ${{ steps.platform.outputs.identityId }}
+      identityClientId: ${{ steps.platform.outputs.identityClientId }}
+      keyVaultUri: ${{ steps.platform.outputs.keyVaultUri }}
+      sqlServerFqdn: ${{ steps.platform.outputs.sqlServerFqdn }}
+      databaseName: ${{ steps.platform.outputs.databaseName }}
+      storageBlobEndpoint: ${{ steps.platform.outputs.storageBlobEndpoint }}
+      documentsContainerName: ${{ steps.platform.outputs.documentsContainerName }}
+      staticWebAppName: ${{ steps.platform.outputs.staticWebAppName }}
+      staticWebAppUrl: ${{ steps.platform.outputs.staticWebAppUrl }}
+      apiUrl: ${{ steps.platform.outputs.apiUrl }}
+    env:
+      RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy infra/main.bicep
+        id: platform
+        env:
+          DEPLOYER_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          DEPLOYER_OBJECT_ID: ${{ vars.AZURE_SP_OBJECT_ID }}
+        run: |
+          az deployment group create \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "platform-${GITHUB_RUN_ID}" \
+            --template-file infra/main.bicep \
+            --parameters deployerClientId="$DEPLOYER_CLIENT_ID" deployerObjectId="$DEPLOYER_OBJECT_ID" \
+            --query properties.outputs --output json > "$RUNNER_TEMP/platform.json"
+          jq -r 'to_entries[] | "\(.key)=\(.value.value)"' "$RUNNER_TEMP/platform.json" >> "$GITHUB_OUTPUT"
+          jq -r 'to_entries[] | "  \(.key): \(.value.value)"' "$RUNNER_TEMP/platform.json"
+
+      # Created once, never by a template: the value exists only in Key Vault. Re-runs leave it alone, so tokens
+      # survive a redeploy. The Key Vault role assignment above can take a minute to apply on the first run.
+      - name: Ensure the JWT signing key exists in Key Vault
+        env:
+          KEY_VAULT_URI: ${{ steps.platform.outputs.keyVaultUri }}
+        run: |
+          vault="$(echo "$KEY_VAULT_URI" | sed -E 's#https://([^.]+)\..*#\1#')"
+          for attempt in $(seq 1 12); do
+            if az keyvault secret show --vault-name "$vault" --name auth-signing-key --query id --output tsv >/dev/null 2>&1; then
+              echo "auth-signing-key exists."
+              exit 0
+            fi
+            key_file="$(mktemp)"
+            openssl rand -base64 48 | tr -d '\n' > "$key_file"
+            if az keyvault secret set --vault-name "$vault" --name auth-signing-key --file "$key_file" \
+                 --content-type "HS256 signing key (D-16)" --output none; then
+              rm -f "$key_file"
+              echo "auth-signing-key created."
+              exit 0
+            fi
+            rm -f "$key_file"
+            echo "Attempt $attempt failed (role assignment still propagating?); retrying in 15 s."
+            sleep 15
+          done
+          exit 1
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # The same bundle the Dockerfile's migrator target builds, self-contained so the runner needs no runtime.
+      - name: Build the EF Core migrations bundle
+        run: |
+          dotnet tool restore
+          dotnet ef migrations bundle \
+            --project src/ClaimsModule.Persistence \
+            --startup-project src/ClaimsModule.API \
+            --configuration Release \
+            --self-contained --target-runtime linux-x64 \
+            --output "$RUNNER_TEMP/efbundle" --force
+
+      # Only for this job: removed again by the always() step below.
+      - name: Open the SQL firewall to this runner
+        env:
+          SQL_SERVER_FQDN: ${{ steps.platform.outputs.sqlServerFqdn }}
+        run: |
+          ip="$(curl -fsS https://api.ipify.org)"
+          az sql server firewall-rule create \
+            --resource-group "$RESOURCE_GROUP" --server "${SQL_SERVER_FQDN%%.*}" \
+            --name "github-runner-${GITHUB_RUN_ID}" --start-ip-address "$ip" --end-ip-address "$ip" --output none
+          echo "Opened for $ip."
+
+      # Signed in as the deployment service principal, the SQL server's Entra admin (Active Directory Default picks up
+      # the Azure CLI session). Retries cover the firewall rule propagating and a paused serverless database resuming.
+      - name: Apply EF Core migrations
+        env:
+          SQL_SERVER_FQDN: ${{ steps.platform.outputs.sqlServerFqdn }}
+          DATABASE_NAME: ${{ steps.platform.outputs.databaseName }}
+        run: |
+          connection="Server=tcp:${SQL_SERVER_FQDN},1433;Database=${DATABASE_NAME};Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;Connect Timeout=60"
+          for attempt in 1 2 3 4 5; do
+            if "$RUNNER_TEMP/efbundle" --connection "$connection"; then
+              exit 0
+            fi
+            echo "Attempt $attempt failed; retrying in 30 s."
+            sleep 30
+          done
+          exit 1
+
+      - name: Grant the API identity its database user
+        env:
+          SQL_SERVER_FQDN: ${{ steps.platform.outputs.sqlServerFqdn }}
+          DATABASE_NAME: ${{ steps.platform.outputs.databaseName }}
+          API_IDENTITY_NAME: ${{ steps.platform.outputs.identityName }}
+          API_IDENTITY_CLIENT_ID: ${{ steps.platform.outputs.identityClientId }}
+          READER_NAME: ${{ vars.SQL_READER_NAME || '-' }}
+          READER_OBJECT_ID: ${{ vars.SQL_READER_OBJECT_ID || '-' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/go-sqlcmd"
+          curl -fsSL "https://github.com/microsoft/go-sqlcmd/releases/download/${GO_SQLCMD_VERSION}/sqlcmd-linux-amd64.tar.bz2" \
+            | tar -xj -C "$RUNNER_TEMP/go-sqlcmd"
+          "$RUNNER_TEMP/go-sqlcmd/sqlcmd" \
+            --server "tcp:${SQL_SERVER_FQDN},1433" --database-name "$DATABASE_NAME" \
+            --authentication-method ActiveDirectoryDefault \
+            --exit-on-error \
+            --input-file infra/sql/grant-api-identity.sql \
+            -v "ApiIdentityName=${API_IDENTITY_NAME}" \
+            -v "ApiIdentityClientId=${API_IDENTITY_CLIENT_ID}" \
+            -v "ReaderName=${READER_NAME}" \
+            -v "ReaderObjectId=${READER_OBJECT_ID}"
+
+      - name: Close the SQL firewall
+        if: always() && steps.platform.outputs.sqlServerFqdn != ''
+        env:
+          SQL_SERVER_FQDN: ${{ steps.platform.outputs.sqlServerFqdn }}
+        run: |
+          az sql server firewall-rule delete \
+            --resource-group "$RESOURCE_GROUP" --server "${SQL_SERVER_FQDN%%.*}" \
+            --name "github-runner-${GITHUB_RUN_ID}" --output none || true
+
+  api:
+    name: API → Container Apps
+    needs: [image, infra]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      apiUrl: ${{ steps.deploy.outputs.apiUrl }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # On the very first run the identity's Key Vault role can still be propagating when the first revision resolves
+      # its secret reference; one retry covers it.
+      - name: Deploy infra/api.bicep
+        id: deploy
+        env:
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          IMAGE: ${{ needs.image.outputs.image }}
+          MIN_REPLICAS: ${{ inputs.min_replicas }}
+          CONTAINER_APP_NAME: ${{ needs.infra.outputs.containerAppName }}
+          ENVIRONMENT_ID: ${{ needs.infra.outputs.containerAppsEnvironmentId }}
+          IDENTITY_ID: ${{ needs.infra.outputs.identityId }}
+          IDENTITY_CLIENT_ID: ${{ needs.infra.outputs.identityClientId }}
+          KEY_VAULT_URI: ${{ needs.infra.outputs.keyVaultUri }}
+          SQL_SERVER_FQDN: ${{ needs.infra.outputs.sqlServerFqdn }}
+          DATABASE_NAME: ${{ needs.infra.outputs.databaseName }}
+          STORAGE_BLOB_ENDPOINT: ${{ needs.infra.outputs.storageBlobEndpoint }}
+          DOCUMENTS_CONTAINER: ${{ needs.infra.outputs.documentsContainerName }}
+          ALLOWED_ORIGIN: ${{ needs.infra.outputs.staticWebAppUrl }}
+        run: |
+          for attempt in 1 2 3; do
+            if az deployment group create \
+                --resource-group "$RESOURCE_GROUP" \
+                --name "api-${GITHUB_RUN_ID}-${attempt}" \
+                --template-file infra/api.bicep \
+                --parameters \
+                  containerAppName="$CONTAINER_APP_NAME" \
+                  containerAppsEnvironmentId="$ENVIRONMENT_ID" \
+                  identityId="$IDENTITY_ID" \
+                  identityClientId="$IDENTITY_CLIENT_ID" \
+                  keyVaultUri="$KEY_VAULT_URI" \
+                  sqlServerFqdn="$SQL_SERVER_FQDN" \
+                  databaseName="$DATABASE_NAME" \
+                  storageBlobEndpoint="$STORAGE_BLOB_ENDPOINT" \
+                  documentsContainerName="$DOCUMENTS_CONTAINER" \
+                  allowedOrigin="$ALLOWED_ORIGIN" \
+                  image="$IMAGE" \
+                  minReplicas="$MIN_REPLICAS" \
+                --query properties.outputs --output json > "$RUNNER_TEMP/api.json"; then
+              jq -r 'to_entries[] | "\(.key)=\(.value.value)"' "$RUNNER_TEMP/api.json" >> "$GITHUB_OUTPUT"
+              jq -r 'to_entries[] | "  \(.key): \(.value.value)"' "$RUNNER_TEMP/api.json"
+              exit 0
+            fi
+            echo "Attempt $attempt failed; retrying in 60 s."
+            sleep 60
+          done
+          exit 1
+
+      - name: Wait for /health/ready
+        env:
+          API_URL: ${{ steps.deploy.outputs.apiUrl }}
+        run: |
+          for attempt in $(seq 1 30); do
+            status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$API_URL/health/ready" || true)"
+            if [[ "$status" == 200 ]]; then
+              echo "Ready after $attempt attempt(s): $API_URL"
+              exit 0
+            fi
+            echo "Attempt $attempt: HTTP $status"
+            sleep 10
+          done
+          exit 1
+
+  web:
+    name: SPA → Static Web App
+    needs: infra
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/claims-ui/package-lock.json
+
+      # The API origin is a build-time constant (src/environments/environment.ts, D-44).
+      - name: Build Angular with the production API URL
+        working-directory: web/claims-ui
+        env:
+          API_URL: ${{ needs.infra.outputs.apiUrl }}
+        run: |
+          npm ci
+          npx ng build --define "API_BASE_URL='${API_URL}'"
+          grep -q "$API_URL" dist/claims-ui/browser/main-*.js
+
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # Fetched at run time with the OIDC session, so the deployment token is never stored as a repository secret.
+      - name: Get the Static Web App deployment token
+        id: swa
+        env:
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          STATIC_WEB_APP: ${{ needs.infra.outputs.staticWebAppName }}
+        run: |
+          token="$(az staticwebapp secrets list --name "$STATIC_WEB_APP" --resource-group "$RESOURCE_GROUP" \
+            --query properties.apiKey --output tsv)"
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ steps.swa.outputs.token }}
+          action: upload
+          app_location: web/claims-ui/dist/claims-ui/browser
+          skip_app_build: true
+          skip_api_build: true
+
+  smoke:
+    name: Smoke test
+    needs: [infra, api, web]
+    if: inputs.run_smoke_test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: SPA is served, deep links fall back to index.html
+        env:
+          SPA_URL: ${{ needs.infra.outputs.staticWebAppUrl }}
+        run: |
+          for path in / /claims /claims/new; do
+            status="$(curl -sS -o "$RUNNER_TEMP/page.html" -w '%{http_code}' "$SPA_URL$path")"
+            if [[ "$status" != 200 ]] || ! grep -q '<app-root' "$RUNNER_TEMP/page.html"; then
+              echo "$SPA_URL$path → HTTP $status, not the SPA shell"
+              exit 1
+            fi
+            echo "$SPA_URL$path → 200"
+          done
+
+      - name: CORS admits the SPA origin only
+        env:
+          API_URL: ${{ needs.api.outputs.apiUrl }}
+          SPA_URL: ${{ needs.infra.outputs.staticWebAppUrl }}
+        run: |
+          preflight() {
+            curl -sS -o /dev/null -D - -X OPTIONS "$API_URL/api/claims" \
+              -H "Origin: $1" -H 'Access-Control-Request-Method: POST' \
+              -H 'Access-Control-Request-Headers: authorization,content-type' | tr -d '\r' | grep -i '^access-control-allow-origin:' || true
+          }
+          [[ "$(preflight "$SPA_URL")" == *"$SPA_URL"* ]] || { echo "SPA origin not admitted"; exit 1; }
+          [[ -z "$(preflight https://evil.example)" ]] || { echo "a foreign origin was admitted"; exit 1; }
+          echo "CORS OK: $SPA_URL admitted, https://evil.example refused."
+
+      - name: Demo flow (brief §7.2)
+        env:
+          API_URL: ${{ needs.api.outputs.apiUrl }}
+        run: scripts/smoke-test.sh "$API_URL"
+
+      - name: Summary
+        env:
+          API_URL: ${{ needs.api.outputs.apiUrl }}
+          SPA_URL: ${{ needs.infra.outputs.staticWebAppUrl }}
+        run: |
+          {
+            echo "### Deployed"
+            echo "| | URL |"
+            echo "|---|---|"
+            echo "| SPA | $SPA_URL |"
+            echo "| API | $API_URL |"
+            echo "| Swagger | $API_URL/swagger |"
+            echo "| Hangfire (manager token) | $API_URL/hangfire |"
+          } >> "$GITHUB_STEP_SUMMARY"

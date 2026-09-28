@@ -1,0 +1,71 @@
+# Build and test everything. Runs on every push and pull request, and deploy.yml calls it first (workflow_call), so
+# nothing reaches Azure without passing the same checks.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  backend:
+    name: Backend (.NET 9)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore
+        run: dotnet restore ClaimsModule.sln
+
+      # TreatWarningsAsErrors and the NuGet audit (Directory.Build.props) make this the lint step too.
+      - name: Build
+        run: dotnet build ClaimsModule.sln --configuration Release --no-restore
+
+      # Integration tests start SQL Server 2022 and Azurite with Testcontainers; GitHub's Ubuntu runners have Docker.
+      - name: Test
+        run: >
+          dotnet test ClaimsModule.sln --configuration Release --no-build
+          --logger "trx;LogFilePrefix=results" --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-test-results
+          path: TestResults/*.trx
+          if-no-files-found: ignore
+
+  frontend:
+    name: Frontend (Angular)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web/claims-ui
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/claims-ui/package-lock.json
+
+      - run: npm ci
+      - run: npx ng lint
+      - run: npx ng test --watch=false
+      # The deployable bundle is built by deploy.yml with the API URL; this only proves the production build compiles.
+      - run: npx ng build
