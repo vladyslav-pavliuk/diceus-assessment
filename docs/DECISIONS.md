@@ -56,6 +56,7 @@ Markers used below:
 | D-41 | Phase 4 reserves, GL posting, SLA job and Hangfire choices (+ two decisions by Vlad) | PROPOSED (Q1, Q2 ACCEPTED) |
 | D-42 | Phase 5 documents: upload orchestration, sanitising, allowlist and sniffing, SAS, local fallback (+ three decisions by Vlad) | PROPOSED (Q1–Q3 ACCEPTED) |
 | D-43 | Phase 6 Angular frontend: toolchain, service layer, auth session, errors, state, UI mirrors of domain rules, scope additions (+ three decisions by Vlad) | PROPOSED (Q1–Q3 ACCEPTED) |
+| D-44 | Phase 7 Azure deployment and CI/CD: Bicep, passwordless SQL, least-privilege API database user, OIDC pipeline, smoke test (+ three questions for Vlad) | PROPOSED |
 
 ---
 
@@ -832,9 +833,11 @@ therefore **never auto-pauses while the API is up**, and the Azure SQL free offe
 - **API:** a Container App (Consumption, 0.5 vCPU / 1 GiB) with ingress enabled, HTTP scale rule, `minReplicas = 0`, `maxReplicas = 1`. With one replica, only one Hangfire server
   runs, which keeps the demo easy to reason about. Multiple replicas would also be safe, because Hangfire distributes jobs through SQL.
   System-assigned managed identity. Secrets are Key Vault references in ACA secrets. ACA's monthly free grant covers the idle demo.
+  **Amended by D-44 (2026-09-28):** a *user-assigned* identity (its roles exist before the app does), and Key Vault holds only the signing key: SQL is
+  passwordless, so there is no connection-string secret.
 - **Image registry:** **GitHub Container Registry** (ghcr.io; free) instead of ACR Basic (~USD 5/month). The image contains no secrets, because all config comes from
   env and Key Vault, so the package can be public, which means no registry credential. ACR Basic is the fallback if you want it private.
-- **DB:** Azure SQL Database **serverless, free offer**, auto-pause on, using the shortest supported auto-pause delay (verify the minimum in Phase 7). The
+- **DB:** Azure SQL Database **serverless, free offer**, auto-pause on, using the shortest supported auto-pause delay (verify the minimum in Phase 7). **Verified in Phase 7 (D-44):** the minimum is 15 minutes (Microsoft Learn, serverless tier overview). The
   free-limit behaviour is set to **"continue using the database for additional charges"**, so an exhausted allowance can never take the database offline during the
   review (cost beyond the allowance is per vCore-second and small at demo volumes).
 - **Frontend:** Static Web App (Free). **Storage:** Standard LRS. **Key Vault:** Standard. **App Insights:** optional.
@@ -1371,3 +1374,93 @@ the brief say nothing. None changes an FRS business rule: every rule the UI show
 **Rationale.** Each item is small and reversible and is either unit-tested (95 Vitest tests named after the matrix IDs) or was exercised in the browser
 against the running API (see `docs/ai-log/phase-6.md`), so none is a silent choice.
 **Status:** PROPOSED (2026-09-28). The plan-level choices and Q1–Q3 were accepted by Vlad (2026-09-28); items 1–17 await review.
+
+## D-44 — Phase 7 Azure deployment and CI/CD
+**Context.** Phase 7 (brief §3.8) provisions Azure and adds the pipeline. The phase prompt names **App Service (Linux)**; D-36 (ACCEPTED, changed by Vlad)
+replaced it with **Azure Container Apps**, and brief §2.3 allows either, so D-36 wins and this entry builds on it. Three points are judgement calls a
+reviewer will probe (Q1–Q3), implemented as recommended; the rest are choices where the brief and FRS say nothing. None changes an FRS business rule.
+
+**Open questions (implemented as recommended; need Vlad's decision).**
+- **Q1. How the API authenticates to Azure SQL.** (a) **Entra-only authentication**: the API connects as its managed identity
+  (`Authentication=Active Directory Managed Identity`), the deployment service principal is the server's Entra admin, SQL logins are disabled. No password
+  exists anywhere. (b) A SQL admin login whose password is a GitHub secret, with the connection string in Key Vault. (b) is one step simpler to set up;
+  (a) removes the only long-lived database credential and is the Azure default recommendation. Cost of (a): the pipeline must create the identity's
+  database user (`infra/sql/grant-api-identity.sql`), and nobody can query the database without an Entra user (bootstrap offers an optional read-only one).
+  **Recommendation: (a).**
+- **Q2. The API is a plain database user, not dbo.** Rights: `db_datareader`, `db_datawriter`, the `claims_app` role (D-39 item 15: `DENY UPDATE, DELETE`
+  on ClaimAuditLog, now in effect), `CREATE TABLE`, and ownership of the `[HangFire]` schema only. Hangfire therefore still installs and upgrades its own
+  tables (D-41 item 14) but the API cannot alter `dbo`, cannot drop or disable the audit trigger, and cannot rewrite the audit log even with raw SQL.
+  Alternatives: (b) `db_owner`, simplest, but the audit protections then rest on the trigger alone, which dbo can drop; (c) install Hangfire's schema from
+  the pipeline and give the API no DDL at all, which ties the pipeline to Hangfire's internal install script. **Recommendation: (a) as built.**
+  Verified locally against SQL Server 2022 with an equivalent SQL-auth user: the full smoke test passes, Hangfire creates its schema, and `UPDATE
+  ClaimAuditLog` (Msg 229), `DISABLE`/`DROP TRIGGER` (Msg 1088/3701), `CREATE TABLE dbo.x` (Msg 2760) and `ALTER TABLE dbo.Claims` (Msg 1088) are refused.
+- **Q3. No GitHub environment; the federated credential trusts `refs/heads/main`.** GitHub environments (and their approval gates) are not available for
+  private repositories on the Free plan, and this repository is private. The credential's subject is `repo:<owner>/<repo>:ref:refs/heads/main`, so a
+  workflow dispatched from any other branch cannot sign in to Azure. If the repository becomes public, or the plan allows it, switch to an environment
+  (`environment: production` on the Azure jobs, subject `repo:…:environment:production`) and add a required reviewer. **Recommendation: main-branch
+  subject now.**
+
+**Choices (ASSUMPTION unless cited).**
+1. **Two Bicep templates.** `infra/main.bicep` (identity, Log Analytics, Container Apps environment, Key Vault, Storage, SQL, Static Web App, role
+   assignments) and `infra/api.bicep` (the Container App). The app is deployed separately because its first revision needs the image, the signing key in
+   Key Vault and the migrated schema, all produced between the two. Both are idempotent and run on every deployment. Resource names carry
+   `uniqueString(resourceGroup().id)` where they must be globally unique.
+2. **User-assigned managed identity** (amends D-36, which said system-assigned). It exists before the Container App, so its Key Vault and Storage roles
+   are in place when the app's first revision resolves its secret reference; a system-assigned identity is born with the app, too late for that.
+   `AZURE_CLIENT_ID` tells DefaultAzureCredential (Blob Storage) which identity to use; SqlClient gets it from `User Id`.
+3. **Storage roles, least privilege.** *Storage Blob Data Contributor* scoped to the `claim-documents` **container**, plus *Storage Blob Delegator* on
+   the **account**: getting a user delegation key (to sign the 1-hour SAS, BR-D-02) is an account-level action the container-scoped role cannot grant, and
+   Delegator grants only that. This settles the open point in ARCHITECTURE-PLAN §7. Shared-key access is **disabled** on the account, so no account key
+   can sign anything; blob and container soft delete keep deleted documents for 7 days.
+4. **Key Vault** (RBAC mode) holds one secret, `auth-signing-key`. The pipeline creates it once (48 random bytes from `openssl`, written from a temp file,
+   never logged) and leaves it alone afterwards, so tokens survive redeploys. The API reads it only through the Container Apps Key Vault reference
+   (*Key Vault Secrets User*); the pipeline's service principal has *Key Vault Secrets Officer* on this vault only.
+5. **Azure SQL:** serverless Gen5, 0.5–2 vCores, **free offer** (`useFreeLimit`), `freeLimitExhaustionBehavior = BillOverUsage` (D-36: never offline
+   during the review), auto-pause **15 minutes** (the documented minimum, verified), 32 GB, local backup redundancy. Firewall: the `AllowAllWindowsAzureIps`
+   rule (how a Container App without a VNet reaches the server), plus a per-run rule for the GitHub runner's IP that the workflow deletes in an
+   `always()` step. Authentication still needs an Entra token for a user of this database. Production answer: VNet-integrated environment + private endpoint.
+6. **Migrations** run from the runner as a **self-contained EF Core migrations bundle** (the same command as the Dockerfile's `migrator` target), signed in
+   as the service principal via `Authentication=Active Directory Default` (the Azure CLI session from `azure/login`), with retries for firewall propagation and a
+   resuming database. They run **before** the new API revision, so a migration must stay compatible with the running code (expand/contract); the demo
+   has no live traffic to break, which is stated rather than engineered.
+7. **API database user** by `infra/sql/grant-api-identity.sql`, run with go-sqlcmd (pinned v1.10.0) as the Entra admin. `CREATE USER … WITH SID = <client
+   id>, TYPE = E` avoids the Microsoft Graph lookup that `FROM EXTERNAL PROVIDER` would need (which, for a service-principal admin, requires Directory
+   Readers on the server). Idempotent; run twice in the local check.
+8. **Forwarded headers:** `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`. Container Apps terminates TLS; without it `CreatedAtAction` Location headers say
+   `http://` and the request looks insecure to the app. Configuration only, no code.
+9. **Container App:** Consumption, 0.5 vCPU / 1 GiB, external ingress on 8080, `minReplicas` a workflow input (0 by default, 1 for the review, D-36),
+   `maxReplicas = 1` (one Hangfire server). Probes: startup and liveness on `/health/live`, readiness on `/health/ready` with a 2-minute failure budget for a
+   resuming database (D-38 item 11). `Auth:DevTokensEnabled = true` in the demo (D-16). CORS: exactly the SWA origin (`Cors__AllowedOrigins__0`).
+10. **Images** go to `ghcr.io/<owner>/claims-api:<sha>` (and `:latest`), as D-36 decided. The package must be made **public once by hand**; the workflow
+    checks an anonymous pull right after pushing and fails with the fix. ACR Basic stays the fallback if a private image is wanted.
+11. **Angular API URL:** a build-time constant. `environment.ts` reads `API_BASE_URL`, `angular.json` defaults it to `http://localhost:5080`, and the
+    workflow builds with `ng build --define "API_BASE_URL='https://…'"` (checked: the override lands in `main-*.js`, the default without it). The
+    alternative, a runtime `config.json`, gives build-once-deploy-anywhere but one more request and a bootstrap `APP_INITIALIZER`; one environment
+    does not need it.
+12. **Static Web App (Free):** `public/staticwebapp.config.json` rewrites deep links (`/claims/…`) to `index.html`, marks `index.html` no-cache (hashed
+    bundles cache normally) and adds `nosniff`, `DENY` framing and a referrer policy. The deployment token is read at run time with the OIDC session
+    (`az staticwebapp secrets list`) and masked, so it is never a stored secret. No CSP yet (it would have to name the API origin; Phase 8 candidate).
+13. **Zero stored secrets in GitHub.** Repository *variables* only (client, tenant, subscription and resource-group ids, the service principal's object id,
+    the optional SQL reader); `azure/login@v3` uses OIDC; `GITHUB_TOKEN` pushes the image.
+14. **Workflows.** `ci.yml` (push, pull request, and `workflow_call`) builds and tests backend and frontend; `deploy.yml` (`workflow_dispatch`) calls it
+    first, then image ∥ infra → api ∥ web → smoke. Actions are pinned to major tags (current majors, checked 2026-09-28), not commit SHAs: readable, and
+    the trade-off is stated. actionlint and shellcheck pass.
+15. **Smoke test** (`scripts/smoke-test.sh`, bash + curl + jq): brief §7.2 flow — FNOL → Open → $25,000 Indemnity reserve as handler.alex
+    (PendingApproval, Supervisor) → handler's own approve refused (403) → supervisor.casey approves → GL job posts (polled) → PDF upload → the signed URL
+    returns the same bytes without an Authorization header → audit log has CLAIM_CREATED, STATUS_CHANGED, RESERVE_CREATED, RESERVE_APPROVED,
+    GL_POSTING_SIMULATED, DOCUMENT_UPLOADED. The workflow also checks the SPA shell on deep links and that CORS admits the SWA origin and refuses another.
+16. **Cost guards:** Log Analytics daily cap 0.5 GB, 30-day retention; everything else is free tier or scale-to-zero (D-36).
+17. **`infra/bootstrap.sh`** does the one-time, owner-only setup (providers, resource group, app registration + service principal, federated
+    credential, *Contributor* and *Role Based Access Control Administrator* on the resource group, repository variables). RBAC Administrator rather
+    than Owner/User Access Administrator: it can manage role assignments and nothing else. A condition restricting it to the four roles the templates
+    assign would tighten it further (noted, not done).
+
+**Not verified (no Azure deployment was made in this phase).** The templates compile with the Bicep linter (0 warnings), the workflows pass actionlint,
+the scripts pass shellcheck, the migrations bundle builds with the workflow's exact command in `sdk:9.0`, go-sqlcmd runs the grant script with the
+workflow's exact flags, and the smoke test passes against the local stack twice (as dbo and as the restricted user). What only a real deployment proves:
+Entra token acquisition by the bundle and go-sqlcmd on a GitHub runner, `TYPE = E` user creation, the Key Vault reference, user-delegation SAS, and RBAC
+propagation timing (each step that depends on it retries).
+
+**Rationale.** Every credential is either an Entra token or a single Key Vault secret nobody handles; the API has the least database and storage rights
+the features need; the pipeline is re-runnable end to end; and each manual step is a one-time act of an owner that no pipeline can do for itself.
+**Status:** PROPOSED (2026-09-28): Q1–Q3 and items 1–17 await Vlad's review.

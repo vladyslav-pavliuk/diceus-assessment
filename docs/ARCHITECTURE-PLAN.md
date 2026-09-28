@@ -289,19 +289,20 @@ duplicate `Idempotency-Key` requests (D-24: placeholder row + unique index, in-f
 
 ---
 
-## 7. Azure target architecture (Brief §2.3, §3.8; D-36)
+## 7. Azure target architecture (Brief §2.3, §3.8; D-36, built in Phase 7: D-44, `docs/DEPLOYMENT.md`)
 
 ```
- Browser ──► Azure Static Web App (Free)  — Angular build; env config holds the API URL
+ Browser ──► Azure Static Web App (Free)  — Angular build; API URL is a build-time constant (ng build --define)
     │
-    └──► Azure Container Apps (Consumption) — container `claims-api` (ASP.NET Core API + in-process Hangfire server)
-            │  ingress: external HTTPS · scale: HTTP rule, minReplicas 0, maxReplicas 1
-            │  image: ghcr.io/<owner>/claims-api:<sha> · system-assigned Managed Identity
-            ├──► Azure SQL Database (serverless, free offer, auto-pause) — app schema + [HangFire] schema
-            ├──► Storage account (Standard LRS) — container `claim-documents`
-            │       SAS = user-delegation SAS signed with the MI (no account key in config)
-            ├──► Key Vault — Auth:SigningKey, SQL connection string (ACA secrets as Key Vault references)
-            └──► Application Insights (optional) — logs/traces with the correlation id
+    └──► Azure Container Apps (Consumption) — container `api` (ASP.NET Core API + in-process Hangfire server)
+            │  ingress: external HTTPS · scale: HTTP rule, minReplicas 0 (1 for the review), maxReplicas 1
+            │  image: ghcr.io/<owner>/claims-api:<sha> · user-assigned managed identity id-claims-api
+            ├──► Azure SQL Database (serverless, free offer, auto-pause 15 min) — app schema + [HangFire] schema
+            │       Entra-only auth: the API is a plain database user (reader/writer + claims_app + owner of [HangFire])
+            ├──► Storage account (Standard LRS, shared keys disabled) — container `claim-documents`
+            │       SAS = user-delegation SAS signed with the MI (no account key exists in use)
+            ├──► Key Vault (RBAC) — Auth:SigningKey only (Container Apps secret as a Key Vault reference)
+            └──► Log Analytics — JSON logs with the correlation id
  Browser ──► SAS URL ──► Blob (download goes directly to Storage, never through the API — BR-D-02)
 ```
 - **Why Container Apps (D-36):** scaling to zero stops the Hangfire server's SQL polling, which lets serverless SQL auto-pause. The idle cost is about USD 0.
@@ -309,14 +310,14 @@ duplicate `Idempotency-Key` requests (D-24: placeholder row + unique index, in-f
   fires the missed occurrence on wake; the rule is state-based, so only the detection time shifts).
 - **Live-review runbook:** before the session, `az containerapp update --min-replicas 1` and warm the database with one request. Revert to 0 afterwards.
 - **Container image:** multi-stage Dockerfile (`sdk:9.0` build → `aspnet:9.0` runtime, non-root user, port 8080). No secrets baked in.
-- **RBAC** for the MI: blob data access plus the right to generate user-delegation keys on the storage account, and Key Vault Secrets User. The exact role set
-  (Storage Blob Data Contributor vs adding Storage Blob Delegator) is verified in Phase 7 and not asserted here.
+- **RBAC** for the MI (D-44 item 3): *Storage Blob Data Contributor* on the `claim-documents` container, *Storage Blob Delegator* on the account (the user
+  delegation key is an account-level action), *Key Vault Secrets User* on the vault. SQL rights are database roles, not Azure RBAC (`infra/sql/grant-api-identity.sql`).
 - **Local dev:** `docker-compose.yml` with SQL Server 2022 + Azurite + the API (the same Dockerfile as production). The connection string gives an account-key
   SAS, and `Storage:Provider=AzureBlob` against Azurite *or* `LocalFileSystem`.
-- **CORS:** locked to the SWA origin. **Swagger** is enabled in the deployed environment (Brief §4.3).
-- **Probes:** liveness `/health/live` (no dependencies, so a paused database never restarts the container); readiness `/health/ready` (database) (D-38).
-- **CI/CD** (GitHub Actions, `workflow_dispatch` is acceptable per Brief §3.8): build + test → `docker build` + push to ghcr.io → EF migrations bundle run against
-  Azure SQL → `az containerapp update --image …:<sha>` → `ng build` → deploy the SWA. Uses OIDC federated credentials for `azure/login`.
+- **CORS:** locked to the SWA origin. **Swagger** is enabled in the deployed environment (Brief §4.3). TLS ends at Container Apps; forwarded headers are trusted.
+- **Probes:** startup + liveness `/health/live` (no dependencies, so a paused database never restarts the container); readiness `/health/ready` (database) (D-38).
+- **CI/CD** (GitHub Actions, `workflow_dispatch`): `ci.yml` (build + test) → image to ghcr.io ∥ `main.bicep` + signing key + EF migrations bundle against Azure SQL
+  + API database user → `api.bicep` (new revision) ∥ `ng build` + SWA upload → smoke test. OIDC federated credential for `azure/login`; no stored secrets.
 
 ---
 
