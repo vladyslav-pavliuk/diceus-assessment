@@ -275,6 +275,19 @@ public sealed class ReserveEndpointTests(ApiFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task D_45_Self_rejection_returns_422_and_the_submitter_retracts_instead()
+    {
+        var claim = await _handler.CreateClaimAsync();
+        var transaction = (await _supervisor.SubmitReserveAsync(claim.Id, "Indemnity", 30_000m)).Transaction;
+
+        var selfReject = await _supervisor.DecideAsync(claim.Id, transaction.Id, "reject", new { rejectionReason = "Changed my mind." });
+        (await ClaimsApi.ErrorsAsync(selfReject))["ReserveApproval"]
+            .ShouldBe(["Self-rejection is not permitted. Use Retract to withdraw your own pending reserve."]);
+
+        (await _supervisor.DecideOkAsync(claim.Id, transaction.Id, "retract")).ApprovalStatus.ShouldBe(ReserveApprovalStatus.Cancelled);
+    }
+
+    [Fact]
     public async Task RSV_02_Only_the_submitter_retracts_a_pending_reserve()
     {
         var claim = await _handler.CreateClaimAsync();

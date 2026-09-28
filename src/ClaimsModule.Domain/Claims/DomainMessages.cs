@@ -35,7 +35,7 @@ public static class DomainMessages
     public const string ConditionActiveClaimant = "CC-03 (at least one active Claimant party)";
     public const string ConditionOpenReservesJustified = "CC-04 (a justification note is required to close a claim with open reserves)";
 
-    // ASSUMPTION wordings (D-05, D-18, D-19, D-22, D-25, D-26, D-39).
+    // ASSUMPTION wordings (D-05, D-18, D-19, D-22, D-25, D-26, D-39, D-45).
     public const string LossDateOutsidePolicyPeriodNotAcknowledged =
         "Loss date is outside the policy effective period. Acknowledge the warning or link a policy that covers the loss date before opening the claim.";
     public const string HandlerRequiredToOpen = "A handler must be assigned before the claim can be opened.";
@@ -51,6 +51,7 @@ public static class DomainMessages
     public const string OnlyPendingCanBeDecided = "Only a transaction pending approval can be approved, rejected or retracted.";
     public const string RejectionReasonRequired = "A rejection reason is required.";
     public const string NoRejectionAuthority = "Your role does not have authority to reject this reserve amount.";
+    public const string SelfRejectionNotPermitted = "Self-rejection is not permitted. Use Retract to withdraw your own pending reserve.";
     public const string OnlySubmitterCanRetract = "Only the submitter may retract a pending reserve.";
     public const string OverrideReasonRequired = "A reason is required to change the reserve limit override.";
     public const string OnlyFailedPostingCanBeRetried = "Only an approved transaction whose GL posting failed can be retried.";

@@ -1,8 +1,383 @@
-# Review prep: likely reviewer questions (Brief §7)
+# Review prep for the live technical review (brief §7)
 
-Short answers, each linked to the decision or section it comes from. This list grows every phase. Code references are added once the code exists.
+This file has three parts:
+- **Part 1:** 25 likely deep-dive questions with short answers and code references. The references were checked against the code in
+  Phase 8.
+- **Part 2:** five rehearsal tasks for the live-implementation slot (brief §7.2 item 11), with the files to touch.
+- **Appendix:** the phase-by-phase question bank written during Phases 0–7, for depth on any topic.
 
-## Architecture & CQRS
+Paths are relative to the repository root. `Dom`/`App`/`Int`/`Web` mark the test project a test lives in (see the requirements matrix).
+
+---
+
+## Part 1: 25 deep-dive questions
+
+### Architecture and CQRS
+
+**1. Walk me through the layers. How do you know the dependency rule holds?**
+- The layers are Domain ← Application ← (Infrastructure, Persistence) ← API.
+- **Project references** make an illegal reference fail to compile.
+- **NetArchTest** catches leaks through transitive references: Application may not touch EF Core, SqlClient, ASP.NET Core, Hangfire or Azure
+  types, and controllers may not touch Persistence (`tests/ClaimsModule.IntegrationTests/Architecture/LayerDependencyTests.cs:13-76`).
+- **An IL scan** forbids `DateTime.Now`/`UtcNow` and `DateTimeOffset.Now`/`UtcNow` in production code (`ClockUsageTests`, CONV-16). It was
+  mutation-checked: adding a clock read made it fail, naming the method.
+
+**2. Why is "approve reserve" a Command rather than a direct service call?**
+- It changes state, so it goes through the write pipeline:
+  - `LoggingBehavior` → `ValidationBehavior` (422 before any transaction) → `UnitOfWorkBehavior` (one transaction, audit before commit,
+    enqueue after commit). The order is set in `src/ClaimsModule.Application/DependencyInjection.cs:21-23`.
+  - Only commands get a unit of work; queries skip it (`src/ClaimsModule.Application/Common/Behaviors/UnitOfWorkBehavior.cs:20`).
+- A service call would have to repeat those concerns, or skip them.
+- The command is also a named, testable unit that maps 1:1 to a business action and a matrix row.
+- The controller only binds and sends: `src/ClaimsModule.API/Controllers/ReservesController.cs:60-68`.
+
+**3. What would break if you removed the Unit of Work?** (brief §7.4)
+
+`src/ClaimsModule.Persistence/UnitOfWork.cs:35-62` runs, in one transaction: the handler → before-commit events (audit rows) → `SaveChanges`
+→ `COMMIT`. After-commit events run outside the replayed block. Without it:
+- **Audit and state could diverge:** state with no audit row, or an audit row for a change that never happened.
+- **Claim numbers could have gaps:** the counter increment would no longer roll back with a failed create
+  (`src/ClaimsModule.Persistence/ClaimNumbers/ClaimNumberGenerator.cs:29` refuses to run outside a transaction).
+- **Jobs could see rolled-back data:** Hangfire jobs could be enqueued for rows that then roll back.
+- **Duplicate-key races would be 500s:** today they map to 409 (`UnitOfWork.cs:64-75`).
+
+Proven by `Int: AUD_I4_A_failing_command_leaves_no_claim_no_audit_row_and_no_used_claim_number` (`tests/…/Claims/UnitOfWorkTests.cs:30`).
+
+**4. How are reads separated from writes?**
+- Commands and queries are different marker types: `ICommand<T>` / `IQuery<T>` (`src/ClaimsModule.Application/Common/Messaging/`). Naming
+  is tested by `CONV_13_*`.
+- **Commands** load the aggregate through `IClaimRepository` and call one domain method.
+- **Queries** never load aggregates. They call SQL projections behind `IClaimQueries`
+  (`src/ClaimsModule.Application/Abstractions/ReadModels/IClaimQueries.cs:14`), implemented in
+  `src/ClaimsModule.Persistence/ReadModels/ClaimQueries.cs`. Application may not reference EF Core, and the list needs shadow columns and
+  correlated subqueries.
+- Query counts are fixed and tested (no N+1): the list is 2 SQL commands and the detail 7
+  (`Int: API_02_List_runs_a_fixed_number_of_queries_whatever_the_page_size`).
+
+**5. Where is FluentValidation wired, and what does a failure look like?**
+- `src/ClaimsModule.Application/Common/Behaviors/ValidationBehavior.cs:26-41` runs every validator in the MediatR pipeline, sequentially
+  (they share a scoped DbContext). It groups the errors per field and throws `ValidationException`.
+- `src/ClaimsModule.API/Middleware/ExceptionHandlingMiddleware.cs:48` maps that to 422 with exactly `{type, title, status, errors}` (FRS
+  §10.4).
+- Model binding cannot pre-empt it: `SuppressImplicitRequiredAttribute…` is on, and lenient converters bind unknown enum values and
+  malformed dates, so the FRS wording always wins (D-40 item 3).
+- Test: `Int: API_ERR_422_body_matches_FRS_10_4_exactly`.
+
+**6. How do domain events reach the audit log, and why is the Hangfire enqueue different?**
+- Aggregate methods raise events. For example, `ApproveReserveTransaction` raises `ReserveApproved` at
+  `src/ClaimsModule.Domain/Claims/Claim.Reserves.cs:140`.
+- `UnitOfWork.DispatchBeforeCommitAsync` (`UnitOfWork.cs:81-103`) runs `ClaimAuditTrail` (`src/ClaimsModule.Application/Claims/Audit/ClaimAuditTrail.cs`).
+  It writes through `IAuditLogService` (`src/ClaimsModule.Persistence/AuditLogService.cs:17`), in the same transaction.
+- **After commit**, `GlPostingEnqueuer` (`src/ClaimsModule.Application/Claims/Jobs/GlPostingEnqueuer.cs:15`) enqueues the GL job.
+- The two phases have two explicit interfaces, because the phase is the important fact about a handler:
+  - audit must commit *with* the state;
+  - a job must never see uncommitted rows, or run after a rollback.
+- Tests:
+  - `App: AUD_I1_Every_domain_event_has_a_before_commit_audit_handler`;
+  - `Int: AUD_I1_Only_the_audit_log_service_creates_audit_rows`, an IL scan;
+  - `Int: CONV_15_After_commit_handlers_run_after_the_commit_and_never_after_a_rollback`.
+
+### EF Core and data
+
+**7. Show me the value conversions, shadow properties and global query filters.**
+- **Conversions** (`src/ClaimsModule.Persistence/ClaimsDbContext.cs:60-71`):
+  - `decimal` → `DECIMAL(19,4)`;
+  - `DateTimeOffset` → precision 7;
+  - every domain enum → `NVARCHAR(50)` text.
+- **Shadow properties** (`src/ClaimsModule.Persistence/Conventions/ModelBuilderConventions.cs:43-65`): `OrganisationId`, `CreatedAt`,
+  `UpdatedAt`, `UserCreated`, `UserModified`, `IsDeleted`, `DeletedAt`, and the `RowVer` columns. `AuditColumnsInterceptor` fills them.
+- **Filters** (`ClaimsDbContext.cs:78-96`): one combined soft-delete + tenant filter per entity, parameterised per query on
+  `CurrentOrganisationId`.
+- Tests: `Int: CONV_02/03/04/05/08_*`, `SEC_04_*`.
+
+**8. How does tenant isolation work, including in background jobs?**
+- **Queries:** the filter compares `OrganisationId` with the context's tenant. With no tenant it compares with `Guid.Empty`, so it fails
+  closed.
+- **Writes:** `AuditColumnsInterceptor` stamps the tenant on insert and refuses cross-tenant writes
+  (`src/ClaimsModule.Persistence/Interceptors/AuditColumnsInterceptor.cs:78-83`).
+- **Jobs:** jobs have no user. `TenantDirectory` is the only place that calls `IgnoreQueryFilters()` (and re-applies the soft-delete
+  condition by hand). `JobScopes.RunAsync` (`src/ClaimsModule.Infrastructure/BackgroundJobs/JobScopes.cs:16`) then runs the command in a
+  scope with that tenant and a fresh correlation id (D-31).
+- Tests: `Int: SEC_04_Other_tenants_rows_are_invisible_and_cannot_be_written`, `SEC_04_Cross_tenant_claim_is_not_found`.
+
+**9. How is the audit log kept append-only?**
+There are three layers (D-14):
+1. `IAuditLogService` is the only writer. An IL scan checks this.
+2. `src/ClaimsModule.Persistence/Interceptors/ImmutableRowsInterceptor.cs:59-60` throws on a modified or deleted audit entry.
+3. An `INSTEAD OF UPDATE, DELETE` trigger (`src/ClaimsModule.Persistence/Migrations/20260927185650_InitialCreate.cs:740`) stops raw SQL and
+   `ExecuteUpdate`.
+
+In Azure, the API's database user also has `DENY UPDATE, DELETE` through `claims_app` (`infra/sql/grant-api-identity.sql`).
+Test: `Int: BR_A_01_Db_trigger_blocks_raw_update_and_delete`.
+
+**10. Why a counter table for claim numbers, not a SEQUENCE?**
+- FRS §5.3 says "no gaps". A SEQUENCE hands out values outside the transaction and loses its cache on restart.
+- The generator runs `UPDATE ClaimNumberCounters SET LastValue = LastValue + 1 OUTPUT INSERTED.LastValue` *inside* the create transaction
+  (`src/ClaimsModule.Persistence/ClaimNumbers/ClaimNumberGenerator.cs:57-64`).
+  - The row lock serialises concurrent creates.
+  - A rollback takes the increment back.
+  - The first claim of a year inserts the row; a racing insert catches the PK violation and retries (`:36-52`).
+- Test: `Int: BR_C_04_50_parallel_creates_yield_unique_gap_free_numbers`, mutation-checked. A read-then-write version produced a duplicate,
+  and the unique index refused it.
+
+**11. Why is ReserveComponent inside the Claim aggregate?**
+- The $10M limit, the override, closure (CC-01/04), BR-C-06 and the read-only status all span components.
+- As separate aggregates, two $6M approvals on *different* components would each read $0 approved, each pass, and the claim would end at
+  $12M. That is write skew, and the component RowVers would never collide.
+- Every change inside the aggregate marks the Claim row modified
+  (`src/ClaimsModule.Persistence/Interceptors/AuditColumnsInterceptor.cs:57`), so the Claim RowVer serialises them → 409.
+- Test: `Int: BR_R_05_Concurrent_approvals_cannot_jointly_exceed_limit`. Mutation check: removing the touch makes it fail.
+
+### Domain rules
+
+**12. Walk me through the authority thresholds. Is it ≤ or <?**
+- `src/ClaimsModule.Domain/Reserves/ReserveAuthorityPolicy.cs:15-24`:
+  - `|amount| ≤ 10,000` → Auto;
+  - `≤ 100,000` → Supervisor;
+  - otherwise → Manager.
+- It uses the *single transaction's* absolute value (FRS §6.3). A large release needs the same authority as a large increase (D-05).
+- `CanApprove` is hierarchical, so a manager can approve a supervisor-tier transaction.
+- Boundaries are tested at 10,000 / 10,000.01 / 100,000 / 100,000.01, both signs (`Dom: BR_R_02_Tier_boundaries`,
+  `tests/ClaimsModule.Domain.Tests/Reserves/ReserveAuthorityTests.cs:21`).
+- The UI mirrors it in `web/claims-ui/src/app/shared/domain/authority.ts:49` (`Web: RSV_09_*`). In the Add Reserve panel the preview also
+  applies the $10M escalation (`exceedsAggregateLimit`, `:30`). That was Phase 8 finding F3: before the fix, a $5k increase on a claim at
+  $9,998,000 previewed "Auto-approved", while the API sent it to a manager.
+
+**13. How do you stop self-approval? When is it 403 and when 422?**
+- The aggregate collects every violation (`src/ClaimsModule.Domain/Claims/Claim.Reserves.cs:121-137`):
+  - submitter == approver → "Self-approval is not permitted.";
+  - role below the tier → "Your role does not have authority to approve this reserve amount.";
+  - the $10M limit re-checked.
+- All three are 422 with the FRS §8 messages.
+- **Reject** follows the same rule (D-45, Phase 8): the submitter gets 422 "Self-rejection is not permitted. Use Retract to withdraw your own
+  pending reserve." (`Claim.Reserves.cs:156-159`). Rejected always means another person's decision; the submitter's own withdrawal is
+  Cancelled (retract).
+- A handler calling approve at all gets **403** from the endpoint policy (`ReservesController.cs:61`): that role can *never* approve.
+  422 is used when it depends on the data (D-25).
+- Tests: `Int: BR_R_03_Self_approval_returns_422_with_exact_message`, `Int: SEC_02_Handler_approve_returns_403`,
+  `Int: BR_R_02_Supervisor_approving_above_100000_returns_422`.
+
+**14. Explain the $10M aggregate limit and the override.**
+- `ApprovedAggregate` = Σ `CurrentAmount` of the cost components. Subrogation is excluded, because it is an expected recovery (D-11).
+- **At submission:** a transaction that would take approved reserves over $10M, with no override, is escalated to Manager and returns the
+  FRS warning (`Claim.Reserves.cs:83-84, 106`).
+- **At approval:** the limit is checked again, because other approvals may have moved the total (`:131-135`).
+- **The override:** only a Manager can set it, with a reason (`:197-216`; the endpoint is Manager-only, `ClaimsController.cs:128-129`).
+- The limit itself: `WouldExceedAggregateLimit` (`:319-323`). Exactly $10M is allowed; a decrease never trips it.
+- Tests: `Dom: BR_R_05_*` (8), `Int: BR_R_05_Crossing_10M_warns_escalates_and_waits_for_the_override`.
+
+**15. Walk me through the claim state machine.**
+- The FRS §4.2 rows are declared once in `src/ClaimsModule.Domain/Claims/ClaimStatusTransition.cs:56-70`. They are seeded with `HasData`,
+  and the aggregate is given the rows loaded from the table, so the rule is data.
+- `Claim.ChangeStatus` (`src/ClaimsModule.Domain/Claims/Claim.Status.cs:18-99`) runs these checks in order:
+  1. The row must exist, or 422 lists the valid next statuses.
+  2. The minimum role, or 403.
+  3. The reason, if the row requires one.
+  4. The entry conditions:
+     - Open: BR-ST-02, D-18, D-19 (`:102-125`);
+     - PendingPayment: an approved reserve exists;
+     - Closed: CC-01..04, every failure listed (`:128-152`);
+     - Withdrawn: no pending reserve.
+- Reopen writes STATUS_CHANGED, CLAIM_REOPENED, STATUS_CHANGED (`:158-173`).
+- `GET /api/reference/claim-statuses` serves the same rows.
+
+### Hangfire
+
+**16. How is the GL posting job idempotent, even when two copies run at once?**
+- It never checks and then acts.
+- `src/ClaimsModule.Persistence/GlPosting/GlPostingStore.cs:27-38` runs one conditional UPDATE. Its predicate (`:71-77`) is: all three job
+  arguments match, `PostingStatus = 'Pending'`, and the transaction is approved.
+- `src/ClaimsModule.Application/Claims/Commands/PostGlReserveChange/PostGlReserveChangeCommand.cs:48-58` then acts only if exactly 1 row
+  changed: it posts to the ledger with the key `Reserve:{componentId}:Change:{seq}` and stages GL_POSTING_SIMULATED, all in one
+  transaction.
+- A concurrent copy blocks on the row lock, re-evaluates the predicate against the committed row, and changes 0 rows.
+- Backstops: `UX_ReserveHistory_IdempotencyKey`, and a unique filtered index allowing one GL_POSTING_SIMULATED per transaction.
+- Test: `Int: BR_R_06_Job_run_concurrently_writes_one_gl_audit_entry` (`tests/…/Jobs/GlPostingJobTests.cs:60`) waits until SQL Server shows
+  the second run *blocked* before releasing the first.
+- The same argument holds under RCSI (Azure SQL): an UPDATE always qualifies rows against the latest committed version.
+
+**17. What happens when the ledger fails, or the process dies after commit?**
+- **Retries:** `[AutomaticRetry(Attempts = 3)]`, 10/30/60 s (`src/ClaimsModule.Infrastructure/BackgroundJobs/PostGLReserveChangeJob.cs:26-32`).
+  Each failed run rolls back, so the row stays Pending.
+- **The last attempt** (`:61-80`) sets `Failed` with the same compare-and-set on `Pending`, writes GL_POSTING_FAILED in a new unit of work,
+  and rethrows so the dashboard shows the job Failed.
+- **Recovery:** `POST …/retry-posting` puts it back to Pending, audited and re-enqueued (`Claim.Reserves.cs:224-237`).
+- **Lost enqueue** (crash between commit and enqueue): `GlPostingSweeperJob` re-enqueues approved rows still Pending after 5 minutes. The
+  ReserveHistory row *is* the outbox (D-15).
+- Tests: `Int: JOB_06_*`, `Int: JOB_11_Sweeper_enqueues_stranded_postings`, `Int: API_25_Retry_failed_posting`.
+
+**18. The brief says the SLA job flags claims with a "SlaBreached status". Why doesn't yours?**
+- FRS §12.2 says "do not change claim status", and D-01 follows the FRS.
+- A flag column would also bump `UpdatedAt` through the interceptor and reset the 48-hour clock the job measures.
+- The query (`src/ClaimsModule.Persistence/ReadModels/SlaMonitoringQueries.cs:28-34`) takes Draft/Open claims with
+  `COALESCE(UpdatedAt, CreatedAt) < now − 48h` (strictly older, `SlaPolicy.cs:11`) and no breach entry in the last 24h.
+- Each gets one SLA_BREACH_DETECTED row. The list derives `IsSlaBreached` from the audit log.
+- Tested with `FakeTimeProvider`: `Int: JOB_08_Exactly_48_hours_is_not_yet_a_breach`, `JOB_09_*`, `JOB_10_Sla_job_does_not_modify_claim_row`.
+
+### Concurrency, API and documents
+
+**19. Two supervisors click Approve on the same reserve at the same moment. What happens?**
+- Both load the claim and pass every check.
+- The first commit updates the transaction, the component (RowVer) and the claim (RowVer).
+- The second's UPDATE waits, matches 0 rows on RowVer, and gets `DbUpdateConcurrencyException` → 409. Its audit row rolls back, and nothing
+  was enqueued.
+- The test forces the interleaving with a before-commit gate instead of hoping for it (`Int: RSV_07_Concurrent_approvals_one_wins`,
+  `tests/…/Reserves/ReserveConcurrencyTests.cs:43`).
+
+**20. What does Idempotency-Key do, and why is it a filter and not a MediatR behaviour?**
+- What gets replayed is an HTTP response (status, body, Location), which MediatR never sees.
+- `src/ClaimsModule.API/Idempotency/IdempotencyFilter.cs:24` stores (user, key, method, route, SHA-256 of the body or form content) and
+  replays a 2xx response.
+- The same key with a different body gives 422; a request still in flight gives 409. Failures release the key.
+- Tests: `Int: API_IDEMP_*` (8).
+
+**21. How is document storage made testable, and how do you stop path traversal?**
+- **Interface:** `IStorageService` (`src/ClaimsModule.Application/Abstractions/IStorageService.cs:9`) has an Azure implementation and a local
+  one. The implementation is chosen from `Storage:Provider`
+  (`src/ClaimsModule.Infrastructure/Storage/StorageRegistration.cs:33-36`).
+- **Azure downloads** are a 1-hour read-only user-delegation SAS (`AzureBlobStorageService.cs:55-63, 109`), so the bytes never pass through
+  the API.
+- **File names:**
+  - `SanitisedFileName.From` (`src/ClaimsModule.Domain/Documents/SanitisedFileName.cs:48`) normalises to NFKC, keeps the last path segment,
+    and strips invisible and bidi characters.
+  - `DocumentBlobPath.For` builds `{org}/{claim}/{docId}_{name}`.
+  - The local provider re-checks containment.
+- **Content:** it is sniffed against the declared type (`DocumentContentInspector`).
+- Tests: `Dom: BR_D_01_*` (11), `Int: BR_D_02_*` against Azurite, `Int: DOC_05_*`.
+
+### Frontend and Azure
+
+**22. How is the FNOL reactive form designed?**
+- `web/claims-ui/src/app/features/fnol-intake/fnol-form.ts:34` creates one typed `FormGroup` per step under a `linear` `MatStepper`, so each
+  step validates independently.
+- Validators return the API's own messages (`web/claims-ui/src/app/shared/forms/validators.ts`):
+  - `lossDateValidator(now)` at `:29`, which reads an injected clock;
+  - `lossDescriptionValidator` (20 trimmed characters) at `:42`;
+  - `atLeastOneClaimant` on the parties FormArray at `:57`.
+- The time picker is a separate control merged into the date, because of the Phase 6 bug (see AI-WORKFLOW §5 item 6).
+- Server 422 keys are mapped back to control paths and to their step (`web/claims-ui/src/app/shared/forms/server-errors.ts:21-39`,
+  `fnol-form.ts:131`).
+- Tests: `Web: UI_FNOL_*`.
+
+**23. How is the UI gated by role, and how do you guarantee no component calls HTTP directly?**
+- `web/claims-ui/src/app/shared/domain/reserve-actions.ts:42-68` decides which buttons a row shows:
+  - Approve/Reject only for supervisor+ on pending rows, disabled with the API message for self-approval or too little authority;
+  - Retract only for the submitter;
+  - Retry only for a Failed posting.
+- The backend still decides everything.
+- `HttpClient` is banned outside `core/api` by `no-restricted-imports` (`web/claims-ui/eslint.config.js:47`).
+- `authInterceptor` adds the Bearer token only for API URLs, and `errorInterceptor` turns ProblemDetails into snackbars
+  (`web/claims-ui/src/app/core/http/interceptors.ts:21, 50`).
+- Tests: `Web: SEC_03_*`, `UI_GEN_03_*`, `UI_GEN_05_*`.
+
+**24. Walk me through the Azure deployment. Where are the secrets?**
+- **Runtime:** Container Apps (API + Hangfire), a Static Web App, serverless Azure SQL, Blob Storage and Key Vault. The API's only
+  credential is a user-assigned managed identity:
+  - SQL uses Entra-only authentication, and the API is a plain database user;
+  - Blob uses Data Contributor on the container plus Delegator on the account, for user-delegation SAS (`infra/main.bicep:58, 209`);
+  - the JWT key is a Key Vault reference (`infra/api.bicep:78`).
+- **Pipeline:** GitHub signs in with OIDC, so no client secret is stored (`.github/workflows/deploy.yml:15`). It deploys the Bicep, runs the
+  EF migrations bundle, grants the database user, rolls out a revision gated on `/health/ready`, uploads the SPA, and runs the smoke test.
+- **Why Container Apps:** scale-to-zero lets the database pause (D-36). Before the review, set `minReplicas 1` (docs/DEPLOYMENT.md).
+
+**25. How would you extend this to multi-currency reserves?** (brief §7.4)
+- Add a currency to each reserve component and transaction, with an FX snapshot (rate, rate date, base-currency amount) on each
+  transaction, so the history stays reproducible.
+- Authority tiers and the $10M limit stay defined in the base currency, and are evaluated on the base amount.
+- Components are keyed by (type, currency).
+- The GL journal carries both amounts.
+- An adjustment must be in the component's currency.
+
+The files are listed in Part 2, task 5. Today, amounts are plain `decimal` with one scale guard, and USD is implicit (D-33, D-39 item 12).
+
+---
+
+## Part 2: rehearsal tasks for the live-implementation slot
+
+Each task says where the change goes and what proves it. Keep the house rules: a message in `DomainMessages` or `RequestMessages`, the test
+named after the rule ID, a matrix row, and a DECISIONS entry if the spec is silent.
+
+### Task 1: a new validation rule
+
+*"The police report number is required when the cause of loss is theft (`COL-THEFT`)."*
+
+| Step | File |
+|---|---|
+| Message constant | `src/ClaimsModule.Domain/Claims/DomainMessages.cs` (new ASSUMPTION wording) |
+| Rule: `RuleFor(c => c.PoliceReportNumber).NotEmpty().When(c => c.CauseOfLossCode == "COL-THEFT")` | `src/ClaimsModule.Application/Claims/Commands/CreateClaim/CreateClaimCommandValidator.cs` (next to the existing rules, lines 21–63) |
+| Unit test `VAL_15_Police_report_required_for_theft` | `tests/ClaimsModule.Application.Tests/Claims/CreateClaimCommandValidatorTests.cs` |
+| HTTP test (422 keyed `PoliceReportNumber`) | `tests/ClaimsModule.IntegrationTests/Claims/CreateClaimTests.cs` |
+| UI: conditional validator on step 1, message shown inline | `web/claims-ui/src/app/features/fnol-intake/fnol-form.ts`, `shared/forms/validators.ts`, `steps/policy-loss-step.html` |
+| Docs | matrix §4 (VAL-15), `docs/DECISIONS.md` (the rule is not in the FRS) |
+
+The design question to be ready for: is this a pipeline rule (422 on POST) or a persisted completeness issue that blocks Open (D-06)? A
+missing report can be supplied later, so D-06's logic points to an **issue**. That version touches
+`Claim.Parties.cs` `EvaluateCompletenessIssues` (line 125) instead of the validator.
+
+### Task 2: a new query endpoint
+
+*"`GET /api/claims/{id}/parties` returns the claim's parties, with `?includeInactive=`."*
+
+| Step | File |
+|---|---|
+| `ListClaimPartiesQuery : IQuery<IReadOnlyList<ClaimPartyDto>>` + handler (404 when the claim is not found) | new `src/ClaimsModule.Application/Claims/Queries/ListClaimParties/ListClaimPartiesQuery.cs` (copy the shape of `ListValidationIssues/ListValidationIssuesQuery.cs`) |
+| Read contract | `src/ClaimsModule.Application/Abstractions/ReadModels/IClaimQueries.cs` (line 14) |
+| SQL projection with `ProjectTo<ClaimPartyDto>` (the profile exists: `Claims/ClaimMappingProfile.cs`) | `src/ClaimsModule.Persistence/ReadModels/ClaimQueries.cs` (next to `ListValidationIssuesAsync`, line 161) |
+| `[HttpGet]` on the parties controller | `src/ClaimsModule.API/Controllers/ClaimChildrenControllers.cs` (route at line 18) |
+| Tests: 200 list, 404 unknown claim, cross-tenant 404, inactive filter | `tests/ClaimsModule.IntegrationTests/Claims/ClaimChildrenTests.cs` |
+
+The CQRS naming test (`CONV_13_*`) and the no-EF-in-Application test (`CONV_14_*`) will check the shape for free.
+
+### Task 3: a new filter on the claims list
+
+*"Filter by severity" (or "only SLA-breached claims").*
+
+| Step | File |
+|---|---|
+| Query parameter + validation (`IsInEnum`) | `src/ClaimsModule.Application/Claims/Queries/ListClaims/ListClaimsQuery.cs` (record line 16, validator 27, filter built at 51) |
+| Filter record field | `src/ClaimsModule.Application/Abstractions/ReadModels/IClaimQueries.cs` (`ClaimListFilter`, line 66) |
+| `Where` clause (SLA: the same `ClaimAuditLog.Any(...)` used for `IsSlaBreached`, line 60) | `src/ClaimsModule.Persistence/ReadModels/ClaimQueries.cs` (filters at lines 239–274) |
+| `[FromQuery]` binding | `src/ClaimsModule.API/Controllers/ClaimsController.cs` (List, lines 46–58) |
+| HTTP test | `tests/ClaimsModule.IntegrationTests/Claims/ClaimReadTests.cs` (`API_02_Each_filter_narrows_the_list`, line 49) |
+| UI: model, URL ↔ query mapping, a control in the filter bar, the API call | `web/claims-ui/src/app/core/models/claim.models.ts` (`ClaimListQuery`, line 38), `features/claims-list/claims-query.ts` (lines 11, 31), `features/claims-list/claims-filter-bar.ts/.html`, `core/api/claims-api.service.ts` (line 46) |
+| UI test | `features/claims-list/claims-list.spec.ts` (`UI_LIST_03_*`) |
+
+Check that the fixed query count still holds (`API_02_List_runs_a_fixed_number_of_queries_whatever_the_page_size`).
+
+### Task 4: modify a frontend component
+
+*"In the reserve history, show the required authority on every pending row, and flag the transactions that crossed the $10M limit."*
+The DTO already carries `requiredAuthority` and `exceedsAggregateLimit` (`web/claims-ui/src/app/core/models/reserve.models.ts`).
+
+| Step | File |
+|---|---|
+| New "Authority" column: tier badge on pending rows, "—" otherwise | `web/claims-ui/src/app/features/claim-detail/tabs/reserves-tab.html` (column defs at lines 101–161), `reserves-tab.ts` (column list) |
+| A "$10M" warning badge when `exceedsAggregateLimit`, with the FRS §8 text as a tooltip (`AGGREGATE_LIMIT_WARNING`) | `reserves-tab.html`, `web/claims-ui/src/app/shared/domain/authority.ts`, `shared/ui/badge-tones.ts` |
+| Pure helper + test (e.g. `authorityBadge(row)` → tone and label) | `web/claims-ui/src/app/shared/domain/reserve-actions.ts` + `.spec.ts` |
+
+For reference, the escalation-aware Add Reserve preview built for Phase 8 finding F3 is in `shared/domain/authority.ts` (`exceedsAggregateLimit`),
+`shared/ui/authority-indicator.ts` (the `aggregate` input) and `add-reserve-panel.ts` (`aggregate`). It mirrors `Claim.Reserves.cs`
+`WouldExceedAggregateLimit`: cost components only, increases only, `>` not `≥`.
+
+### Task 5: multi-currency reserves (a design sketch, not a full build)
+
+| Layer | Change |
+|---|---|
+| Domain | `Currency` (ISO 4217) on `ReserveComponent` and `ReserveTransaction`. An `FxSnapshot` (rate, as-of date, base amount) on each transaction. `ReserveAuthorityPolicy.RequiredAuthorityFor` and `Claim.WouldExceedAggregateLimit` use the **base** amount. `ApprovedAggregate` sums base amounts. `GlJournalEntry.ForReserveChange` carries the transaction and base amounts. Files: `src/ClaimsModule.Domain/Reserves/*.cs`, `Claims/Claim.Reserves.cs` |
+| Application | An `IExchangeRateProvider` port. `SubmitReserveTransactionCommand` gets `Currency`, and the validator checks it is ISO 4217 and matches the component's currency. DTOs gain `currency` and `baseAmount`. Files: `Claims/Commands/SubmitReserveTransaction/`, `Claims/ReserveDtos.cs`, `Abstractions/` |
+| Infrastructure | A rate-provider implementation (a fixed table for the demo) |
+| Persistence | New columns `Currency NVARCHAR(3)`, `FxRate DECIMAL(19,8)`, `BaseAmount DECIMAL(19,4)`. The unique index `UX_ClaimReserveComponents_ClaimId_Component` becomes (ClaimId, Component, Currency) (`Configurations/ReserveComponentConfiguration.cs:31`). A migration backfills USD with rate 1 |
+| UI | A currency select in the Add Reserve panel. `shared/ui/amount.ts` stops hard-coding USD (line 15). The authority preview uses the base amount the API returns |
+| Tests | Tier boundaries at the converted edge, the limit summed across currencies, and mixed-currency adjustments rejected |
+
+The argument to make: the FX rate is **snapshotted per transaction** (event sourcing), never recomputed. The authority and the limit are
+defined in the base currency, because they express risk appetite, not a number in some currency.
+
+---
+
+## Appendix: phase-by-phase question bank (Phases 0–7)
+
+### Architecture & CQRS
 **Why is "submit reserve" a Command rather than a service call?**
 It changes state. The command goes through the same pipeline as every other write: logging, then validation (422 before any transaction), then the UoW
 (one transaction, audit before commit, enqueue after). A service call would have to repeat those concerns or skip them. The command is also a named,
@@ -21,7 +396,7 @@ The component RowVer is still there. (ARCHITECTURE-PLAN §2.2)
 **Why is idempotency an ASP.NET filter and not a MediatR behaviour?**
 What gets replayed is an HTTP response (status, body, Location header). MediatR never sees those. (D-24)
 
-## Data & EF Core
+### Data & EF Core
 **Why a counter table instead of a SQL SEQUENCE for claim numbers?**
 A SEQUENCE hands out a value even when the transaction rolls back, and its cache is lost on restart. Both create gaps, and FRS §5.3 says "No gaps".
 `UPDATE … OUTPUT INSERTED` inside the create transaction rolls back with it. The row lock prevents duplicates. The cost is serialised creates per org
@@ -39,7 +414,7 @@ together (named filters only arrive in EF 10), so any bypass re-applies `!IsDele
 Its amounts are immutable; the row is not. The FRS itself requires updating ApprovalStatus and PostingStatus on the row. The interceptor guards the
 amount, balance, sequence and key columns. (D-22)
 
-## Hangfire
+### Hangfire
 **How is the GL job idempotent under concurrent execution?**
 It never checks and then acts. One transaction runs a conditional `UPDATE … WHERE PostingStatus = 'Pending'` (and approved, and all three job
 arguments match) and writes the audit row only if exactly 1 row changed. A concurrent duplicate blocks on the row lock, then updates 0 rows. The
@@ -53,7 +428,7 @@ ReserveHistory row acts as the outbox. (D-15)
 Any write to Claims bumps `UpdatedAt`, and that would reset the 48h clock the job measures. The last breach is derived from the audit log, as FRS §12.2 says.
 (D-01)
 
-## Azure
+### Azure
 **Why Container Apps and not App Service?**
 Cost. Hangfire polls SQL all the time a server runs, so an always-on App Service keeps a serverless database awake and burns the free allowance. Container Apps
 scales to zero when idle, the polling stops, and the database auto-pauses. The idle cost is about zero. The price is a cold start (container + database resume, absorbed
@@ -64,7 +439,7 @@ For the live review, `minReplicas` is set to 1. (D-36)
 The job is persisted in SQL. After Hangfire's invisibility timeout, the next replica picks it up again. The conditional update makes a re-run a no-op if the first run
 had already committed. (D-36, ARCHITECTURE-PLAN §6)
 
-## Domain
+### Domain
 **403 or 422 when a supervisor tries to approve $250k?**
 422 with the FRS §8 message. The supervisor *can* approve, just not this amount, so the rule depends on the data. A handler hitting approve at all gets 403,
 because that role can never perform the action. (D-25)
@@ -79,7 +454,7 @@ and the GL journal carries both amounts. Validation rejects mixed-currency adjus
 Under D-06, the only Critical issue stored on a claim is "no claimant". §4.2 and BR-ST-02 separately require a claimant, so waiving that issue could never
 unblock anything. (D-07)
 
-## Phase 1: skeleton & cross-cutting
+### Phase 1: skeleton & cross-cutting
 **How do you prove the dependency rule holds, not just claim it?**
 Two layers. Project references make illegal references impossible to compile (Domain has none; Infrastructure and Persistence know only Application). NetArchTest
 then catches framework leakage through transitive references: Application must not touch EF Core, SqlClient, ASP.NET Core, Hangfire or Azure types, and
@@ -101,8 +476,10 @@ validation would effectively live in the controller layer. Now model binding onl
 The `X-Correlation-Id` response header, which every log line of that request also carries. The body is kept to exactly FRS §10.4's four fields. (D-38 items 1, 10)
 
 **Why accept a client-supplied correlation id at all, and why not reject a bad one?**
-A client (the SPA, a gateway) can then tie its own logs to ours. The value lands in logs, audit rows and a response header, so only a short plain token
-(1–64 of `[A-Za-z0-9-_.]`) is accepted. Anything else is replaced, not rejected: a tracing header should never fail a business request. (`CorrelationIdMiddleware.cs`)
+A client (the SPA, a gateway) can then tie its own logs to ours. The value lands in logs, audit rows (a GUID column, FRS §9.8) and a response
+header, so only a GUID in the standard `D` format is accepted (D-39 Q1; the Phase 1 rule of "1–64 characters of `[A-Za-z0-9-_.]`" was
+replaced). Anything else is replaced with a new GUID, not rejected: a tracing header should never fail a business request.
+(`src/ClaimsModule.API/Middleware/CorrelationIdMiddleware.cs:34`)
 
 **Why is AutoMapper on a version with a known high CVE?**
 CVE-2026-32933 needs a ~25,000-level self-referencing graph to be mapped. We only map DB entities to DTOs, never request input, and no mapped type references itself.
@@ -122,7 +499,7 @@ pointless restarts. Readiness includes the database, so traffic waits for it ins
 algorithm on every request, with the key from Key Vault. It is on in the demo deployment by decision (D-16), so reviewers can switch roles; a real system would put
 an identity provider behind the same `JwtBearer` validation, with no change to the rest of the API.
 
-## Phase 2: domain model & schema
+### Phase 2: domain model & schema
 **Where do the business rules live, and how do you know nothing bypasses them?**
 In the Claim aggregate (`src/ClaimsModule.Domain/Claims/Claim*.cs`). Entities have no public setters (`DOM_01_Entities_have_no_public_setters`
 checks every entity by reflection) and child collections are read-only wrappers. The only way to change a claim is a method that checks the rule.
@@ -183,7 +560,7 @@ The only persisted Critical is "no claimant". A claim reaches Closed only throug
 The check stays because the transition table is data. The tests add a configured Draft → Closed row, and CC-02/CC-03 then fail as specified
 (D-39 item 17).
 
-## Phase 3: commands, queries, controllers
+### Phase 3: commands, queries, controllers
 **Walk me through POST /api/claims.**
 Model binding creates `CreateClaimCommand`. Then, in order:
 - `LoggingBehavior` logs the request.
@@ -237,7 +614,7 @@ failure of that request.
 **Why does a transition return 403 for a handler reopening, but 422 for a missing reason?**
 The role can never make that move, whatever the data, so it is 403 (D-25). A missing reason is fixable input, so it is 422.
 
-## Phase 4: reserves, GL posting, SLA job, Hangfire
+### Phase 4: reserves, GL posting, SLA job, Hangfire
 **Walk me through the races you defend against.** (ARCHITECTURE-PLAN §6.1, written before the code)
 Four mechanisms. (1) Every change inside a claim touches the claim row, so two commands on one claim conflict on its RowVer → 409. (2) Unique indexes
 (ChangeSequence per component, idempotency key, one pending transaction per component) are the last word, and a duplicate key at commit is also a 409.
@@ -315,7 +692,7 @@ per-tenant error isolation in the recurring jobs (today one tenant's failure sto
 books; and an alert on GL_POSTING_FAILED.
 
 
-## Phase 5: documents
+### Phase 5: documents
 
 **Why does the upload command manage its own unit of work, when every other command gets it from the pipeline?**
 Because it does network I/O that must not sit inside a database transaction and must not be replayed with it. The blob is written first, outside any
@@ -383,7 +760,7 @@ A two-step flow: `POST /documents/upload-url` returns a short-lived write-only S
 checks the blob (size, sniffed type) and records the metadata. It removes 50 MB from the API's memory and bandwidth; the price is a pending state and a
 clean-up of uploads never completed.
 
-## Phase 6: Angular frontend
+### Phase 6: Angular frontend
 
 **The FRS asks for "lazy-loaded feature modules". You have no NgModules. Is that a deviation?**
 No, the intent is met: each feature (claims list, FNOL, claim detail) has one route file loaded with `loadChildren`, and `ng build` lists exactly three
@@ -438,7 +815,7 @@ but silently combines the time with *today*, because Angular writes a view chang
 driving the real form in a browser, not by the unit tests.
 
 
-## Phase 7: Azure and CI/CD
+### Phase 7: Azure and CI/CD
 
 **The brief lists App Service. Why is the API on Container Apps?**
 Brief §2.3 allows either; §3.8's list is a minimum. Hangfire polls SQL for as long as a server runs, so an always-on App Service keeps a serverless database awake

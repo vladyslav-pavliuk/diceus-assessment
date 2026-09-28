@@ -94,6 +94,30 @@ public sealed class ReserveApprovalTests
     }
 
     [Fact]
+    public void D_45_Self_rejection_is_refused_and_points_to_retract()
+    {
+        var claim = OpenClaim();
+        var transaction = Submit(claim, ReserveComponentType.Indemnity, 50_000m, submitter: Supervisor);
+
+        ShouldViolate(() => claim.RejectReserveTransaction(transaction.Id, "Changed my mind", Supervisor, Now))[ErrorKeys.ReserveApproval]
+            .ShouldBe(["Self-rejection is not permitted. Use Retract to withdraw your own pending reserve."]);
+        transaction.ApprovalStatus.ShouldBe(ReserveApprovalStatus.PendingApproval);
+
+        claim.RetractReserveTransaction(transaction.Id, Supervisor);
+        transaction.ApprovalStatus.ShouldBe(ReserveApprovalStatus.Cancelled);
+    }
+
+    [Fact]
+    public void D_45_Supervisor_self_rejecting_above_100000_gets_both_reasons()
+    {
+        var claim = OpenClaim();
+        var transaction = Submit(claim, ReserveComponentType.Indemnity, 150_000m, submitter: Supervisor);
+
+        ShouldViolate(() => claim.RejectReserveTransaction(transaction.Id, "Too high", Supervisor, Now))[ErrorKeys.ReserveApproval]
+            .ShouldBe([DomainMessages.SelfRejectionNotPermitted, DomainMessages.NoRejectionAuthority]);
+    }
+
+    [Fact]
     public void BR_R_04_Rejected_txn_is_retained_and_resubmission_creates_new_txn()
     {
         var claim = OpenClaim();

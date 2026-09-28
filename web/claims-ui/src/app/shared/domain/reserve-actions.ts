@@ -29,6 +29,9 @@ export const NO_APPROVAL_AUTHORITY_MESSAGE =
   'Your role does not have authority to approve this reserve amount.';
 export const NO_REJECTION_AUTHORITY_MESSAGE =
   'Your role does not have authority to reject this reserve amount.';
+/** D-45: the submitter withdraws their own pending transaction with Retract, not Reject. */
+export const SELF_REJECTION_MESSAGE =
+  'Self-rejection is not permitted. Use Retract to withdraw your own pending reserve.';
 
 export function reserveRowActions(
   row: ReserveHistoryEntry,
@@ -41,12 +44,15 @@ export function reserveRowActions(
   let approveBlockedReason: string | null = null;
   let rejectBlockedReason: string | null = null;
   if (showDecision && user) {
-    if (row.submittedByUserId === user.id) {
+    const ownRow = row.submittedByUserId === user.id;
+    if (ownRow) {
       approveBlockedReason = SELF_APPROVAL_MESSAGE;
     } else if (!canApproveTier(user.role, row.requiredAuthority)) {
       approveBlockedReason = NO_APPROVAL_AUTHORITY_MESSAGE;
     }
-    if (!canApproveTier(user.role, row.requiredAuthority)) {
+    if (ownRow) {
+      rejectBlockedReason = SELF_REJECTION_MESSAGE;
+    } else if (!canApproveTier(user.role, row.requiredAuthority)) {
       rejectBlockedReason = NO_REJECTION_AUTHORITY_MESSAGE;
     }
   }
