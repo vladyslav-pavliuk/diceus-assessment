@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace ClaimsModule.Persistence.Configurations;
 
-/// <summary>ClaimNumberCounters (D-10): one row per organisation and year; no seed, the first claim of a year inserts it.</summary>
+/// <summary>No seed: the first claim of a year inserts its row (D-10).</summary>
 internal sealed class ClaimNumberCounterConfiguration : IEntityTypeConfiguration<ClaimNumberCounter>
 {
     public void Configure(EntityTypeBuilder<ClaimNumberCounter> builder)

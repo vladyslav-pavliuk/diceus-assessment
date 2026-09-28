@@ -6,10 +6,7 @@ namespace ClaimsModule.Persistence.Repositories;
 
 internal sealed class ClaimRepository(ClaimsDbContext dbContext) : IClaimRepository
 {
-    /// <summary>
-    /// The full aggregate (D-39 Q2). A split query avoids the cartesian explosion of five collection
-    /// includes; the tenant and soft-delete filters apply to the root and to every child.
-    /// </summary>
+    /// <summary>A split query avoids the cartesian explosion of five collection includes.</summary>
     public Task<Claim?> GetAsync(Guid claimId, CancellationToken cancellationToken) =>
         dbContext.Claims
             .Include(claim => claim.LossEvent)

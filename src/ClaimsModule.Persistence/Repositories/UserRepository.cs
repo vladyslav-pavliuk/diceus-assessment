@@ -6,9 +6,8 @@ using Microsoft.EntityFrameworkCore;
 namespace ClaimsModule.Persistence.Repositories;
 
 /// <summary>
-/// The sign-in lookups run before the caller has a tenant (the token is what establishes it), so
-/// they bypass the tenant filter. EF Core 9's IgnoreQueryFilters removes the soft-delete filter too,
-/// so it is re-applied by hand (D-31, D-38 item 6). <see cref="GetInOrganisationAsync"/> keeps both filters.
+/// The sign-in lookups bypass the tenant filter, and IgnoreQueryFilters also drops soft delete, so that is re-applied
+/// by hand (D-31).
 /// </summary>
 internal sealed class UserRepository(ClaimsDbContext dbContext) : IUserRepository
 {

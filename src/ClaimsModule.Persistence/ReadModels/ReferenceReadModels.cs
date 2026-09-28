@@ -11,7 +11,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ClaimsModule.Persistence.ReadModels;
 
-/// <summary>Reference data (FRS §10.3). Cause codes are per organisation; the transition table is global (D-12).</summary>
 internal sealed class ReferenceDataQueries(ClaimsDbContext dbContext, IMapper mapper) : IReferenceDataQueries
 {
     public async Task<IReadOnlyList<CauseOfLossCodeDto>> ListCauseOfLossCodesAsync(PerilCategory? perilCategory, CancellationToken cancellationToken)
@@ -27,10 +26,7 @@ internal sealed class ReferenceDataQueries(ClaimsDbContext dbContext, IMapper ma
             .ToListAsync(cancellationToken);
     }
 
-    /// <summary>
-    /// BR-C-05. SQL Server compares case-insensitively, so the stored code is compared ordinally here: a
-    /// code is an exact identifier, and a claim should never store "col-fire" for "COL-FIRE".
-    /// </summary>
+    /// <summary>SQL Server compares case-insensitively, so the code is re-checked ordinally: it is an exact identifier.</summary>
     public async Task<bool> IsActiveCauseOfLossCodeAsync(string code, CancellationToken cancellationToken)
     {
         var stored = await dbContext.CauseOfLossCodes.AsNoTracking()
@@ -47,7 +43,6 @@ internal sealed class ReferenceDataQueries(ClaimsDbContext dbContext, IMapper ma
             .ToListAsync(cancellationToken);
 }
 
-/// <summary>The simulated policy lookup (FRS §5.5, §10.3). Tenant-scoped.</summary>
 internal sealed class PolicyQueries(ClaimsDbContext dbContext) : IPolicyQueries
 {
     public async Task<IReadOnlyList<PolicyDto>> SearchAsync(string term, int maxResults, CancellationToken cancellationToken) =>
@@ -60,8 +55,7 @@ internal sealed class PolicyQueries(ClaimsDbContext dbContext) : IPolicyQueries
     public Task<PolicyDto?> GetAsync(Guid policyId, CancellationToken cancellationToken) =>
         ToDtos(dbContext.Policies.AsNoTracking().Where(policy => policy.Id == policyId)).SingleOrDefaultAsync(cancellationToken);
 
-    // A hand-written projection: CoverageTypes is a JSON column behind a value converter, which EF
-    // reads as a whole but cannot translate the per-element copy ProjectTo would generate.
+    // Hand-written: EF cannot translate ProjectTo's per-element copy of the JSON CoverageTypes column.
     private static IQueryable<PolicyDto> ToDtos(IQueryable<Policy> policies) =>
         policies.Select(policy => new PolicyDto
         {
@@ -75,7 +69,7 @@ internal sealed class PolicyQueries(ClaimsDbContext dbContext) : IPolicyQueries
         });
 }
 
-/// <summary>Users of the caller's organisation (D-29, D-18). Both filters apply, unlike the sign-in lookups.</summary>
+/// <summary>Both filters apply, unlike the sign-in lookups.</summary>
 internal sealed class UserQueries(ClaimsDbContext dbContext, IMapper mapper) : IUserQueries
 {
     public async Task<IReadOnlyList<UserDto>> ListActiveAsync(UserRole? role, CancellationToken cancellationToken)

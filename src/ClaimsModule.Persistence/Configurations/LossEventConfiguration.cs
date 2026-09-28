@@ -7,7 +7,7 @@ using CauseOfLossCodeEntity = ClaimsModule.Domain.ReferenceData.CauseOfLossCode;
 
 namespace ClaimsModule.Persistence.Configurations;
 
-/// <summary>LossEvents (FRS §9.2). One per claim: the FK to Claims gets a unique index (D-13).</summary>
+/// <summary>One per claim, so the FK to Claims has a unique index (D-13).</summary>
 internal sealed class LossEventConfiguration : IEntityTypeConfiguration<LossEvent>
 {
     public void Configure(EntityTypeBuilder<LossEvent> builder)
@@ -22,8 +22,7 @@ internal sealed class LossEventConfiguration : IEntityTypeConfiguration<LossEven
         builder.Property(lossEvent => lossEvent.ReportDate).IsRequired();
         builder.Property(lossEvent => lossEvent.PoliceReportNumber).HasMaxLength(FieldLengths.PoliceReportNumber);
 
-        // FRS §9.2 "FK to CauseOfLossCodes.Code". Codes are per organisation (D-12), so the key is
-        // (OrganisationId, Code): a claim can only use a code of its own organisation (BR-C-05 backstop).
+        // Keyed on (OrganisationId, Code), so a claim can only use its own organisation's codes (BR-C-05 backstop).
         builder.HasOne<CauseOfLossCodeEntity>()
             .WithMany()
             .HasForeignKey(ShadowColumns.OrganisationId, nameof(LossEvent.CauseOfLossCode))

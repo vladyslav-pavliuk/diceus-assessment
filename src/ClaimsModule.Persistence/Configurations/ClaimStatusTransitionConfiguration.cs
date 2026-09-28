@@ -5,10 +5,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace ClaimsModule.Persistence.Configurations;
 
-/// <summary>
-/// ClaimStatusTransitions (FRS §4.2, D-09): global configuration, so no OrganisationId (D-12). Seeded
-/// from <see cref="ClaimStatusTransition.FrsDefaults"/>, the single declaration of the table.
-/// </summary>
+/// <summary>Global configuration, so no OrganisationId (D-12).</summary>
 internal sealed class ClaimStatusTransitionConfiguration : IEntityTypeConfiguration<ClaimStatusTransition>
 {
     public void Configure(EntityTypeBuilder<ClaimStatusTransition> builder)

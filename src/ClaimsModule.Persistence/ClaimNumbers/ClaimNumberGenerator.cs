@@ -7,17 +7,8 @@ using Microsoft.EntityFrameworkCore;
 namespace ClaimsModule.Persistence.ClaimNumbers;
 
 /// <summary>
-/// Gap-free, duplicate-free claim numbers (FRS §5.3, BR-C-04, D-10):
-/// <c>UPDATE … SET LastValue = LastValue + 1 OUTPUT INSERTED.LastValue</c> on the (organisation, year)
-/// counter row, inside the claim-creation transaction.
-/// <list type="bullet">
-/// <item>No duplicates: the UPDATE takes an exclusive lock on the row, so concurrent creates for the
-/// same organisation and year wait for each other until commit.</item>
-/// <item>No gaps: if the claim's transaction rolls back, the increment rolls back with it. A SQL
-/// SEQUENCE would not: it hands out values outside the transaction and loses its cache on restart.</item>
-/// </list>
-/// The first claim of a year finds no row and inserts (organisation, year, 1). If two such inserts
-/// race, the loser gets a primary-key violation once the winner commits and retries the UPDATE.
+/// UPDATE … OUTPUT INSERTED inside the claim-creation transaction (D-10). The row lock prevents duplicates, and a
+/// rollback undoes the increment, so there are no gaps. A SQL SEQUENCE would leave gaps on rollback or cache loss.
 /// </summary>
 internal sealed class ClaimNumberGenerator(ClaimsDbContext dbContext, ITenantContext tenantContext) : IClaimNumberGenerator
 {

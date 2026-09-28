@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace ClaimsModule.Persistence.Configurations;
 
-/// <summary>IdempotencyRecords (D-24, D-39 item 18). Not a domain entity: no soft-delete, audit columns or query filter (D-14).</summary>
+/// <summary>Not a domain entity, so no soft-delete, audit columns or query filter (D-14).</summary>
 internal sealed class IdempotencyRecordConfiguration : IEntityTypeConfiguration<IdempotencyRecord>
 {
     public void Configure(EntityTypeBuilder<IdempotencyRecord> builder)
@@ -23,10 +23,10 @@ internal sealed class IdempotencyRecordConfiguration : IEntityTypeConfiguration<
 
         builder.HasOne<Organisation>().WithMany().HasForeignKey(record => record.OrganisationId).OnDelete(DeleteBehavior.Restrict);
 
-        // One request per key and user (D-24); a second insert with the same pair is how a repeat is detected.
+        // A second insert with the same pair is how a repeat is detected (D-24).
         builder.HasIndex(record => new { record.UserId, record.Key }, "UX_IdempotencyRecords_UserId_Key").IsUnique();
 
-        // The retention clean-up (24h, Phase 4) deletes by age.
+        // The retention clean-up deletes by age.
         builder.HasIndex(record => record.CreatedAt, "IX_IdempotencyRecords_CreatedAt");
     }
 }

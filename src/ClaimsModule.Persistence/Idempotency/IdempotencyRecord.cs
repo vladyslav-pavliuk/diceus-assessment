@@ -1,10 +1,6 @@
 namespace ClaimsModule.Persistence.Idempotency;
 
-/// <summary>
-/// One request made with an Idempotency-Key (D-24). A web-layer bookkeeping row, not a business
-/// record, so it lives in Persistence (like the claim-number counter) and has no soft-delete or audit
-/// columns (D-14). A row with no <see cref="CompletedAt"/> is a request still in progress.
-/// </summary>
+/// <summary>A row without <see cref="CompletedAt"/> is a request still in progress (D-24).</summary>
 internal sealed class IdempotencyRecord
 {
     public const int KeyMaxLength = 200;
@@ -21,7 +17,7 @@ internal sealed class IdempotencyRecord
 
     public string Route { get; private set; } = null!;
 
-    /// <summary>SHA-256 (hex) of method, path, query and body: "the same request".</summary>
+    /// <summary>SHA-256 hex of method, path, query and body.</summary>
     public string RequestHash { get; private set; } = null!;
 
     public int? StatusCode { get; private set; }

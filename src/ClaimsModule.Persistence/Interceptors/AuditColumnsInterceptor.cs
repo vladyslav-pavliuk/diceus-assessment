@@ -8,14 +8,8 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 namespace ClaimsModule.Persistence.Interceptors;
 
 /// <summary>
-/// Fills the FRS §15.1 convention columns just before SaveChanges, so no handler sets them by hand:
-/// <list type="number">
-/// <item>Touches the Claim row whenever anything inside its aggregate changes, so the Claim RowVer
-/// serialises concurrent commands on one claim (ARCHITECTURE-PLAN §2.2).</item>
-/// <item>Stamps OrganisationId on new rows from the tenant scope and refuses cross-tenant writes (D-12, D-31).</item>
-/// <item>Sets CreatedAt/UserCreated on insert and UpdatedAt/UserModified on update (TimeProvider, UTC).</item>
-/// <item>Turns a delete into a soft delete (IsDeleted, DeletedAt).</item>
-/// </list>
+/// Fills the convention columns and turns deletes into soft deletes. It also touches the Claim row whenever anything in
+/// its aggregate changes, so the Claim RowVer serialises concurrent commands, and refuses cross-tenant writes (D-12).
 /// </summary>
 internal sealed class AuditColumnsInterceptor(TimeProvider timeProvider, ICurrentUser currentUser, ITenantContext tenantContext)
     : SaveChangesInterceptor
@@ -106,7 +100,7 @@ internal sealed class AuditColumnsInterceptor(TimeProvider timeProvider, ICurren
     {
         if (entry.Metadata.FindProperty(ShadowColumns.UserCreated) is null)
         {
-            // The audit log (its own CreatedAt/CreatedByUserId) and the claim-number counter have no audit columns (D-14).
+            // No audit columns on the audit log and the claim-number counter (D-14).
             return;
         }
 
@@ -118,7 +112,6 @@ internal sealed class AuditColumnsInterceptor(TimeProvider timeProvider, ICurren
                 break;
 
             case EntityState.Deleted:
-                // Soft delete (FRS §15.1): the row stays and disappears from queries through the filter.
                 entry.State = EntityState.Modified;
                 entry.Property(ShadowColumns.IsDeleted).CurrentValue = true;
                 entry.Property(ShadowColumns.DeletedAt).CurrentValue = now;

@@ -6,20 +6,12 @@ using Microsoft.EntityFrameworkCore;
 namespace ClaimsModule.Persistence.GlPosting;
 
 /// <summary>
-/// Compare-and-set moves of ReserveHistory.PostingStatus for the GL jobs (FRS §12.1, ARCHITECTURE-PLAN §6.1).
+/// Each move is one conditional UPDATE in the caller's transaction, so the row stays locked until the audit row commits.
+/// A concurrent run blocks on the lock, then re-evaluates the WHERE clause against the committed row and changes nothing,
+/// under READ_COMMITTED_SNAPSHOT too.
 /// <para>
-/// Each move is ONE conditional UPDATE: the WHERE clause is the check and the SET is the write, so there is no
-/// window between them. It runs in the caller's unit of work (EF enlists ExecuteUpdate in the open transaction),
-/// so the row keeps its exclusive lock until the audit row is committed with it. A concurrent run of the same job
-/// blocks on that lock; when it resumes, SQL Server evaluates the WHERE clause against the committed row, finds
-/// PostingStatus is no longer Pending, and changes 0 rows. That holds under READ COMMITTED and under
-/// READ_COMMITTED_SNAPSHOT (Azure SQL's default): an UPDATE never writes through a stale snapshot.
-/// </para>
-/// <para>
-/// ExecuteUpdate bypasses the change tracker and its interceptors on purpose: the claim row is not touched, so a
-/// system posting neither resets the SLA clock nor makes a user's concurrent edit fail with 409 (R10). The
-/// UpdatedAt/UserModified convention columns are therefore set here by hand (system actor = null, D-33).
-/// The tenant query filter still applies, and the job has set its tenant scope (D-31).
+/// ExecuteUpdate skips the interceptors on purpose: the claim row is not touched, so a system posting neither resets the
+/// SLA clock nor causes a user's edit to fail with 409. The convention columns are therefore set by hand.
 /// </para>
 /// </summary>
 internal sealed class GlPostingStore(ClaimsDbContext dbContext, TimeProvider timeProvider) : IGlPostingStore
@@ -39,7 +31,7 @@ internal sealed class GlPostingStore(ClaimsDbContext dbContext, TimeProvider tim
 
     public async Task<GlPostingTarget?> TryMarkFailedAsync(GlPostingRequest request, string? jobId, CancellationToken cancellationToken)
     {
-        // Same predicate as posting: Failed never overwrites Posted (R8).
+        // Same predicate as posting, so Failed never overwrites Posted.
         var changed = await Pending(request).ExecuteUpdateAsync(
             setters => setters
                 .SetProperty(transaction => transaction.PostingStatus, PostingStatus.Failed)
@@ -63,10 +55,8 @@ internal sealed class GlPostingStore(ClaimsDbContext dbContext, TimeProvider tim
             .ToListAsync(cancellationToken);
 
     /// <summary>
-    /// The row the job was enqueued for, if it is an approved transaction still waiting to be posted. All three
-    /// job arguments must match, so a job can only ever act on the exact change it was created for. Pending,
-    /// not "anything but Posted": a Failed posting is posted again only after the audited user retry puts it back
-    /// to Pending, so a stray duplicate job cannot bypass that step (R9, D-41).
+    /// All three job arguments must match. Pending rather than "not Posted": a Failed posting is posted again only after
+    /// the audited retry, so a stray duplicate job cannot bypass it (D-41).
     /// </summary>
     private IQueryable<ReserveTransaction> Pending(GlPostingRequest request) =>
         dbContext.ReserveHistory.Where(transaction =>

@@ -5,21 +5,17 @@ using ClaimsModule.Domain.Users;
 
 namespace ClaimsModule.Persistence.Seed;
 
-/// <summary>
-/// Fixed identifiers and values for HasData seeding (FRS §15.4: seed data via HasData or
-/// migrations, never startup code). GUID literals are allowed here and nowhere in application
-/// logic (FRS §15.4).
-/// </summary>
+/// <summary>The only place GUID literals are allowed (FRS §15.4).</summary>
 internal static class SeedData
 {
-    /// <summary>Constant CreatedAt for seeded rows, so the migration is deterministic.</summary>
+    /// <summary>Constant, so the migration is deterministic.</summary>
     public static readonly DateTimeOffset SeededAt = new(2026, 9, 27, 0, 0, 0, TimeSpan.Zero);
 
     public static readonly Guid OrganisationId = new("b49c0515-77a9-49ff-be76-2a1fcfdc144f");
 
     public const string OrganisationName = "Demo Insurance Company";
 
-    /// <summary>Two users per role, so self-approval and cross-approval can be demonstrated for every tier (D-16).</summary>
+    /// <summary>Two per role, so self-approval and cross-approval can be demonstrated for every tier (D-16).</summary>
     public static readonly IReadOnlyList<SeedUser> Users =
     [
         new(new Guid("415b998a-b77b-4d44-9a25-8f506dfd17e4"), "handler.alex", "Alex Carter", UserRole.Handler),
@@ -30,10 +26,7 @@ internal static class SeedData
         new(new Guid("3a97300c-8566-47a8-8e24-87ce3dae8759"), "manager.finley", "Finley Hayes", UserRole.Manager),
     ];
 
-    /// <summary>
-    /// FRS §5.5 exactly (the first five rows), plus three long-dated policies so the demo always has
-    /// in-force policies whatever the review date (D-34). Status per D-33.
-    /// </summary>
+    /// <summary>FRS §5.5, plus long-dated policies so the demo always has in-force ones (D-34).</summary>
     public static readonly IReadOnlyList<SeedPolicy> Policies =
     [
         new(new Guid("8281fb25-5cd6-4f26-b82e-72695950beb3"), "POL-2024-001001", "Meridian Transport LLC", new(2024, 1, 1), new(2026, 12, 31), PolicyStatus.Active, ["Vehicle", "Cargo"]),
@@ -48,7 +41,7 @@ internal static class SeedData
         new(new Guid("07a6b67a-e72d-4535-bd39-d299b55e434f"), "POL-2025-003003", "Keystone Manufacturing Co", new(2025, 1, 1), new(2030, 12, 31), PolicyStatus.Active, ["Property", "Equipment"]),
     ];
 
-    /// <summary>FRS §5.6 exactly, all active, in the FRS order.</summary>
+    /// <summary>FRS §5.6 exactly.</summary>
     public static readonly IReadOnlyList<SeedCauseOfLossCode> CauseOfLossCodes =
     [
         new(new Guid("997a4c70-15b9-49b4-9b50-210df0527a32"), "COL-FIRE", "Fire", PerilCategory.Property, "Structure or contents fire"),
@@ -63,10 +56,7 @@ internal static class SeedData
         new(new Guid("e597f02e-2d9f-4687-91b4-c7a02bcc4ef3"), "COL-OTHER", "Other / Unknown", PerilCategory.General, "Catch-all for uncategorised losses"),
     ];
 
-    /// <summary>
-    /// Fixed ids for the FRS §4.2 transition rows. The rows themselves come from
-    /// <see cref="ClaimStatusTransition.FrsDefaults"/>, so the table is declared once.
-    /// </summary>
+    /// <summary>Ids only: the rows come from <see cref="ClaimStatusTransition.FrsDefaults"/>.</summary>
     public static readonly IReadOnlyDictionary<(ClaimStatus From, ClaimStatus To), Guid> TransitionIds =
         new Dictionary<(ClaimStatus From, ClaimStatus To), Guid>
         {

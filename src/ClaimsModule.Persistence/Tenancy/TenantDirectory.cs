@@ -5,9 +5,7 @@ using Microsoft.EntityFrameworkCore;
 namespace ClaimsModule.Persistence.Tenancy;
 
 /// <summary>
-/// The cross-tenant lookups of the background jobs (D-31), kept in one place. A job has no user and therefore
-/// no tenant yet, so the tenant filter would hide everything. EF Core 9 has no way to lift only the tenant
-/// filter, and IgnoreQueryFilters() lifts the soft-delete filter too, so that condition is re-applied by hand.
+/// IgnoreQueryFilters() also lifts the soft-delete filter, so that condition is re-applied by hand (D-31).
 /// </summary>
 internal sealed class TenantDirectory(ClaimsDbContext dbContext) : ITenantDirectory
 {
