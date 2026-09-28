@@ -2,8 +2,8 @@
 
 - **Date:** 2026-09-28
 - **Tool:** Claude Code (desktop app), model Claude Opus 5.5.
-- **Scope:** the .NET backend (`src/**`), then the Angular app (`web/claims-ui/src/**`), then merging and pruning branches.
-- **Branches:** `refactor/backend-cleanup` and `refactor/frontend-cleanup`, both merged into `main` with `--no-ff` and deleted.
+- **Scope:** the .NET backend (`src/**`), then the Angular app (`web/claims-ui/src/**`), then merging and pruning branches, then one UI spacing fix.
+- **Branches:** `refactor/backend-cleanup`, `refactor/frontend-cleanup` and `fix/tab-actions-spacing`, each merged into `main` with `--no-ff` and deleted.
 
 ## 1. Prompts given (verbatim)
 
@@ -31,6 +31,22 @@ the fronted mostly looks clean, the only things I don't like are:
 then merge fe feature branch to main too, remove all other branches which were merged to main too (local and remote).
 
 log this conversation to docs/ai-logs as phase-refinement.
+```
+
+### Prompts 3–5: UI fix, push, this log entry
+
+```
+one small ui issue, please add top margin for the button.
+```
+
+(with a screenshot of the claim detail's **Link policy** button touching the policy search field above it)
+
+```
+yes, push it
+```
+
+```
+add this fix to the phase-refinement log
 ```
 
 ## 2. What was generated: backend
@@ -80,13 +96,23 @@ log this conversation to docs/ai-logs as phase-refinement.
   `phase-1-skeleton`, `phase-5-documents`, `phase-6-frontend`, `phase-7-azure`, `phase-8-review`, `refactor/backend-cleanup`, `refactor/frontend-cleanup`.
   The remote had only `main`, so there was no remote branch to delete.
 
-## 5. Verification
+## 5. Follow-up: Link policy button spacing
+
+- **Cause, measured in the running app** (the dev server on :4200 with the Docker API): the `.tab__actions` row started at exactly the pixel where
+  the policy field's outline ended. The field's hint/error area rendered 0 px tall, and the `app-policy-typeahead` host is `display: inline`, so
+  nothing separated them. The notes textarea and its **Save notes** / **Discard** row (the only other `.tab__actions` use) had the same zero gap.
+- **Fix:** `margin-top: 12px` on the shared `.tab__actions` rule in `tabs.scss`, so both rows are fixed. After hot reload the measured gap was 12 px,
+  and a screenshot confirmed it. Pre-existing since `fd3a78a` (Phase 6), not caused by this refactor.
+- **Delivery:** `fix/tab-actions-spacing` → `main` (`4cbb1ed`), branch deleted. The push waited for Vlad's explicit "yes, push it".
+
+## 6. Verification
 
 - `dotnet build`: 0 warnings, 0 errors (warnings are errors).
 - `dotnet test`: **695/695** (326 domain, 89 application, 280 integration).
 - `ng build`: no warnings. `ng test`: **100/100** (11 files). `ng lint`: all files pass.
+- After the spacing fix: `ng build` clean (a style-only change).
 
-## 6. What the AI got wrong
+## 7. What the AI got wrong
 
 1. **Ran the tests on a runtime that is not installed, again.** The first `dotnet test` aborted every test host, the same mistake as in Phase 8.
    It was re-run with `DOTNET_ROLL_FORWARD=Major`.
@@ -96,8 +122,11 @@ log this conversation to docs/ai-logs as phase-refinement.
    `[DisableConcurrentExecution]` attribute by hand.
 3. **Trimmed one comment too far.** In `party-form.ts`, "the name rules read the type: re-check them whenever it changes" was first cut to "the name
    rules read the type", which loses the point. Restored before committing.
+4. **Missed the spacing bug.** The frontend pass checked builds, tests and lint but no rendered screens, so the button touching the field above it
+   was found by Vlad, not by the AI.
 
-## 7. What Vlad changed or rejected
+## 8. What Vlad changed or rejected
 
 - After reviewing the backend refactor, Vlad accepted it as delivered (no changes) and asked for it to be merged and pushed.
 - For the frontend, Vlad set the direction: templates in separate files, and the same comment policy as the backend.
+- Vlad found the Link policy spacing issue by eye and asked for a top margin; the fix went in as asked.
