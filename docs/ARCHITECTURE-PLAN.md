@@ -198,13 +198,34 @@ apply to every table they read.
 2. **ValidationBehavior**: runs all `IValidator<TRequest>`, aggregates the errors, and throws `ValidationException` → 422 with the FRS §10.4 shape. It runs
    before any transaction is opened.
 3. **UnitOfWorkBehavior**: only for `ICommand<TResponse>`; queries skip it. It owns the transaction, commit, and event dispatch phases (§4).
+   One exception (Phase 5, D-42 Q1): a command marked `IHandlesOwnUnitOfWork` (the document upload) is let through, and its handler calls
+   `IUnitOfWork` once itself, because the blob upload must happen outside the transaction (§5.1).
 
 Not a MediatR behaviour:
 - **Idempotency** is an ASP.NET resource filter (`IdempotencyFilter`), because it stores an HTTP response (D-24). It runs before model
-  binding (to hash the raw body) and wraps result execution (to capture the bytes sent). Only 2xx responses are stored (D-40 item 12).
+  binding (to hash the raw body, or a form by its content, D-42 item 18) and wraps result execution (to capture the bytes sent). Only 2xx
+  responses are stored (D-40 item 12).
 - **Lenient JSON converters** (unknown enum → undefined, unparseable optional date → null) keep binding from rejecting values, so the
   validator words every 422 as FRS §8 does (D-40 item 3).
 - **Authorization** by role is an endpoint policy, plus domain checks for data-dependent authority (D-25).
+
+### 5.1 Document upload flow (Phase 5, D-42)
+```
+POST /api/claims/{id}/documents (multipart, ≤ 51 MB body; larger → 413 before reading)
+  └─ ClaimDocumentsController → ISender.Send(UploadClaimDocumentCommand)       [IHandlesOwnUnitOfWork]
+       ├─ LoggingBehavior → ValidationBehavior (file present, 1 B–50 MB, name/notes length, type)
+       └─ UploadClaimDocumentCommandHandler
+            1. SanitisedFileName (NFKC, last segment, invisible chars)  → DocumentFormat.Resolve (extension allowlist, declared type)
+               → DocumentContentInspector (magic bytes / OOXML directory / no binary bytes)          ── 422 "File", nothing stored
+            2. IClaimQueries.GetStatusAsync: missing/foreign → 404, Closed/Withdrawn → 422             ── nothing stored
+            3. IStorageService.UploadAsync({org}/{claim}/{docId}_{name}, canonical type, no overwrite)  ── outside any transaction
+            4. IUnitOfWork: load Claim → Claim.AddDocument (re-checks read-only, path belongs to claim)
+                 → before commit: DOCUMENT_UPLOADED audit → SaveChanges → COMMIT
+            5. on failure in 4: row exists? keep blob : IStorageService.DeleteAsync                   ── then rethrow
+            6. sign a 1-hour download URL → 201 DocumentDto
+GET /documents, GET /documents/{docId}/url → one SQL read → URLs signed locally (SAS, or HMAC token for the local fallback)
+Browser → SAS URL → Blob Storage (the API never serves the bytes; the local fallback's dev-only endpoint is the documented exception)
+```
 
 ---
 

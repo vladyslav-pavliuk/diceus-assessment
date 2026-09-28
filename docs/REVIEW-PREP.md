@@ -314,3 +314,71 @@ A real ledger client with the key (above); Hangfire's schema installed by the de
 per-tenant error isolation in the recurring jobs (today one tenant's failure stops the run, and the next run retries); batching the SLA insert for very large
 books; and an alert on GL_POSTING_FAILED.
 
+
+## Phase 5: documents
+
+**Why does the upload command manage its own unit of work, when every other command gets it from the pipeline?**
+Because it does network I/O that must not sit inside a database transaction and must not be replayed with it. The blob is written first, outside any
+transaction; then one unit of work records the metadata and the DOCUMENT_UPLOADED audit row. Inside the pipeline's transaction, a 50 MB upload would hold a
+pooled connection and an open transaction, and an execution-strategy retry (transient Azure SQL error) would run the handler again with a request stream that
+can be read only once. The marker `IHandlesOwnUnitOfWork` makes this the one visible exception; it is still one transaction, with the same event dispatch (D-42 Q1).
+
+**What if the metadata commit fails after the blob is written?**
+The handler deletes the blob, unless the document row exists after all: a commit can succeed on the server while its acknowledgement is lost, and deleting then
+would leave a row without a file. "When in doubt keep the blob": an orphan blob is invisible and harmless, a missing blob is a lost document. If the process dies
+between upload and commit, the orphan stays; a Storage lifecycle rule or a sweep comparing blobs with rows would remove it (not built). Tests: `DOC_09_*`.
+
+**How do you stop path traversal?**
+Three layers. (1) `SanitisedFileName` keeps only the last path segment after NFKC normalisation, so `../`, `C:\`, UNC paths and fullwidth `．．／` all collapse
+to a plain name; it also removes bidi overrides and zero-width characters and neutralises slash look-alikes. (2) `DocumentBlobPath` is always
+`{orgGuid}/{claimGuid}/{docGuid}_{name}`: three segments, and the last one starts with a 36-character GUID, so even a name of `..` cannot become a
+segment. (3) The local provider resolves every path and refuses anything outside its root; Azure has no directories to escape, and the aggregate refuses a path
+of another claim. Mutation checks: switching NFKC back to NFC fails 15 tests; removing the local containment check fails 8.
+
+**Why NFKC and not NFC?**
+NFC only composes accents. NFKC also folds compatibility characters: fullwidth `．` and `／`, `‥` (two dot leader), ligatures. Those are exactly the "looks
+harmless now, becomes `../` later" characters. The cost is that a few legitimate characters change (`ﬁ` becomes `fi`), which is acceptable for a file name (D-42 Q2).
+
+**The Content-Type header is set by the client. How do you know a "PDF" is a PDF?**
+Three checks: the extension must be on the allowlist; the declared type must not contradict it; and the bytes are sniffed. PDF, JPEG and PNG have
+signatures at offset 0. DOCX and XLSX are ZIPs whose directory must hold `[Content_Types].xml` and `word/document.xml` or `xl/workbook.xml`, with no
+`vbaProject.bin` (a renamed macro file). Text has no signature, so TXT/CSV must contain no binary bytes anywhere. The stored and served type is the
+canonical one for the format, never the client's string.
+
+**Can someone upload HTML as a .txt and get it executed?**
+It passes sniffing, because it is text. But it is stored and served as `text/plain`, as an attachment (only PDF and images are inline), with the headers
+fixed inside the signature, and the local endpoint adds `nosniff`. The browser downloads it; it never renders it.
+
+**How is the SAS built, and why is there no account key in Azure?**
+In Azure the API authenticates with its managed identity (DefaultAzureCredential) and asks Storage for a user delegation key, then signs a user-delegation SAS
+with it: read-only, one blob, valid from 5 minutes ago (clock skew) to one hour from now, HTTPS only, with the content type and disposition fixed. The key is
+cached for a day and renewed before it would expire under a new SAS, so the list costs no extra Storage call per document. With a connection string
+(Azurite), the same SAS is signed with the account key.
+
+**Can you revoke a SAS before its hour is up?**
+Not individually: there is no stored access policy. The options are revoking all user delegation keys of the account (every delegation SAS dies at once), or
+rotating the account key for account-key SAS. For one-hour, read-only, one-blob links that is the usual trade-off; a stored access policy would allow
+revocation per container, but user-delegation SAS cannot use one.
+
+**The FRS says bytes are never proxied through the API. The local fallback streams them. Is that a violation?**
+It is the one documented deviation (D-28), limited to the development-only provider: a local disk has no SAS. The link still behaves like one: an HMAC-signed
+token naming one file, its headers and its expiry, under a random per-process key. The endpoint exists only when the provider is LocalFileSystem, and
+start-up refuses that provider outside Development.
+
+**What happens to a 60 MB upload?**
+The endpoint allows 51 MB of request body (50 MB plus the multipart envelope). A body declared larger gets 413 from a resource filter before anything reads it.
+A file between 50 MB and 51 MB is read and gets the validator's 422 "The file must not exceed 50 MB.". Exactly 50 MB is accepted. The first container run showed
+that without the filter, Kestrel's 413 was swallowed by form binding and came back as a 422 with an empty key.
+
+**Does Idempotency-Key work for uploads?**
+It did not until this phase: the filter hashed the raw body, and a multipart body has a random boundary, so a browser retry never matched. Forms are now hashed
+by content (fields, file names, content types, SHA-256 of each file), so a retried upload replays the first response, and the same key with a different file is a 422.
+
+**How would you scan uploads for malware?**
+Microsoft Defender for Storage (malware scanning on upload) with its result written to blob index tags, and the list/URL endpoints refusing to sign a blob not
+yet marked clean; or an Event Grid–triggered scanner. The upload flow stays the same; the document would get a `ScanStatus` column.
+
+**How would you let the browser upload straight to Blob Storage?**
+A two-step flow: `POST /documents/upload-url` returns a short-lived write-only SAS for the reserved path; the browser PUTs the file; `POST /documents/{id}/complete`
+checks the blob (size, sniffed type) and records the metadata. It removes 50 MB from the API's memory and bandwidth; the price is a pending state and a
+clean-up of uploads never completed.

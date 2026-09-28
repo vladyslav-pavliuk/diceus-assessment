@@ -54,6 +54,7 @@ Markers used below:
 | D-39 | Phase 2 domain and schema choices (+ two open questions) | ACCEPTED |
 | D-40 | Phase 3 API, read-side and pipeline choices (+ two decisions by Vlad) | PROPOSED (Q1, Q2 ACCEPTED) |
 | D-41 | Phase 4 reserves, GL posting, SLA job and Hangfire choices (+ two decisions by Vlad) | PROPOSED (Q1, Q2 ACCEPTED) |
+| D-42 | Phase 5 documents: upload orchestration, sanitising, allowlist and sniffing, SAS, local fallback (+ three open questions) | PROPOSED |
 
 ---
 
@@ -691,6 +692,7 @@ Uploading a second file with the same name would silently **overwrite** the firs
 - **Blob name** `{organisationId}/{claimId}/{documentId}_{sanitisedFileName}` in container `claim-documents`. **DEVIATION:** the `{filename}` segment is
   prefixed with the document id, which prevents overwrites. `DocumentName` keeps the original name for display.
 - **Sanitisation:** strip directory components, reject `..`, control characters and reserved names, normalise Unicode (NFC), and cap the length at 200 characters.
+  **Amended by D-42 Q2 (PROPOSED):** NFKC instead of NFC, and format characters (bidi overrides, zero-width) and slash look-alikes are removed too.
 - **Local fallback:** files go under `{ContentRoot}/uploads/{org}/{claim}/…`. Downloads use a dev-only endpoint `GET /api/local-files/{token}`, where the token
   is an HMAC-signed, 1h-expiring token that emulates a SAS. This *does* stream through the API, which is unavoidable for a local filesystem. It is
   documented as a **DEVIATION from BR-D-02, limited to the fallback provider**. The Azure provider never proxies bytes.
@@ -884,7 +886,8 @@ NetArchTest.Rules. Versions are pinned in `Directory.Packages.props`. The exact 
 | Hangfire.Core, Hangfire.NetCore, Hangfire.SqlServer, Hangfire.AspNetCore | 1.8.25 | LGPL-3.0 (LICENSE.md in the package) | added in Phase 4 (D-41); used unmodified as a library |
 | Newtonsoft.Json (transitive pin) | 13.0.4 | MIT | Hangfire.Core asks for ≥ 11.0.1; versions below 13.0.1 carry GHSA-5crp-9r3c-p9vr (high), which the NuGet audit fails on |
 | Microsoft.Extensions.Hosting.Abstractions | 9.0.20 | MIT | Infrastructure's hosted service; pinned so Hangfire.NetCore's 3.0.0 floor is not used |
-| Azure.Storage.Blobs 12.x, Azure.Identity 1.x | — | MIT / MIT | added in Phase 5 |
+| Azure.Storage.Blobs, Azure.Identity | 12.27.0, 1.17.2 | MIT / MIT | added in Phase 5 (D-42 item 19): the last versions on Azure.Core 1.50.0, whose dependencies stay on Microsoft.Extensions 8.x; later Azure.Core needs Microsoft.Extensions 10.x (NU1109 against the 9.0.20 pins). Transitive pinning also lifts SqlClient's Azure.Identity 1.12.1 → 1.17.2 and Azure.Core 1.41.0 → 1.50.0 |
+| Testcontainers.Azurite | 4.15.0 | MIT | Phase 5, integration tests only |
 
 **Amendment (2026-09-27): AutoMapper 14.0.0 has CVE-2026-32933 / GHSA-rvv3-g6hj-g44x (high).** Mapping a deeply self-referencing object graph
 (about 25,000 levels) overflows the stack and kills the process. Affected: every version below 15.1.1 (and 16.0.0–16.1.0). **No 14.x patch exists**; the
@@ -1193,3 +1196,95 @@ FRS business rule.
 container smoke run recorded in `docs/ai-log/phase-4.md`), so none is a silent choice.
 **Status:** PROPOSED (2026-09-28). Q1 and Q2 ACCEPTED by Vlad (2026-09-28); items 1–19 await review.
 
+## D-42 — Phase 5 documents
+**Context.** Phase 5 built document upload, listing and download (FRS §7.4, §9.7, §10.1, §13; brief §3.6) on top of D-28. Three points depart
+from text that was already written down or are judgement calls a reviewer will probe, so they are open questions for Vlad (Q1–Q3), implemented as
+recommended; each is a small change to reverse. The other items are choices where the FRS and the brief say nothing, or refinements of D-24/D-28.
+One Phase 3 defect was found and fixed (item 18).
+
+**Open questions.**
+- **Q1. Upload orchestration: blob first, metadata second, and the handler runs its own unit of work.**
+  - (a) Upload inside the command's transaction (the UnitOfWorkBehavior as for every other command). Network I/O of up to 50 MB then runs while a
+    database transaction and a pooled connection are held, and an execution-strategy replay (D-36, transient Azure SQL errors) runs the handler again:
+    the request stream can be read only once, and a new document id would leave the first blob behind.
+  - (b) Metadata first, then upload. A failed upload after commit leaves a row pointing at no blob: a document the UI lists but nobody can open.
+  - (c) **Blob first, then one unit of work for the metadata; if that fails, delete the blob, unless the row exists after all** (a commit whose
+    acknowledgement was lost). The command implements the marker `IHandlesOwnUnitOfWork`; `UnitOfWorkBehavior` lets it through, and the handler calls
+    `IUnitOfWork.ExecuteInTransactionAsync` once. The database part is still exactly one transaction, with the same before/after-commit dispatch
+    (CLAUDE.md rules 4 and 5), and still no `SaveChanges` in a handler. A process crash between upload and commit leaves an **orphan blob**: invisible
+    (no row points to it), harmless, and removable by a lifecycle rule (not built). "When in doubt keep the blob": an orphan wastes bytes, a missing
+    blob loses a document.
+  - Before uploading, the handler checks the claim's status through the read model, so a missing, foreign (404) or read-only (TR-13, 422) claim never
+    touches storage; the aggregate re-checks inside the transaction, so a claim closed in between still gets a 422 and the blob is removed.
+  - **Recommendation: (c).** Tests: `DOC_09_*` (Application, with fakes, and HTTP with a commit forced to fail), mutation-checked.
+- **Q2. Sanitising: NFKC instead of D-28's NFC, plus invisible and look-alike characters.** The Phase 5 prompt asks for tests against "unicode
+  tricks". NFC does not fold compatibility characters, so a fullwidth `．．／` survives it as three harmless-looking characters that another component
+  (a file system, a sync tool, a later NFKC step) may turn into `../`. The sanitiser now: drops unpaired surrogates (which make `string.Normalize` throw:
+  a 500), normalises to **NFKC** *before* looking for separators, removes control, format (bidi overrides such as U+202E, zero-width, BOM) and
+  line/paragraph separator characters, and replaces the slash look-alikes NFKC keeps (∕ ⁄ ⧸ ⧹ ∖) with `_`. Cost: NFKC also changes some legitimate
+  characters (`ﬁ` → `fi`, `²` → `2`, fullwidth letters → ASCII) in the stored name. **Recommendation: accept.** D-28 amended.
+- **Q3. `DocumentName` stores the sanitised name, not the raw client string.** FRS §9.7 says "Filename as uploaded". For every ordinary name the two are
+  identical. For a name with a path, invisible characters or reserved characters, the raw string would reach the UI and the logs (a bidi override makes
+  `invoice‮fdp.exe` display as `invoiceexe.pdf`). **DEVIATION**, minor. **Recommendation: store and show the sanitised name**; the raw string is never
+  persisted or echoed. It is also the name offered on download.
+
+**Choices (ASSUMPTION unless cited).**
+1. **Allowlist (FRS §13) = `DocumentFormat` in the Domain:** PDF, JPEG, PNG, DOCX, XLSX, TXT, CSV. The **extension** claims the format; the declared
+   Content-Type may confirm it (including known aliases: `image/jpg`, `image/pjpeg`, `image/x-png`, `application/x-pdf`, and for .csv
+   `application/vnd.ms-excel`, which Windows browsers send when Excel is installed), may say nothing (empty, `application/octet-stream`), but may not
+   contradict it (422 "The declared content type does not match the file extension."). The stored and served type is always the canonical MIME type of the
+   format, never the client's string. The aggregate refuses a non-allowlisted extension too.
+2. **Content sniffing (DOC-05)** in the Application, before anything is stored (422 "The file content does not match its type."):
+   PDF `%PDF-`, JPEG `FF D8 FF`, PNG the 8-byte signature, all at offset 0; DOCX/XLSX a ZIP whose central directory has `[Content_Types].xml` and
+   `word/document.xml` / `xl/workbook.xml` and **no `vbaProject.bin`** (a renamed .docm/.xlsm is refused); nothing is decompressed. TXT/CSV have no
+   signature, so the rule is "no binary bytes" over the **whole** file (no NUL, no C0 control except tab, LF, FF, CR): UTF-8 and single-byte encodings
+   pass, UTF-16 does not. An HTML page named `.txt` passes, and is harmless because of item 3.
+3. **Only PDF and images are shown inline**; everything else downloads as an attachment. The content type and `Content-Disposition` (RFC 6266,
+   `filename*` for Unicode) are **part of the signed URL** (SAS `rsct`/`rscd`; fields of the local token), so the browser gets exactly these whatever it
+   asks for. The local endpoint also sends `X-Content-Type-Options: nosniff`.
+4. **`documentType` is optional and defaults to `Other`**: the FRS §11.3 upload button is only a file picker. An unknown name gets the framework's
+   model-binding 422 (same body shape; D-40 item 3 precedent for non-JSON binding).
+5. **Error keys are the form fields:** `File` (missing, empty, over 50 MB, name, type, content), `DocumentType`, `Notes` (D-40 item 4).
+6. **50 MB (DOC-06):** 52,428,800 bytes is allowed, one byte more is a 422 from the validator (the aggregate checks it too). The endpoint raises
+   Kestrel's body limit to 51 MB (`[RequestSizeLimit]`, `[RequestFormLimits]`) for the multipart envelope. A body declared larger than that gets **413**
+   (`PayloadTooLarge` problem body) from `[RejectBodiesLargerThan]`, a resource filter that runs first and looks only at Content-Length. Without it,
+   Kestrel's 413 is caught by MVC form binding and surfaces as a 422 with an empty key and framework wording (found in the container smoke run, see
+   `docs/ai-log/phase-5.md`). A chunked body without Content-Length still meets Kestrel's limit through binding.
+7. **SAS (BR-D-02):** read-only, one blob, start = now − 5 min (clock skew), expiry = now + 1 h in whole seconds (the URL's own precision; the returned
+   `expiresAt` is the one in the URL), HTTPS-only when the endpoint is HTTPS (Azurite is HTTP). Account-key SAS when configured with a connection string
+   (Azurite); **user-delegation SAS** when configured with a service URI (DefaultAzureCredential, the Container App's managed identity, D-36): no account
+   key anywhere. The delegation key is cached for a day and renewed before it would expire under a new SAS, so the list costs no Storage call per
+   document. A SAS cannot be revoked before it expires (no stored access policy); REVIEW-PREP explains the options.
+8. **Never overwrite:** Azure uploads are conditional (`If-None-Match: *`), local files use `FileMode.CreateNew`. The document id in the name makes a
+   collision impossible anyway (D-28); this makes it enforced.
+9. **Container** `claim-documents` is created on first use (`CreateIfNotExists`, private); in Azure the template creates it (Phase 7) and the call is a no-op.
+10. **Local fallback (BR-D-03) is development-only:** start-up validation refuses `Storage:Provider=LocalFileSystem` outside Development (a Container
+    App's disk is per replica and lost on restart), and the download endpoint `GET /api/local-files/{token}` is mapped only with that provider. The token
+    is the SAS stand-in: path, expiry and response headers, signed with HMAC-SHA256 under a random per-process key (links die with a restart), checked in
+    constant time; forged, edited, expired and dangling links all get the same 403. Anonymous, like a SAS: a new browser tab cannot send the Bearer
+    header. Every object path is also checked to stay inside the root (relative, forward slashes, no empty/./.. segments, full path under the root).
+11. **Provider selection** at resolve time from `Storage:Provider`, so a test host switches provider with configuration alone. Both implementations are
+    singletons (container flag and delegation key cache; the token key). A non-development host without exactly one of
+    `Storage:AzureBlob:ConnectionString` / `ServiceUri` refuses to start.
+12. **Development default = LocalFileSystem** (FRS §13 "not configured (local dev)"): `dotnet run` needs only SQL Server. Azurite is one variable
+    away (`Storage__Provider=AzureBlob`; the `UseDevelopmentStorage=true` connection string is preset). The compose `app` profile uses the container's disk
+    (`/home/app/uploads`, writable by the non-root user), because Azurite's SAS URLs would name the host `azurite`, which a browser cannot resolve.
+13. **Endpoints:** `POST /claims/{id}/documents` → 201 with the document **and a download URL**, no Location (as for parties, D-40 item 7);
+    `GET /claims/{id}/documents` → every document, newest first, each with a fresh URL (one SQL query plus the claim check; URLs are signed locally);
+    `GET /claims/{id}/documents/{documentId}/url` (D-08) → a fresh URL. The claim detail (API-03) keeps metadata only. Handler policy (all roles, FRS §3).
+14. **Audit** DOCUMENT_UPLOADED: RelatedEntityId = document id (FRS §13), NewValue `{documentName, documentType, contentType, fileSizeBytes}`.
+15. **`ClaimDocument` invariants:** the blob path must belong to the same claim (a row can never point into another claim's folder), and the id is
+    the path's document id. `DocumentBlobPath` is a Domain value object: exactly three segments, GUID/GUID/`{guid}_{sanitised name}`.
+16. **No schema change:** ClaimDocuments already matched FRS §9.7. No migration.
+17. **The blob path never leaves the API.** Clients see document ids and signed URLs only.
+18. **Defect found in Phase 3 (D-24/D-40 item 12): Idempotency-Key never matched a retried multipart request.** The request hash covered the raw body,
+    and a multipart body carries a random boundary, so a browser retry (a new `FormData`) was always "a different request" (422). Forms are now hashed
+    **by content** (every field value; every file's field name, file name, content type and SHA-256), length-prefixed, in a fixed order. JSON bodies are
+    unchanged. Tests: `API_IDEMP_A_repeated_upload_with_the_same_key_stores_one_document`, `API_IDEMP_The_same_key_with_a_different_file_is_rejected`.
+19. **Package versions (D-37):** Azure.Storage.Blobs 12.27.0 and Azure.Identity 1.17.2, the newest on Azure.Core 1.50.0. Azure.Core 1.51+ depends on
+    Microsoft.Extensions 10.x, which conflicts with the .NET 9 pins (NU1109 with central transitive pinning). Revisit when the solution moves to .NET 10.
+20. **Azurite runs with `--skipApiVersionCheck`** (compose and tests): the SDK may send a newer REST API version than the image supports.
+
+**Rationale.** Each item is small and reversible, and each is covered by a test named after its rule, so none is a silent choice. Q1–Q3 are flagged
+because they change written text (CLAUDE.md rule 4's "every command", D-28's NFC, FRS §9.7's wording).
+**Status:** PROPOSED (2026-09-28): Q1–Q3 and items 1–20 await review.
