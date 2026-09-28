@@ -3,9 +3,8 @@ using ClaimsModule.Domain.Claims;
 namespace ClaimsModule.Application.Abstractions.Persistence;
 
 /// <summary>
-/// Loads and adds Claim aggregates for commands. Always the whole aggregate, including every reserve
-/// transaction, so the domain checks its rules against complete data (D-39 Q2). Saving is the Unit of
-/// Work's job; there is no Update or Delete here. Reads for screens are query projections, not this.
+/// Always loads the whole aggregate, including every reserve transaction, so rules see complete data (D-39).
+/// Saving is the Unit of Work's job.
 /// </summary>
 public interface IClaimRepository
 {

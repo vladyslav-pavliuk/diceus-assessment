@@ -3,18 +3,9 @@ using ClaimsModule.Domain.Common;
 namespace ClaimsModule.Domain.Reserves;
 
 /// <summary>
-/// One reserve transaction: a row of the append-only ReserveHistory table (FRS §6.6, §9.6).
-/// <para>
-/// Amount-immutable, not row-immutable (D-22): the amount, balances, sequence, key and submitter are
-/// fixed at submission and guarded by a SaveChanges interceptor; only the approval and posting
-/// columns move, once, through the methods below. A change of amount is always a new row.
-/// </para>
-/// <para>
-/// GL posting (FRS §6.5, §12.1): Pending → Posted, or Pending → Failed once the job's retries are
-/// exhausted. Those two moves are made by the GL job as compare-and-set UPDATEs in the database
-/// (ARCHITECTURE-PLAN §6.1 R6/R8), not through this class, because the check and the write must be one
-/// atomic statement. The only move made here is the user's retry, Failed → Pending.
-/// </para>
+/// A row of the append-only ReserveHistory. Amount-immutable, not row-immutable (D-22): only the approval
+/// and posting columns change, once each. The GL job moves posting Pending → Posted/Failed with
+/// compare-and-set UPDATEs in the database, so the only posting move here is the user's retry.
 /// </summary>
 public sealed class ReserveTransaction : Entity
 {
@@ -29,12 +20,12 @@ public sealed class ReserveTransaction : Entity
 
     public Guid ReserveComponentId { get; private set; }
 
-    /// <summary>Denormalised from the component for query convenience (FRS §9.6).</summary>
+    /// <summary>Denormalised from the component.</summary>
     public Guid ClaimId { get; private set; }
 
     public ReserveTransactionType TransactionType { get; private set; }
 
-    /// <summary>The signed delta: positive increases the reserve, negative decreases it (FRS §9.6).</summary>
+    /// <summary>Signed delta.</summary>
     public decimal Amount { get; private set; }
 
     public decimal PreviousBalance { get; private set; }
@@ -45,7 +36,7 @@ public sealed class ReserveTransaction : Entity
 
     public ApprovalAuthority RequiredAuthority { get; private set; }
 
-    /// <summary>True when approving this transaction would take the claim over the $10M limit (BR-R-05).</summary>
+    /// <summary>Approving it would take the claim over the $10M limit (BR-R-05).</summary>
     public bool ExceedsAggregateLimit { get; private set; }
 
     public Guid? ApprovedByUserId { get; private set; }
@@ -72,10 +63,8 @@ public sealed class ReserveTransaction : Entity
 
     public bool IsPending => ApprovalStatus == ReserveApprovalStatus.PendingApproval;
 
-    /// <summary>Approved and AutoApproved both count toward the balance (D-11, D-21).</summary>
     public bool IsApproved => ApprovalStatus is ReserveApprovalStatus.Approved or ReserveApprovalStatus.AutoApproved;
 
-    /// <summary>The GL job gave up on this approved transaction; a user may retry it (D-08).</summary>
     public bool IsPostingFailed => IsApproved && PostingStatus == PostingStatus.Failed;
 
     internal static ReserveTransaction Submit(
@@ -106,7 +95,7 @@ public sealed class ReserveTransaction : Entity
             RequiredAuthority = requiredAuthority,
             ExceedsAggregateLimit = exceedsAggregateLimit,
 
-            // Auto-approval has no approving user (ASSUMPTION, D-39); the status says who decided.
+            // Auto-approval has no approving user; the status says who decided (D-39).
             ApprovedAt = autoApproved ? now : null,
             ChangeReason = changeReason,
             PostingStatus = PostingStatus.Pending,
@@ -134,7 +123,7 @@ public sealed class ReserveTransaction : Entity
         PostingStatus = PostingStatus.Cancelled;
     }
 
-    /// <summary>A failed GL posting goes back to Pending, so the GL job can post it again (D-08 retry-posting).</summary>
+    /// <summary>Failed → Pending, so the GL job posts it again (D-08).</summary>
     internal void RequeuePosting()
     {
         if (!IsPostingFailed)

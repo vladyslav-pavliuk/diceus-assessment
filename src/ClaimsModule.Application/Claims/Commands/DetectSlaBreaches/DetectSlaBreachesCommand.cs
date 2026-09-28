@@ -9,11 +9,8 @@ using MediatR;
 namespace ClaimsModule.Application.Claims.Commands.DetectSlaBreaches;
 
 /// <summary>
-/// The body of SlaMonitoringJob (FRS §12.2, D-01), for the current tenant: every Draft or Open claim not
-/// updated for more than 48 hours gets one SLA_BREACH_DETECTED audit entry, unless it already got one in the
-/// last 24 hours. The claim row is never written: no status change (FRS §12.2), no UpdatedAt change (which
-/// would reset the very clock this job measures), no RowVer change (no spurious 409 for a user editing the
-/// claim). Returns the number of breaches recorded.
+/// Writes audit rows only. Touching the claim would reset the UpdatedAt clock this job measures and cause spurious
+/// 409s for users (D-01). Returns the number of breaches recorded.
 /// </summary>
 public sealed record DetectSlaBreachesCommand : ICommand<int>;
 

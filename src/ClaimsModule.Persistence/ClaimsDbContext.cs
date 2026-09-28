@@ -32,18 +32,13 @@ public sealed class ClaimsDbContext(DbContextOptions<ClaimsDbContext> options, I
 
     public DbSet<Claim> Claims => Set<Claim>();
 
-    /// <summary>The ReserveHistory table (FRS §9.6), for read models and the GL job.</summary>
     public DbSet<ReserveTransaction> ReserveHistory => Set<ReserveTransaction>();
 
     public DbSet<ClaimAuditLog> ClaimAuditLog => Set<ClaimAuditLog>();
 
     internal DbSet<ClaimNumberCounter> ClaimNumberCounters => Set<ClaimNumberCounter>();
 
-    /// <summary>
-    /// The tenant the global query filter compares against. EF Core evaluates it per query on this
-    /// context instance. No tenant (anonymous request, job before it sets its scope) → Guid.Empty,
-    /// which matches no row: the filter fails closed.
-    /// </summary>
+    /// <summary>Guid.Empty without a tenant, which matches no row, so the filter fails closed.</summary>
     public Guid CurrentOrganisationId => tenantContext.OrganisationId ?? Guid.Empty;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -59,11 +54,9 @@ public sealed class ClaimsDbContext(DbContextOptions<ClaimsDbContext> options, I
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
-        // FRS §15.1: money DECIMAL(19,4); timestamps DATETIMEOFFSET(7).
         configurationBuilder.Properties<decimal>().HavePrecision(19, 4);
         configurationBuilder.Properties<DateTimeOffset>().HavePrecision(7);
 
-        // CLAUDE.md rule 10: every domain enum is stored as NVARCHAR(50) text, never as an integer.
         foreach (var enumType in typeof(Entity).Assembly.GetTypes().Where(type => type.IsEnum))
         {
             configurationBuilder.Properties(enumType).HaveConversion<string>().HaveMaxLength(50);
@@ -71,9 +64,8 @@ public sealed class ClaimsDbContext(DbContextOptions<ClaimsDbContext> options, I
     }
 
     /// <summary>
-    /// One combined filter per entity (EF Core 9 supports one): soft delete (FRS §15.2) and tenant
-    /// isolation (FRS §15.1, D-12). Written as a lambda over this instance so EF Core parameterises
-    /// <see cref="CurrentOrganisationId"/> per query instead of caching the value in the model.
+    /// Soft delete and tenant in one filter, since EF Core 9 allows one per entity. A lambda over this instance, so
+    /// <see cref="CurrentOrganisationId"/> is a per-query parameter rather than a value cached in the model.
     /// </summary>
     private void ApplyQueryFilter<TEntity>(ModelBuilder modelBuilder)
         where TEntity : Entity

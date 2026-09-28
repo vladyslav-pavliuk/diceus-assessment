@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace ClaimsModule.Persistence.Configurations;
 
-/// <summary>ClaimDocuments (FRS §9.7): metadata only; the bytes are in blob storage.</summary>
 internal sealed class ClaimDocumentConfiguration : IEntityTypeConfiguration<ClaimDocument>
 {
     public void Configure(EntityTypeBuilder<ClaimDocument> builder)

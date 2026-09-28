@@ -11,10 +11,6 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Commands.LinkPolicy;
 
-/// <summary>
-/// PUT /api/claims/{id}/policy (D-08): links or changes the policy. Resolves BR-C-06 (which unblocks
-/// reserves) and re-evaluates BR-C-02 against the new policy's period. Audit: POLICY_LINKED.
-/// </summary>
 public sealed record LinkPolicyCommand(Guid ClaimId, Guid? PolicyId) : ICommand;
 
 internal sealed class LinkPolicyCommandValidator : AbstractValidator<LinkPolicyCommand>

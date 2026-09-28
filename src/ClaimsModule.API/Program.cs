@@ -12,8 +12,7 @@ using Serilog.Formatting.Compact;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Structured logging. Levels come from the "Serilog" configuration section; the sink is chosen here:
-// readable text locally, one JSON object per line elsewhere (Container Apps → Log Analytics).
+// Readable text locally, one JSON object per line elsewhere (for Log Analytics).
 builder.Host.UseSerilog((context, services, logger) =>
 {
     logger.ReadFrom.Configuration(context.Configuration)
@@ -39,14 +38,14 @@ builder.Services
 
 var app = builder.Build();
 
-// Order matters: the correlation id must exist before anything logs, and request logging sits
-// outside exception handling so it records the final status code.
+// The correlation id must exist before anything logs, and request logging sits outside exception handling so
+// it records the final status code.
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseSerilogRequestLogging();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseStatusCodePages();
 
-// Swagger stays on in every environment: the deployed API must expose it (brief §4.3).
+// On in every environment: the brief requires the deployed API to expose it.
 app.UseSwagger();
 app.UseSwaggerUI();
 
@@ -56,13 +55,11 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// Development-only download endpoint of the local document storage fallback (FRS §13, D-28); absent with Azure Blob Storage.
+// Only mapped for the local storage fallback (D-28).
 app.MapLocalFileDownloads();
 
-// Hangfire dashboard (D-41): managers only, through the normal authorization pipeline (the token may arrive as
-// ?access_token= once, then as a cookie; see DashboardTokenHandoff). Read-only: no requeue or delete buttons, so
-// the only way to post a failed GL posting again is the audited retry endpoint, and cookie-authenticated POSTs
-// (a CSRF surface) do not exist.
+// Read-only (D-41): a failed posting can only be retried through the audited endpoint, and there are no
+// cookie-authenticated POSTs to protect against CSRF.
 app.MapHangfireDashboard(DashboardTokenHandoff.Path, new DashboardOptions
 {
     Authorization = [],
@@ -73,7 +70,6 @@ app.MapHangfireDashboard(DashboardTokenHandoff.Path, new DashboardOptions
 }).RequireAuthorization(AuthorizationPolicies.Manager);
 
 // Liveness has no dependencies, so a paused serverless database never restarts the container.
-// Readiness includes the database.
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
@@ -82,5 +78,5 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 
 app.Run();
 
-/// <summary>Entry point; public so that WebApplicationFactory can host the API in integration tests.</summary>
+/// <summary>Public for WebApplicationFactory.</summary>
 public partial class Program;

@@ -3,9 +3,8 @@ using ClaimsModule.Domain.Users;
 namespace ClaimsModule.Application.Abstractions.Persistence;
 
 /// <summary>
-/// Read access to seeded users. The two sign-in lookups (D-16) are deliberately not tenant-scoped:
-/// at sign-in the caller has no organisation yet, and the organisation is what the sign-in
-/// establishes. Usernames are therefore unique system-wide.
+/// The sign-in lookups are deliberately not tenant-scoped: sign-in is what establishes the organisation, so
+/// usernames are unique system-wide (D-16).
 /// </summary>
 public interface IUserRepository
 {
@@ -13,6 +12,6 @@ public interface IUserRepository
 
     Task<IReadOnlyList<User>> ListActiveAsync(CancellationToken cancellationToken);
 
-    /// <summary>Tenant-scoped, unlike the sign-in lookups: a user of another organisation is not found (D-18 assign).</summary>
+    /// <summary>Tenant-scoped, unlike the sign-in lookups.</summary>
     Task<User?> GetInOrganisationAsync(Guid userId, CancellationToken cancellationToken);
 }

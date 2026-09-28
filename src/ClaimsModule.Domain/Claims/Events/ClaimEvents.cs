@@ -4,8 +4,8 @@ using ClaimsModule.Domain.Reserves;
 
 namespace ClaimsModule.Domain.Claims.Events;
 
-// Raised by the Claim aggregate. Before commit each one becomes an audit row; ReserveAutoApproved,
-// ReserveApproved and GlPostingRetryRequested also enqueue the GL posting job after commit (ARCHITECTURE-PLAN §2.5).
+// Each event becomes an audit row before commit. ReserveAutoApproved, ReserveApproved and
+// GlPostingRetryRequested also enqueue the GL posting job after commit.
 
 public sealed record ClaimCreated(Guid ClaimId, string ClaimNumber) : IDomainEvent;
 
@@ -50,19 +50,16 @@ public sealed record ReserveTransactionSubmitted(
     ApprovalAuthority RequiredAuthority,
     bool ExceedsAggregateLimit) : IDomainEvent;
 
-/// <summary>Enqueues the GL posting job after commit (FRS §6.3).</summary>
 public sealed record ReserveAutoApproved(Guid ClaimId, Guid TransactionId, string IdempotencyKey, decimal Amount) : IDomainEvent;
 
-/// <summary>Enqueues the GL posting job after commit (FRS §6.4 step 8).</summary>
 public sealed record ReserveApproved(Guid ClaimId, Guid TransactionId, string IdempotencyKey, decimal Amount) : IDomainEvent;
 
 public sealed record ReserveRejected(Guid ClaimId, Guid TransactionId, decimal Amount, string Reason) : IDomainEvent;
 
-/// <summary>A failed GL posting was put back to Pending by a user; enqueues the GL posting job after commit (D-08).</summary>
+/// <summary>A user put a failed GL posting back to Pending (D-08).</summary>
 public sealed record GlPostingRetryRequested(Guid ClaimId, Guid TransactionId, string IdempotencyKey, decimal Amount) : IDomainEvent;
 
 public sealed record ReserveRetracted(Guid ClaimId, Guid TransactionId, decimal Amount) : IDomainEvent;
 
-/// <summary>FRS §13: audited as DOCUMENT_UPLOADED with RelatedEntityId = documentId.</summary>
 public sealed record DocumentUploaded(
     Guid ClaimId, Guid DocumentId, string DocumentName, DocumentType DocumentType, string ContentType, long FileSizeBytes) : IDomainEvent;

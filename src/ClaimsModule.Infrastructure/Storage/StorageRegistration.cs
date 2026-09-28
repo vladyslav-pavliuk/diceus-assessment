@@ -10,9 +10,8 @@ namespace ClaimsModule.Infrastructure.Storage;
 internal static class StorageRegistration
 {
     /// <summary>
-    /// BR-D-03: IStorageService is chosen by Storage:Provider when it is first resolved, so a test host can switch provider
-    /// with configuration alone. Both implementations are singletons: the Azure one caches its container check and
-    /// delegation key, the local one holds the key that signs its download tokens.
+    /// The provider is chosen at first resolve, so a test host can switch it through configuration (BR-D-03). Singletons, because
+    /// each implementation caches keys.
     /// </summary>
     public static IServiceCollection AddStorage(this IServiceCollection services, IConfiguration configuration)
     {

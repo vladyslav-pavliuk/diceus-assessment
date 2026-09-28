@@ -6,9 +6,8 @@ using Microsoft.EntityFrameworkCore;
 namespace ClaimsModule.Persistence.Idempotency;
 
 /// <summary>
-/// Idempotency-Key bookkeeping (D-24). Every statement runs on its own, outside the command's unit of
-/// work: the placeholder row must be committed before the command starts, so that a concurrent
-/// duplicate finds it. The unique (UserId, Key) index decides the race: exactly one insert wins.
+/// Runs outside the command's unit of work, so a concurrent duplicate finds the committed placeholder. The unique
+/// (UserId, Key) index decides the race (D-24).
 /// </summary>
 internal sealed class IdempotencyStore(ClaimsDbContext dbContext, ITenantContext tenantContext, TimeProvider timeProvider) : IIdempotencyStore
 {
@@ -34,7 +33,6 @@ internal sealed class IdempotencyStore(ClaimsDbContext dbContext, ITenantContext
         }
         catch (SqlException exception) when (exception.Number is PrimaryKeyViolation or UniqueIndexViolation)
         {
-            // The key was seen before. Decide from the stored row.
         }
 
         var existing = await dbContext.Set<IdempotencyRecord>().AsNoTracking()

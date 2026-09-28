@@ -8,10 +8,6 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Commands.RemoveParty;
 
-/// <summary>
-/// DELETE /api/claims/{id}/parties/{partyId} (FRS §10.1): a soft remove, IsActive = false (D-27). The
-/// last active Claimant cannot be removed (422, PTY-01). Audit: PARTY_REMOVED.
-/// </summary>
 public sealed record RemovePartyCommand(Guid ClaimId, Guid PartyId) : ICommand;
 
 internal sealed class RemovePartyCommandHandler(IClaimRepository claims, ICurrentUser currentUser, TimeProvider timeProvider)

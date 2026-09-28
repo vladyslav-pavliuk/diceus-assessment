@@ -8,11 +8,7 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Queries.ListClaims;
 
-/// <summary>
-/// GET /api/claims (FRS §10.1, D-29): the dashboard table. <see cref="Statuses"/> may repeat
-/// (?status=Open&amp;status=Draft) for the multi-select filter. <see cref="DateFrom"/> and
-/// <see cref="DateTo"/> filter the loss date (FRS §11.1), inclusive. Sorted by reported date, newest first.
-/// </summary>
+/// <summary><see cref="DateFrom"/> and <see cref="DateTo"/> filter the loss date, inclusive (D-29).</summary>
 public sealed record ListClaimsQuery(
     IReadOnlyList<ClaimStatus>? Statuses = null,
     DateOnly? DateFrom = null,

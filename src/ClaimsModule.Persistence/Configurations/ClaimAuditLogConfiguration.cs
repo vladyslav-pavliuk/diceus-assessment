@@ -6,9 +6,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace ClaimsModule.Persistence.Configurations;
 
 /// <summary>
-/// ClaimAuditLog (FRS §9.8): append-only. Rejected in three layers (D-14): IAuditLogService is the only
-/// writer, ImmutableRowsInterceptor refuses modified or deleted rows, and the migration adds an
-/// INSTEAD OF UPDATE, DELETE trigger that raises an error for any client, including raw SQL.
+/// Append-only in three layers (D-14): a single writer, an interceptor, and a trigger that also stops raw SQL.
 /// </summary>
 internal sealed class ClaimAuditLogConfiguration : IEntityTypeConfiguration<ClaimAuditLog>
 {
@@ -29,18 +27,15 @@ internal sealed class ClaimAuditLogConfiguration : IEntityTypeConfiguration<Clai
 
         builder.HasOne<Claim>().WithMany().HasForeignKey(entry => entry.ClaimId).OnDelete(DeleteBehavior.Restrict);
 
-        // GET /claims/{id}/audit: reverse-chronological pages (FRS §10.1).
         builder.HasIndex([nameof(ClaimAuditLog.ClaimId), nameof(ClaimAuditLog.CreatedAt)], "IX_ClaimAuditLog_ClaimId_CreatedAt")
             .IsDescending(false, true);
 
-        // BR-R-06 backstop: at most one GL_POSTING_SIMULATED per reserve transaction, whatever the code does.
-        // The GL job's compare-and-set already guarantees it (ARCHITECTURE-PLAN §6.1 R6); a check-then-act bug
-        // would now fail with a duplicate key instead of writing a second posting.
+        // BR-R-06 backstop behind the GL job's compare-and-set: one GL_POSTING_SIMULATED per reserve transaction.
         builder.HasIndex([nameof(ClaimAuditLog.RelatedEntityId)], "UX_ClaimAuditLog_RelatedEntityId_GlPostingSimulated")
             .IsUnique()
             .HasFilter($"[EventType] = N'{AuditEventTypes.GlPostingSimulated}'");
 
-        // SLA job: "last SLA_BREACH_DETECTED for this claim" (D-01).
+        // The SLA job's "last breach of this claim" lookup (D-01).
         builder.HasIndex(
             [nameof(ClaimAuditLog.ClaimId), nameof(ClaimAuditLog.EventType), nameof(ClaimAuditLog.CreatedAt)],
             "IX_ClaimAuditLog_ClaimId_EventType_CreatedAt");

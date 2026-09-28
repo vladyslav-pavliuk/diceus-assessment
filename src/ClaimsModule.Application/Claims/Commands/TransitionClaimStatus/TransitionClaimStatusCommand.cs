@@ -10,13 +10,6 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Commands.TransitionClaimStatus;
 
-/// <summary>
-/// PUT /api/claims/{id}/status (FRS §10.1, D-26). The aggregate checks the transition against the
-/// seeded table (BR-ST-01), the caller's role against the row's minimum role (D-09: 403 when the role
-/// can never make the move, D-25), and the target's conditions (BR-ST-02, BR-ST-03 / CC-01..04). Every
-/// failed condition comes back in one 422. Reopen continues to Open in the same transaction (BR-ST-04).
-/// </summary>
-/// <param name="Reason">Closure, withdrawal or reopen reason, where the transition requires one.</param>
 /// <param name="Justification">CC-04: confirms closing a claim whose reserves are still open.</param>
 public sealed record TransitionClaimStatusCommand(
     Guid ClaimId,
@@ -24,7 +17,7 @@ public sealed record TransitionClaimStatusCommand(
     string? Reason,
     string? Justification) : ICommand<ClaimStatusChangedDto>;
 
-/// <summary>The outcome of a transition. After a reopen, <see cref="Status"/> is Open (BR-ST-04).</summary>
+/// <summary>After a reopen, <see cref="Status"/> is Open (BR-ST-04).</summary>
 public sealed record ClaimStatusChangedDto(Guid ClaimId, ClaimStatus PreviousStatus, ClaimStatus Status);
 
 internal sealed class TransitionClaimStatusCommandValidator : AbstractValidator<TransitionClaimStatusCommand>

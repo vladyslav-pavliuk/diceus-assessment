@@ -7,9 +7,8 @@ using Microsoft.Extensions.Logging;
 namespace ClaimsModule.Infrastructure.BackgroundJobs;
 
 /// <summary>
-/// Runs one step of a background job the way an HTTP request runs a command: in its own DI scope (so its own
-/// DbContext and unit of work), for one organisation (D-31: jobs have no user, so they set the tenant
-/// explicitly), with the job's correlation id on every audit row and log line (CLAUDE.md rule 6).
+/// Runs a job step like an HTTP request runs a command: its own DI scope and unit of work, an explicit tenant (D-31),
+/// and the job's correlation id on every audit row and log line.
 /// </summary>
 public sealed class JobScopes(IServiceScopeFactory scopeFactory, ILogger<JobScopes> logger)
 {

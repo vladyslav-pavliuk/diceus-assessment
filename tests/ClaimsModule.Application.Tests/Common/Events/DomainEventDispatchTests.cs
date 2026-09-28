@@ -3,7 +3,6 @@ using ClaimsModule.Application.Common.Behaviors;
 using ClaimsModule.Application.Common.Events;
 using ClaimsModule.Application.Common.Messaging;
 using ClaimsModule.Domain.Common;
-using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 

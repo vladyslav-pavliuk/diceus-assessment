@@ -10,11 +10,6 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Commands.SetReserveLimitOverride;
 
-/// <summary>
-/// PUT /api/claims/{id}/reserve-limit-override (BR-R-05, FRS §3, D-08): a manager allows (or stops allowing)
-/// approved reserves above $10,000,000 on this claim, with a reason. The endpoint admits managers only (403,
-/// D-25) and the aggregate checks the role again. Audit: RESERVE_LIMIT_OVERRIDE_SET.
-/// </summary>
 public sealed record SetReserveLimitOverrideCommand(Guid ClaimId, bool? Enabled, string? Reason) : ICommand;
 
 internal sealed class SetReserveLimitOverrideCommandValidator : AbstractValidator<SetReserveLimitOverrideCommand>

@@ -7,10 +7,7 @@ using MediatR;
 
 namespace ClaimsModule.Application.Users.Queries.ListUsers;
 
-/// <summary>
-/// GET /api/users?role= (D-08, D-29): the active users of the caller's organisation, for the dashboard's
-/// handler filter and the assign dialog. <see cref="Role"/> matches one role exactly.
-/// </summary>
+/// <summary>Active users of the caller's organisation. <see cref="Role"/> matches exactly, not hierarchically.</summary>
 public sealed record ListUsersQuery(UserRole? Role = null) : IQuery<IReadOnlyList<UserDto>>;
 
 internal sealed class ListUsersQueryValidator : AbstractValidator<ListUsersQuery>

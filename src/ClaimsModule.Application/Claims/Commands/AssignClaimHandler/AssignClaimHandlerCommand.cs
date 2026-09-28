@@ -10,10 +10,6 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Commands.AssignClaimHandler;
 
-/// <summary>
-/// PUT /api/claims/{id}/assignee (D-08, D-18): supervisors and managers (re)assign the handler. The
-/// assignee must be an active user of the caller's organisation. Audit: HANDLER_ASSIGNED.
-/// </summary>
 public sealed record AssignClaimHandlerCommand(Guid ClaimId, Guid? UserId) : ICommand;
 
 internal sealed class AssignClaimHandlerCommandValidator : AbstractValidator<AssignClaimHandlerCommand>
@@ -32,7 +28,7 @@ internal sealed class AssignClaimHandlerCommandHandler(IClaimRepository claims, 
         var claim = await claims.GetAsync(request.ClaimId, cancellationToken)
             ?? throw new NotFoundException(nameof(Claim), request.ClaimId);
 
-        // Tenant-scoped: a user of another organisation is "not found" (D-18).
+        // Tenant-scoped: a user of another organisation is not found (D-18).
         var assignee = await users.GetInOrganisationAsync(request.UserId!.Value, cancellationToken)
             ?? throw new BusinessRuleViolationException(ErrorKeys.AssignedHandlerId, RequestMessages.UserNotFound);
 

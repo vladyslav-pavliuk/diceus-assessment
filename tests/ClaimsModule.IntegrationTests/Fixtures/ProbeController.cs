@@ -1,6 +1,5 @@
 using ClaimsModule.API.Auth;
 using ClaimsModule.Application.Abstractions;
-using ClaimsModule.Application.Common.Exceptions;
 using ClaimsModule.Domain.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

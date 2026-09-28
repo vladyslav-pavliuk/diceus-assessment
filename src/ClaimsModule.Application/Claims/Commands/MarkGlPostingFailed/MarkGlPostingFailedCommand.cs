@@ -9,11 +9,8 @@ using MediatR;
 namespace ClaimsModule.Application.Claims.Commands.MarkGlPostingFailed;
 
 /// <summary>
-/// Sent by PostGLReserveChangeJob when its last attempt fails (FRS §12.1 "After all retries exhausted: set
-/// PostingStatus = Failed, write audit log entry GL_POSTING_FAILED", D-35). Runs in its own unit of work,
-/// because the failed attempt's transaction has rolled back. Compare-and-set Pending → Failed, so it can never
-/// overwrite a posting that another run completed meanwhile (ARCHITECTURE-PLAN §6.1 R8). Returns whether it
-/// changed the row.
+/// Own unit of work, because the failed attempt rolled back. Compare-and-set on Pending, so it never overwrites a
+/// posting another run completed (D-35). Returns whether it changed the row.
 /// </summary>
 public sealed record MarkGlPostingFailedCommand(
     Guid ReserveHistoryId,
@@ -36,7 +33,6 @@ internal sealed class MarkGlPostingFailedCommandHandler(IGlPostingStore postings
             return false;
         }
 
-        // FRS §14.1: "NewValue includes failure reason".
         auditLog.Record(new AuditEntry(
             failed.ClaimId,
             AuditEventTypes.GlPostingFailed,

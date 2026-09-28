@@ -7,13 +7,8 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 namespace ClaimsModule.Persistence.Interceptors;
 
 /// <summary>
-/// Refuses changes the domain never makes, so a future bug fails loudly instead of rewriting history:
-/// <list type="bullet">
-/// <item>ClaimAuditLog is append-only: no update, no delete (BR-A-01, D-14).</item>
-/// <item>ReserveHistory is amount-immutable: the amount, balance, sequence, key and submitter columns
-/// never change, and a row is never deleted, not even softly (FRS §6.6, D-22).</item>
-/// </list>
-/// Registered before <see cref="AuditColumnsInterceptor"/>, so it sees a delete before it becomes a soft delete.
+/// Refuses changes the domain never makes, so a future bug fails loudly instead of rewriting history: audit rows are
+/// append-only (D-14), and ReserveHistory amounts never change and rows are never deleted (D-22).
 /// </summary>
 internal sealed class ImmutableRowsInterceptor : SaveChangesInterceptor
 {

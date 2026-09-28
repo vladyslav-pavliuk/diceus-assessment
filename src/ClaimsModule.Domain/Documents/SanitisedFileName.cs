@@ -6,17 +6,10 @@ using ClaimsModule.Domain.Common;
 namespace ClaimsModule.Domain.Documents;
 
 /// <summary>
-/// A file name that is safe to use as the last segment of a blob path (BR-D-01, D-28, D-42):
-/// <list type="number">
-/// <item>unpaired UTF-16 surrogates are dropped (they would make normalisation throw);</item>
-/// <item>Unicode is normalised to NFKC, so compatibility look-alikes become the plain characters they imitate
-/// (fullwidth "．．／" becomes "../", "‥" becomes "..", "ﬁ" becomes "fi") <em>before</em> anything is checked;</item>
-/// <item>directory components are stripped, so "../../x" or "C:\x" cannot escape the claim's folder;</item>
-/// <item>control, invisible-format (bidi overrides, zero-width) and line/paragraph separator characters are removed;</item>
-/// <item>reserved characters and the slash look-alikes NFKC keeps ("∕", "⁄", "⧸", "⧹", "∖") become "_";</item>
-/// <item>trailing dots and spaces go, Windows device names are neutralised, and the length is capped at 200
-/// characters with the extension kept.</item>
-/// </list>
+/// Safe as the last segment of a blob path (BR-D-01, D-42). NFKC normalisation runs <em>first</em>, so look-alikes
+/// such as fullwidth "．．／" become "../" before directory components are stripped. Invisible characters are
+/// removed, reserved characters and the slash look-alikes NFKC keeps become "_", Windows device names are
+/// neutralised, and the length is capped with the extension kept.
 /// </summary>
 public sealed record SanitisedFileName
 {
@@ -35,7 +28,7 @@ public sealed record SanitisedFileName
 
     public string Value { get; }
 
-    /// <summary>The extension including the dot (".pdf"), or empty when the name has none.</summary>
+    /// <summary>Including the dot; empty when there is none.</summary>
     public string Extension
     {
         get
@@ -106,7 +99,6 @@ public sealed record SanitisedFileName
         return builder.ToString();
     }
 
-    /// <summary>Characters that print nothing or reorder what is printed: C0/C1 controls, format characters, line and paragraph separators.</summary>
     private static bool IsInvisible(char character) =>
         char.GetUnicodeCategory(character) is UnicodeCategory.Control
             or UnicodeCategory.Format

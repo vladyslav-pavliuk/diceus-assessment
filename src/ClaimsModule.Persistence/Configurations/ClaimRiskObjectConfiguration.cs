@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace ClaimsModule.Persistence.Configurations;
 
-/// <summary>ClaimRiskObjects (FRS §9.4).</summary>
 internal sealed class ClaimRiskObjectConfiguration : IEntityTypeConfiguration<ClaimRiskObject>
 {
     public void Configure(EntityTypeBuilder<ClaimRiskObject> builder)

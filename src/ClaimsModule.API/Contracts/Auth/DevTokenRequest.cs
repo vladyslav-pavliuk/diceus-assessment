@@ -1,4 +1,4 @@
 namespace ClaimsModule.API.Contracts.Auth;
 
-/// <summary>Username may be null here; the GetUserByUsernameQuery validator rejects it with a 422.</summary>
+/// <summary>Nullable, so the validator rather than binding rejects a missing username.</summary>
 public sealed record DevTokenRequest(string? Username);

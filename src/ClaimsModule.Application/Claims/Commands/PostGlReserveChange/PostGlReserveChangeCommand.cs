@@ -10,30 +10,18 @@ using Microsoft.Extensions.Logging;
 namespace ClaimsModule.Application.Claims.Commands.PostGlReserveChange;
 
 /// <summary>
-/// The body of PostGLReserveChangeJob (FRS §6.5, §12.1): posts one approved reserve change to the general
-/// ledger exactly once, however many times it runs and however many copies run at once.
-/// <para>
-/// One unit of work (the UnitOfWorkBehavior's transaction):
-/// <list type="number">
-/// <item>compare-and-set Pending → Posted in one UPDATE (<see cref="IGlPostingStore.TryMarkPostedAsync"/>);
-/// 0 rows changed → nothing to do, and nothing is written;</item>
-/// <item>post the journal to the ledger, with the idempotency key;</item>
-/// <item>stage GL_POSTING_SIMULATED;</item>
-/// <item>commit. Any failure in 2–4 rolls back 1 as well, so a retry starts from Pending (R7).</item>
-/// </list>
-/// The row lock taken in step 1 makes a concurrent copy wait, then change 0 rows (ARCHITECTURE-PLAN §6.1 R6).
-/// </para>
+/// Posts once however often it runs: the compare-and-set to Posted comes first, and its row lock makes a concurrent
+/// copy wait and then change nothing. A later failure rolls the compare-and-set back too, so a retry starts from Pending.
 /// </summary>
-/// <param name="JobId">The Hangfire job id, stored in ReserveHistory.PostingJobId (FRS §12.1); null outside Hangfire.</param>
+/// <param name="JobId">Null outside Hangfire.</param>
 public sealed record PostGlReserveChangeCommand(Guid ReserveHistoryId, Guid ClaimId, string IdempotencyKey, string? JobId)
     : ICommand<GlPostingOutcome>;
 
 public enum GlPostingOutcome
 {
-    /// <summary>This run posted the change and wrote GL_POSTING_SIMULATED.</summary>
     Posted = 1,
 
-    /// <summary>Nothing was pending for these arguments (already posted, failed, not approved, or unknown); no write.</summary>
+    /// <summary>Already posted, failed, not approved or unknown; nothing was written.</summary>
     NothingToPost,
 }
 
@@ -57,7 +45,6 @@ internal sealed class PostGlReserveChangeCommandHandler(
         var journal = GlJournalEntry.ForReserveChange(posted.Amount);
         await ledger.PostAsync(journal, posted.IdempotencyKey, cancellationToken);
 
-        // FRS §6.5: "DR Change in Outstanding Reserves / CR Outstanding Loss Reserves, Amount = {reserveAmount}".
         auditLog.Record(new AuditEntry(
             posted.ClaimId,
             AuditEventTypes.GlPostingSimulated,

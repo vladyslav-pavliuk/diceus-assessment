@@ -20,16 +20,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ClaimsModule.API.Controllers;
 
-/// <summary>
-/// Claims (FRS §10.1) and the claim-level operations added in D-08. Thin by design (CLAUDE.md rule 1):
-/// bind, send one command or query, map the result to HTTP. Errors are mapped by the middleware.
-/// </summary>
 [ApiController]
 [Route("api/claims")]
 [Authorize(Policy = AuthorizationPolicies.Handler)]
 public sealed class ClaimsController(ISender sender) : ControllerBase
 {
-    /// <summary>FNOL: creates a Draft claim with its claim number (FRS §5, §10.1).</summary>
     [HttpPost]
     [ProducesResponseType<ClaimCreatedDto>(StatusCodes.Status201Created)]
     [ProducesResponseType<HttpValidationProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
@@ -39,7 +34,7 @@ public sealed class ClaimsController(ISender sender) : ControllerBase
         return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
     }
 
-    /// <summary>Paged, filtered claim list (FRS §10.1, D-29). <c>status</c> may repeat.</summary>
+    /// <summary><c>status</c> may repeat.</summary>
     [HttpGet]
     [ProducesResponseType<PagedResult<ClaimSummaryDto>>(StatusCodes.Status200OK)]
     [ProducesResponseType<HttpValidationProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
@@ -64,7 +59,7 @@ public sealed class ClaimsController(ISender sender) : ControllerBase
     public async Task<ActionResult<ClaimDetailDto>> Get(Guid id, CancellationToken cancellationToken) =>
         Ok(await sender.Send(new GetClaimDetailQuery(id), cancellationToken));
 
-    /// <summary>Status transition (FRS §4.2, §10.1). 422 lists the valid next statuses or every blocking condition.</summary>
+    /// <summary>422 lists the valid next statuses or every blocking condition.</summary>
     [HttpPut("{id:guid}/status")]
     [ProducesResponseType<ClaimStatusChangedDto>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
@@ -75,7 +70,6 @@ public sealed class ClaimsController(ISender sender) : ControllerBase
         Ok(await sender.Send(
             new TransitionClaimStatusCommand(id, request.TargetStatus, request.Reason, request.Justification), cancellationToken));
 
-    /// <summary>The append-only audit log, newest first (FRS §10.1).</summary>
     [HttpGet("{id:guid}/audit")]
     [ProducesResponseType<PagedResult<AuditEntryDto>>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -83,14 +77,12 @@ public sealed class ClaimsController(ISender sender) : ControllerBase
         Guid id, CancellationToken cancellationToken, int page = 1, int pageSize = ClaimQueryLimits.DefaultAuditPageSize) =>
         Ok(await sender.Send(new GetClaimAuditQuery(id, page, pageSize), cancellationToken));
 
-    /// <summary>Re-runs the persisted validation rules (FRS §5.4, D-08) and returns every issue.</summary>
     [HttpPost("{id:guid}/validate")]
     [ProducesResponseType<IReadOnlyList<ValidationIssueDto>>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<IReadOnlyList<ValidationIssueDto>>> Validate(Guid id, CancellationToken cancellationToken) =>
         Ok(await sender.Send(new ValidateClaimCommand(id), cancellationToken));
 
-    /// <summary>Links or changes the policy (BR-C-06, D-08).</summary>
     [HttpPut("{id:guid}/policy")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<HttpValidationProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
@@ -100,7 +92,6 @@ public sealed class ClaimsController(ISender sender) : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Reassigns the handler: supervisors and managers only (D-18).</summary>
     [HttpPut("{id:guid}/assignee")]
     [Authorize(Policy = AuthorizationPolicies.Supervisor)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -112,7 +103,6 @@ public sealed class ClaimsController(ISender sender) : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Edits notes and severity (FRS §11.3 Tab 1, D-08).</summary>
     [HttpPatch("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<HttpValidationProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
@@ -122,9 +112,6 @@ public sealed class ClaimsController(ISender sender) : ControllerBase
         return NoContent();
     }
 
-    /// <summary>
-    /// Allows (or stops allowing) approved reserves above $10,000,000 on this claim: managers only (BR-R-05, FRS §3, D-08).
-    /// </summary>
     [HttpPut("{id:guid}/reserve-limit-override")]
     [Authorize(Policy = AuthorizationPolicies.Manager)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

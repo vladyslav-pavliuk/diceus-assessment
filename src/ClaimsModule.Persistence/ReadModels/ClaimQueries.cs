@@ -12,11 +12,8 @@ using Microsoft.EntityFrameworkCore;
 namespace ClaimsModule.Persistence.ReadModels;
 
 /// <summary>
-/// The claims read side (FRS §10.1). Every method projects in SQL and runs a fixed number of queries,
-/// whatever the number of claims, parties or entries (no N+1). Claim rows use hand-written Select
-/// projections, because they read shadow columns (UpdatedAt, CreatedAt) and correlated subqueries
-/// (names, reserve totals, SLA flag); the simple child rows use AutoMapper's ProjectTo with the
-/// Application profiles (D-40). The tenant and soft-delete filters apply to every table read here.
+/// Every method runs a fixed number of queries (no N+1). Claim rows are hand-written projections, because they read shadow
+/// columns and correlated subqueries; child rows use ProjectTo (D-40).
 /// </summary>
 internal sealed class ClaimQueries(ClaimsDbContext dbContext, IMapper mapper) : IClaimQueries
 {
@@ -86,7 +83,6 @@ internal sealed class ClaimQueries(ClaimsDbContext dbContext, IMapper mapper) : 
             return null;
         }
 
-        // One query per collection: a constant number, independent of how many rows each one has.
         var parties = await dbContext.Set<ClaimParty>().AsNoTracking()
             .Where(party => party.ClaimId == claimId)
             .OrderBy(party => EF.Property<DateTimeOffset>(party, ShadowColumns.CreatedAt)).ThenBy(party => party.Id)
@@ -138,7 +134,7 @@ internal sealed class ClaimQueries(ClaimsDbContext dbContext, IMapper mapper) : 
             RiskObjects = riskObjects,
             ValidationIssues = validationIssues,
 
-            // Stored as text, so SQL would sort them alphabetically; the enum order is the FRS §6.2 order.
+            // Stored as text, so SQL would sort alphabetically rather than in FRS §6.2 order.
             ReserveComponents = reserveComponents.OrderBy(component => component.Component).ToList(),
             Documents = documents,
             RecentAuditEntries = recentAudit,
@@ -168,7 +164,7 @@ internal sealed class ClaimQueries(ClaimsDbContext dbContext, IMapper mapper) : 
         return await ValidationIssues(claimId).ToListAsync(cancellationToken);
     }
 
-    /// <summary>Three queries whatever the size of the history: the claim header, the components, the transactions.</summary>
+    /// <summary>Three queries, whatever the size of the history.</summary>
     public async Task<ClaimReservesDto?> GetReservesAsync(Guid claimId, CancellationToken cancellationToken)
     {
         var claim = await dbContext.Claims.AsNoTracking()
@@ -222,7 +218,7 @@ internal sealed class ClaimQueries(ClaimsDbContext dbContext, IMapper mapper) : 
         {
             ClaimId = claim.Id,
 
-            // Stored as text, so SQL would sort them alphabetically; the enum order is the FRS §6.2 order.
+            // Stored as text, so SQL would sort alphabetically rather than in FRS §6.2 order.
             Components = components.OrderBy(component => component.Component).ToList(),
             Transactions = transactions,
             TotalReserves = components.Sum(component => component.CurrentAmount),
@@ -242,7 +238,7 @@ internal sealed class ClaimQueries(ClaimsDbContext dbContext, IMapper mapper) : 
             claims = claims.Where(claim => statuses.Contains(claim.Status));
         }
 
-        // D-32: the loss date's UTC calendar date, inclusive at both ends.
+        // The loss date's UTC calendar date, inclusive at both ends (D-32).
         if (filter.LossDateFrom is { } from)
         {
             var fromInstant = StartOfUtcDay(from);
@@ -270,7 +266,7 @@ internal sealed class ClaimQueries(ClaimsDbContext dbContext, IMapper mapper) : 
             claims = claims.Where(claim => claim.PolicyId == policyId);
         }
 
-        // FRS §10.1: "partial claim number or client name". EF parameterises the term and escapes LIKE wildcards.
+        // EF parameterises the term and escapes LIKE wildcards.
         if (filter.Search is { } search)
         {
             claims = claims.Where(claim => claim.ClaimNumber.Contains(search) || (claim.ClientName != null && claim.ClientName.Contains(search)));
@@ -296,11 +292,10 @@ internal sealed class ClaimQueries(ClaimsDbContext dbContext, IMapper mapper) : 
             AssignedHandlerId = claim.AssignedHandlerId,
             AssignedHandlerName = dbContext.Users.Where(user => user.Id == claim.AssignedHandlerId).Select(user => user.DisplayName).FirstOrDefault(),
 
-            // D-29: net of all components, SubrogationRecoverable included.
+            // Net of all components, subrogation included (D-29).
             TotalReserves = claim.ReserveComponents.Sum(component => component.CurrentAmount),
 
-            // D-01: a breach entry newer than the claim's last update. The SLA job never writes the claim,
-            // so any later change to the claim clears the flag.
+            // The SLA job never writes the claim, so any later change clears the flag (D-01).
             IsSlaBreached = dbContext.ClaimAuditLog.Any(entry =>
                 entry.ClaimId == claim.Id
                 && entry.EventType == AuditEventTypes.SlaBreachDetected
@@ -308,10 +303,7 @@ internal sealed class ClaimQueries(ClaimsDbContext dbContext, IMapper mapper) : 
             ReportedDate = claim.ReportedDate,
         });
 
-    /// <summary>
-    /// Reverse-chronological (FRS §10.1). Rows of one transaction can share a timestamp, so the id breaks
-    /// ties: ids are sequential in SQL Server order (D-30), i.e. in the order the rows were written.
-    /// </summary>
+    /// <summary>Rows of one transaction share a timestamp, so the sequential id (D-30) breaks ties in write order.</summary>
     private IQueryable<ClaimAuditLog> NewestFirst(Guid claimId) =>
         dbContext.ClaimAuditLog.AsNoTracking()
             .Where(entry => entry.ClaimId == claimId)
@@ -340,7 +332,6 @@ internal sealed class ClaimQueries(ClaimsDbContext dbContext, IMapper mapper) : 
             .OrderBy(issue => issue.RaisedAt).ThenBy(issue => issue.Id)
             .ProjectTo<ValidationIssueDto>(mapper.ConfigurationProvider);
 
-    /// <summary>The summary cards (FRS §11.3 Tab 3): current balance and pending amount per component (D-11, D-21).</summary>
     private IQueryable<ReserveComponentSummaryDto> ReserveSummaries(Guid claimId) =>
         dbContext.Set<ReserveComponent>().AsNoTracking()
             .Where(component => component.ClaimId == claimId)

@@ -8,14 +8,8 @@ using ClaimsModule.Domain.Users;
 namespace ClaimsModule.Domain.Claims;
 
 /// <summary>
-/// The claim aggregate root (FRS §9.1). It owns the loss event, parties, risk objects, validation
-/// issues, reserve components with their transactions, and document metadata
-/// (ARCHITECTURE-PLAN §2.1). Every state change goes through a method here, so the status machine,
-/// the closure conditions and the reserve invariants are checked against one consistent snapshot.
-/// <para>
-/// The class is split by concern: this file (creation, details, documents), Claim.Status.cs,
-/// Claim.Parties.cs (parties, risk objects, validation issues) and Claim.Reserves.cs.
-/// </para>
+/// Every state change goes through a method here, so the status machine, the closure conditions and the
+/// reserve invariants are checked against one consistent snapshot. Split by concern into Claim.*.cs.
 /// </summary>
 public sealed partial class Claim : AggregateRoot
 {
@@ -38,29 +32,29 @@ public sealed partial class Claim : AggregateRoot
 
     public Guid? PolicyId { get; private set; }
 
-    /// <summary>Denormalised from the linked policy for display (FRS §9.1); null without a policy (D-33).</summary>
+    /// <summary>Denormalised from the linked policy (D-33).</summary>
     public string? PolicyNumber { get; private set; }
 
-    /// <summary>Denormalised from the linked policy for display (FRS §9.1); null without a policy (D-33).</summary>
+    /// <summary>Denormalised from the linked policy (D-33).</summary>
     public string? ClientName { get; private set; }
 
     public ClaimStatus Status { get; private set; }
 
     public ClaimSeverity Severity { get; private set; }
 
-    /// <summary>When the FNOL was received: the server time of creation (D-32).</summary>
+    /// <summary>Server time of creation (D-32).</summary>
     public DateTimeOffset ReportedDate { get; private set; }
 
     public Guid? AssignedHandlerId { get; private set; }
 
     public DateTimeOffset? ClosedAt { get; private set; }
 
-    /// <summary>The closure or withdrawal reason (FRS §9.1, D-26).</summary>
+    /// <summary>Also holds the withdrawal reason (D-26).</summary>
     public string? ClosureReason { get; private set; }
 
     public string? Notes { get; private set; }
 
-    /// <summary>Set by a manager to allow approved reserves above $10,000,000 (BR-R-05, FRS §3).</summary>
+    /// <summary>Set by a manager to allow approved reserves above $10,000,000 (BR-R-05).</summary>
     public bool ReserveLimitOverride { get; private set; }
 
     public string? ReserveLimitOverrideReason { get; private set; }
@@ -87,10 +81,8 @@ public sealed partial class Claim : AggregateRoot
     public static bool IsReadOnlyStatus(ClaimStatus status) => status is ClaimStatus.Closed or ClaimStatus.Withdrawn;
 
     /// <summary>
-    /// FNOL (FRS §5.2, §10.1 POST /api/claims): creates a Draft claim with its loss event, parties and
-    /// risk objects, then records the completeness issues it still has (D-06, D-07). The creator is
-    /// the assigned handler (D-18). An initial reserve is submitted afterwards, in the same unit of
-    /// work, through <see cref="SubmitReserveTransaction"/>.
+    /// FNOL: creates a Draft claim and records its completeness issues (D-06, D-07). The creator becomes the
+    /// assigned handler (D-18); an initial reserve is submitted afterwards in the same unit of work.
     /// </summary>
     public static Claim Create(
         ClaimNumber claimNumber,
@@ -140,7 +132,7 @@ public sealed partial class Claim : AggregateRoot
         return claim;
     }
 
-    /// <summary>D-08 PUT /claims/{id}/policy: links (or changes) the policy and re-evaluates BR-C-02 and BR-C-06.</summary>
+    /// <summary>Links or changes the policy and re-evaluates BR-C-02 and BR-C-06.</summary>
     public void LinkPolicy(Policy policy, Actor actor, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(policy);
@@ -162,10 +154,7 @@ public sealed partial class Claim : AggregateRoot
         EvaluatePolicyPeriodIssue(policy, now);
     }
 
-    /// <summary>
-    /// D-08 POST /claims/{id}/validate: re-runs every rule that is persisted as an issue.
-    /// <paramref name="linkedPolicy"/> must be the policy the claim is linked to (null if none).
-    /// </summary>
+    /// <summary>Re-runs every rule that is persisted as a validation issue.</summary>
     public void Revalidate(Policy? linkedPolicy, DateTimeOffset now)
     {
         if (linkedPolicy?.Id != PolicyId)
@@ -178,7 +167,6 @@ public sealed partial class Claim : AggregateRoot
         EvaluatePolicyPeriodIssue(linkedPolicy, now);
     }
 
-    /// <summary>D-18: supervisors and managers (re)assign the handler; the assignee must be an active user.</summary>
     public void AssignHandler(User assignee, Actor actor)
     {
         ArgumentNullException.ThrowIfNull(assignee);
@@ -205,7 +193,6 @@ public sealed partial class Claim : AggregateRoot
         Raise(new HandlerAssigned(Id, previous, assignee.Id));
     }
 
-    /// <summary>FRS §11.3 Tab 1: internal notes are editable (D-08).</summary>
     public void UpdateNotes(string? notes, Actor actor)
     {
         ArgumentNullException.ThrowIfNull(actor);
@@ -222,7 +209,7 @@ public sealed partial class Claim : AggregateRoot
         Raise(new ClaimDetailsUpdated(Id, nameof(Notes), previous, newNotes));
     }
 
-    /// <summary>FRS §9.1 Severity; who sets it is NOT SPECIFIED, so any role may (D-33).</summary>
+    /// <summary>The FRS does not say who sets severity, so any role may (D-33).</summary>
     public void ChangeSeverity(ClaimSeverity severity, Actor actor)
     {
         ArgumentNullException.ThrowIfNull(actor);
@@ -243,10 +230,7 @@ public sealed partial class Claim : AggregateRoot
         Raise(new ClaimDetailsUpdated(Id, nameof(Severity), previous.ToString(), severity.ToString()));
     }
 
-    /// <summary>
-    /// FRS §13: records an uploaded document. The document id is chosen by the caller before the upload,
-    /// because it is part of the blob path (D-28); <paramref name="blobPath"/> carries it. Audit: DOCUMENT_UPLOADED.
-    /// </summary>
+    /// <summary>The caller picks the document id before the upload, because it is part of the blob path (D-28).</summary>
     public ClaimDocument AddDocument(
         DocumentBlobPath blobPath,
         DocumentType documentType,
@@ -266,10 +250,7 @@ public sealed partial class Claim : AggregateRoot
         return document;
     }
 
-    /// <summary>
-    /// Whether a claim in <paramref name="status"/> accepts changes (D-26). Lets a caller refuse early, before work
-    /// that is expensive to undo (a document upload); the aggregate still enforces the rule itself.
-    /// </summary>
+    /// <summary>Lets a caller refuse early, before work that is expensive to undo such as an upload (D-26).</summary>
     public static void EnsureModifiable(ClaimStatus status)
     {
         if (IsReadOnlyStatus(status))

@@ -8,11 +8,8 @@ using FluentValidation;
 namespace ClaimsModule.Application.Claims.Commands.CreateClaim;
 
 /// <summary>
-/// The FNOL rules that reject the request with 422 (D-06), worded exactly as FRS §8:
-/// BR-C-01 (future loss date), loss date required, BR-C-07 (description ≥ 20), BR-C-05 (code exists and
-/// is active in the caller's organisation), BR-C-06 (no initial reserve without a policy), and the
-/// initial reserve's BR-R-01 shape. Completeness rules (no claimant, no policy, no risk object, loss date
-/// outside the policy period) are not here: they are persisted as issues on the Draft (D-06).
+/// Only the rules that reject FNOL with a 422. Completeness rules (claimant, policy, risk object, policy period)
+/// are persisted as issues on the Draft instead (D-06).
 /// </summary>
 internal sealed class CreateClaimCommandValidator : AbstractValidator<CreateClaimCommand>
 {

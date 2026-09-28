@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace ClaimsModule.Persistence.Configurations;
 
-/// <summary>ClaimParties (FRS §9.3).</summary>
 internal sealed class ClaimPartyConfiguration : IEntityTypeConfiguration<ClaimParty>
 {
     public void Configure(EntityTypeBuilder<ClaimParty> builder)
@@ -23,7 +22,7 @@ internal sealed class ClaimPartyConfiguration : IEntityTypeConfiguration<ClaimPa
         builder.Property(party => party.Notes);
         builder.Property(party => party.IsActive).IsRequired().HasDefaultValue(false);
 
-        // "At least one active Claimant" (BR-C-03, CC-03, PTY-01).
+        // "At least one active Claimant" checks (BR-C-03, CC-03).
         builder.HasIndex([nameof(ClaimParty.ClaimId), nameof(ClaimParty.PartyRole), nameof(ClaimParty.IsActive)], "IX_ClaimParties_ClaimId_PartyRole_IsActive");
     }
 }

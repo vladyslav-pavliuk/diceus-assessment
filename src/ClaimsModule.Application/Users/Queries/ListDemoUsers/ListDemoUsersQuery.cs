@@ -5,7 +5,7 @@ using MediatR;
 
 namespace ClaimsModule.Application.Users.Queries.ListDemoUsers;
 
-/// <summary>Lists the active seeded users for the frontend role switcher (FRS §11.4, D-08).</summary>
+/// <summary>For the sign-in role switcher, so not tenant-scoped (D-16).</summary>
 public sealed record ListDemoUsersQuery : IQuery<IReadOnlyList<UserDto>>;
 
 internal sealed class ListDemoUsersQueryHandler(IUserRepository users, IMapper mapper)

@@ -6,10 +6,6 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Queries.GetClaimDetail;
 
-/// <summary>
-/// GET /api/claims/{id} (FRS §10.1): the claim with parties, risk objects, validation issues, reserve
-/// summary, document list and its most recent audit entries. 404 for another organisation's claim.
-/// </summary>
 public sealed record GetClaimDetailQuery(Guid ClaimId) : IQuery<ClaimDetailDto>;
 
 internal sealed class GetClaimDetailQueryHandler(IClaimQueries claims) : IRequestHandler<GetClaimDetailQuery, ClaimDetailDto>

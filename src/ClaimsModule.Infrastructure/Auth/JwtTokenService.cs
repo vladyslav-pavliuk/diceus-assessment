@@ -8,10 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace ClaimsModule.Infrastructure.Auth;
 
-/// <summary>
-/// Issues HS256-signed JWTs for seeded users (D-16). Claims: sub (user id), name (display name),
-/// role (FRS §3 code), org (organisation id). Times come from <see cref="TimeProvider"/>.
-/// </summary>
+/// <summary>HS256-signed JWTs for seeded users (D-16).</summary>
 internal sealed class JwtTokenService(IOptions<AuthOptions> options, TimeProvider timeProvider) : ITokenService
 {
     private readonly JsonWebTokenHandler _handler = new() { SetDefaultTimesOnTokenCreation = false };

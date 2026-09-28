@@ -4,19 +4,14 @@ using ClaimsModule.Domain.Documents;
 namespace ClaimsModule.Application.Claims.Documents;
 
 /// <summary>
-/// Content sniffing for the FRS §13 allowlist (DOC-05, D-42): whether the bytes of an upload really are the format its
-/// extension claims. The declared Content-Type is a client-controlled string and proves nothing, so this runs on every
-/// upload, before anything is stored.
+/// Checks that the bytes really are the format the extension claims (D-42), since the declared Content-Type proves nothing.
 /// <list type="bullet">
-/// <item><b>PDF, JPEG, PNG</b>: the file signature ("magic number") at offset 0.</item>
-/// <item><b>DOCX, XLSX</b>: a ZIP whose central directory has <c>[Content_Types].xml</c> and the main part of that
-/// format (<c>word/document.xml</c> or <c>xl/workbook.xml</c>), and no <c>vbaProject.bin</c>: a macro-enabled
-/// .docm/.xlsm renamed to .docx/.xlsx is refused. Only the directory is read; nothing is decompressed.</item>
-/// <item><b>TXT, CSV</b>: text has no signature, so the rule is "no binary bytes": no NUL and no C0 control character
-/// other than tab, line feed, form feed and carriage return, anywhere in the file. UTF-8 and single-byte encodings pass;
-/// UTF-16 does not (it is full of NULs).</item>
+/// <item>PDF, JPEG, PNG: the file signature.</item>
+/// <item>DOCX, XLSX: the ZIP directory has the format's main part and no <c>vbaProject.bin</c>, so a renamed macro-enabled
+/// file is refused. Nothing is decompressed.</item>
+/// <item>TXT, CSV: no binary control characters anywhere, so UTF-16 is refused.</item>
 /// </list>
-/// The stream must be seekable; it is left at position 0.
+/// The stream is left at position 0.
 /// </summary>
 internal static class DocumentContentInspector
 {

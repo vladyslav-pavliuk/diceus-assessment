@@ -4,13 +4,9 @@ using ClaimsModule.Domain.Common;
 namespace ClaimsModule.Domain.Documents;
 
 /// <summary>
-/// The MIME allowlist of FRS §13: PDF, JPEG, PNG, DOCX, XLSX, TXT, CSV (D-42).
-/// <para>
-/// A file's format is claimed by its <b>extension</b> (what the user and whoever downloads it will see). The declared
-/// Content-Type may confirm the claim or say nothing (empty, <c>application/octet-stream</c>), but it may not contradict
-/// it. Whether the <b>bytes</b> really are that format is checked by content sniffing in the Application layer before
-/// anything is stored. The stored and served content type is always <see cref="ContentType"/>, never the client's string.
-/// </para>
+/// The FRS §13 allowlist (D-42). The extension decides the format; the declared Content-Type may confirm it
+/// or be non-committal but never contradict it. The bytes are sniffed in the Application layer, and only the
+/// canonical <see cref="ContentType"/> is ever stored or served.
 /// </summary>
 public sealed record DocumentFormat
 {
@@ -35,13 +31,12 @@ public sealed record DocumentFormat
     public static readonly DocumentFormat Txt = new(
         "TXT", "text/plain", [".txt"], [], displayInline: false);
 
-    /// <summary>Windows browsers declare .csv as <c>application/vnd.ms-excel</c> when Excel is installed, so that alias is accepted.</summary>
+    /// <summary>Browsers on Windows with Excel installed declare .csv as <c>application/vnd.ms-excel</c>.</summary>
     public static readonly DocumentFormat Csv = new(
         "CSV", "text/csv", [".csv"], ["application/csv", "text/x-csv", "text/comma-separated-values", "application/vnd.ms-excel"], displayInline: false);
 
     public static readonly IReadOnlyList<DocumentFormat> All = [Pdf, Jpeg, Png, Docx, Xlsx, Txt, Csv];
 
-    /// <summary>What a browser declares when it does not know the type; it neither confirms nor contradicts the extension.</summary>
     private static readonly HashSet<string> NonCommittalTypes = new(StringComparer.OrdinalIgnoreCase) { "application/octet-stream" };
 
     private readonly HashSet<string> _extensions;
@@ -58,26 +53,18 @@ public sealed record DocumentFormat
 
     public string Name { get; }
 
-    /// <summary>The canonical MIME type: stored in ClaimDocuments.ContentType and served on download.</summary>
     public string ContentType { get; }
 
-    /// <summary>
-    /// PDF and images open in the browser tab (FRS §11.3 "opens in new tab"); the rest download as attachments, so a text
-    /// file that happens to contain HTML is never rendered.
-    /// </summary>
+    /// <summary>Only PDF and images open inline, so a text file containing HTML is never rendered.</summary>
     public bool DisplayInline { get; }
 
     public static DocumentFormat? FromExtension(string extension) =>
         All.FirstOrDefault(format => format._extensions.Contains(extension));
 
-    /// <summary>Maps a stored ContentType back to its format; null for a value this allowlist never stores.</summary>
     public static DocumentFormat? FromContentType(string contentType) =>
         All.FirstOrDefault(format => string.Equals(format.ContentType, contentType, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>
-    /// FRS §13: the format of an upload, from its extension, checked against the declared Content-Type. Throws a 422
-    /// (key "File") for an extension outside the allowlist or a declared type that contradicts it.
-    /// </summary>
+    /// <summary>Throws a 422 when the extension is not allowlisted or the declared type contradicts it.</summary>
     public static DocumentFormat Resolve(SanitisedFileName fileName, string? declaredContentType)
     {
         ArgumentNullException.ThrowIfNull(fileName);

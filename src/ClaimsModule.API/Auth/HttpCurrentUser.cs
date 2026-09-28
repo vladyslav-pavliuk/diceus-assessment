@@ -5,7 +5,6 @@ using ClaimsModule.Domain.Users;
 
 namespace ClaimsModule.API.Auth;
 
-/// <summary>Reads the caller from the JWT validated by the authentication middleware.</summary>
 internal sealed class HttpCurrentUser(IHttpContextAccessor httpContextAccessor) : ICurrentUser
 {
     private ClaimsPrincipal? Principal =>

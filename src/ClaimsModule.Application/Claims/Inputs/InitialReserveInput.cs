@@ -6,17 +6,12 @@ using FluentValidation;
 
 namespace ClaimsModule.Application.Claims.Inputs;
 
-/// <summary>
-/// The optional initial reserve of FNOL step 3 (FRS §5.2, §11.2): a component and an amount. It opens
-/// the component, so it is always an Add transaction (D-05). The FNOL form has no reason field, so a
-/// blank reason gets a default (D-40).
-/// </summary>
+/// <summary>Always an Add (D-05). The FNOL form has no reason field, so a blank reason gets a default (D-40).</summary>
 public sealed record InitialReserveInput(ReserveComponentType? Component, decimal? Amount, string? ChangeReason)
 {
     public const string DefaultChangeReason = "Initial reserve at FNOL.";
 }
 
-/// <summary>FRS §8 ReserveAmount / ReserveComponent rules for an opening (Add) transaction (BR-R-01, D-05).</summary>
 internal sealed class InitialReserveInputValidator : AbstractValidator<InitialReserveInput>
 {
     public InitialReserveInputValidator()
@@ -25,7 +20,7 @@ internal sealed class InitialReserveInputValidator : AbstractValidator<InitialRe
             .NotNull().WithMessage(DomainMessages.InvalidReserveComponent)
             .IsInEnum().WithMessage(DomainMessages.InvalidReserveComponent);
 
-        // BR-R-01: greater than zero, except SubrogationRecoverable, which may be negative but not zero.
+        // BR-R-01: SubrogationRecoverable may be negative, but never zero.
         RuleFor(reserve => reserve.Amount)
             .Cascade(CascadeMode.Stop)
             .NotNull().WithMessage(DomainMessages.ReserveAmountNotPositive)

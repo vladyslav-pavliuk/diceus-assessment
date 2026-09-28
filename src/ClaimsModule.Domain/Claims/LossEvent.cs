@@ -2,7 +2,6 @@ using ClaimsModule.Domain.Common;
 
 namespace ClaimsModule.Domain.Claims;
 
-/// <summary>What the reporter tells us about the loss, before the claim exists (FNOL step 1, FRS §5.2).</summary>
 public sealed record LossEventDetails(
     DateTimeOffset LossDate,
     string LossDescription,
@@ -12,9 +11,8 @@ public sealed record LossEventDetails(
     string? PoliceReportNumber);
 
 /// <summary>
-/// The loss incident (FRS §9.2). One per claim (FRS §1.2, D-13), created with it.
-/// BR-C-05 (the code exists and is active) needs reference data, so it is checked by the validator
-/// and backed by a foreign key; this entity guards the rules it can see on its own.
+/// One per claim (D-13). BR-C-05 needs reference data, so the validator and a foreign key enforce it;
+/// this entity guards only the rules it can check on its own.
 /// </summary>
 public sealed class LossEvent : Entity
 {
@@ -31,7 +29,7 @@ public sealed class LossEvent : Entity
 
     public Guid ClaimId { get; private set; }
 
-    /// <summary>Stored in UTC (FRS §14.2, D-32).</summary>
+    /// <summary>Stored in UTC (D-32).</summary>
     public DateTimeOffset LossDate { get; private set; }
 
     public string LossDescription { get; private set; } = null!;
@@ -42,7 +40,7 @@ public sealed class LossEvent : Entity
 
     public decimal? EstimatedLossAmount { get; private set; }
 
-    /// <summary>When the claim was formally reported: the server time of the FNOL (D-32).</summary>
+    /// <summary>Server time of the FNOL (D-32).</summary>
     public DateTimeOffset ReportDate { get; private set; }
 
     public string? PoliceReportNumber { get; private set; }

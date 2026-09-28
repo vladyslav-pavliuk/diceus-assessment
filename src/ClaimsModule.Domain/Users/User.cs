@@ -2,10 +2,7 @@ using ClaimsModule.Domain.Common;
 
 namespace ClaimsModule.Domain.Users;
 
-/// <summary>
-/// A claims professional who can sign in through the mock authentication (D-16).
-/// Users are seeded via HasData; there is no user-management feature in scope.
-/// </summary>
+/// <summary>A seeded user of the mock authentication (D-16); user management is out of scope.</summary>
 public sealed class User : Entity
 {
     private User()
@@ -27,7 +24,7 @@ public sealed class User : Entity
 
     public bool IsActive { get; private set; }
 
-    /// <summary>Users are seeded (D-16); this factory exists for tests and future user management.</summary>
+    /// <summary>For tests: users are seeded (D-16).</summary>
     public static User Create(Guid organisationId, string username, string displayName, UserRole role)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(username);

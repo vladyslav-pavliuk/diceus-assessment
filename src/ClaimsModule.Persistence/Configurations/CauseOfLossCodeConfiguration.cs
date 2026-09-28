@@ -7,7 +7,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace ClaimsModule.Persistence.Configurations;
 
-/// <summary>CauseOfLossCodes (FRS §9.9), seeded with FRS §5.6.</summary>
 internal sealed class CauseOfLossCodeConfiguration : IEntityTypeConfiguration<CauseOfLossCode>
 {
     public void Configure(EntityTypeBuilder<CauseOfLossCode> builder)
@@ -24,7 +23,7 @@ internal sealed class CauseOfLossCodeConfiguration : IEntityTypeConfiguration<Ca
 
         builder.HasOne<Organisation>().WithMany().HasForeignKey(ShadowColumns.OrganisationId).OnDelete(DeleteBehavior.Restrict);
 
-        // FRS §9.9 "Code: UNIQUE", per organisation (D-12). An alternate key, because LossEvents references it.
+        // Unique per organisation (D-12); an alternate key, because LossEvents references it.
         builder.HasAlternateKey(ShadowColumns.OrganisationId, nameof(CauseOfLossCode.Code)).HasName("AK_CauseOfLossCodes_OrganisationId_Code");
 
         builder.HasData(SeedData.CauseOfLossCodes.Select((code, index) => new

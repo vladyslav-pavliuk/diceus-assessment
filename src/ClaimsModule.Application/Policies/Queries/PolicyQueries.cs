@@ -8,11 +8,7 @@ using MediatR;
 
 namespace ClaimsModule.Application.Policies.Queries;
 
-/// <summary>
-/// GET /api/policies/search?q= (FRS §10.3, §11.2 typeahead): policies whose number or client name
-/// contains the term. The term is required and results are capped, because this backs a typeahead (D-40).
-/// Named List… because FRS §15.3 allows only Get…/List… query names.
-/// </summary>
+/// <summary>Backs a typeahead, so the term is required and results are capped (D-40).</summary>
 public sealed record ListPoliciesQuery(string? Q) : IQuery<IReadOnlyList<PolicyDto>>
 {
     public const int MaxResults = 20;
@@ -35,7 +31,6 @@ internal sealed class ListPoliciesQueryHandler(IPolicyQueries policies) : IReque
         policies.SearchAsync(request.Q!.Trim(), ListPoliciesQuery.MaxResults, cancellationToken);
 }
 
-/// <summary>GET /api/policies/{id}/coverage (brief §3.3.2, D-08): the coverage types shown during FNOL.</summary>
 public sealed record GetPolicyCoverageQuery(Guid PolicyId) : IQuery<PolicyCoverageDto>;
 
 internal sealed class GetPolicyCoverageQueryHandler(IPolicyQueries policies) : IRequestHandler<GetPolicyCoverageQuery, PolicyCoverageDto>

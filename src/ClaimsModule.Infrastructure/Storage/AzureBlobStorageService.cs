@@ -7,19 +7,13 @@ using ClaimsModule.Application.Abstractions;
 namespace ClaimsModule.Infrastructure.Storage;
 
 /// <summary>
-/// Documents in Azure Blob Storage (FRS §13, BR-D-01, BR-D-02), container <c>claim-documents</c>. Downloads are read-only SAS
-/// URLs that go straight from the browser to Storage; the API never proxies the bytes.
-/// <list type="bullet">
-/// <item><b>Account key</b> (a connection string, e.g. Azurite): the SAS is signed locally with the key.</item>
-/// <item><b>Managed identity</b> (DefaultAzureCredential in Azure): a <b>user-delegation SAS</b>, signed with a user delegation
-/// key obtained through Entra ID, so no account key is ever configured. The key is cached and renewed before it would
-/// expire under a SAS, so listing documents costs no Storage round trip per document.</item>
-/// </list>
-/// Uploads never overwrite: the write is conditional on the blob not existing (If-None-Match: *).
+/// Downloads are read-only SAS URLs, so the API never proxies bytes (BR-D-02). With managed identity the SAS is a
+/// user-delegation SAS whose key is cached, so listing documents costs no Storage round trip per document.
+/// Uploads use If-None-Match: * and never overwrite.
 /// </summary>
 public sealed class AzureBlobStorageService : IStorageService
 {
-    /// <summary>A SAS starts slightly in the past, so a clock that runs a little behind Storage's does not reject a new URL.</summary>
+    /// <summary>Tolerates a local clock running slightly behind Storage's.</summary>
     private static readonly TimeSpan ClockSkewAllowance = TimeSpan.FromMinutes(5);
 
     private static readonly TimeSpan DelegationKeyLifetime = TimeSpan.FromDays(1);
@@ -86,7 +80,7 @@ public sealed class AzureBlobStorageService : IStorageService
     public async Task DeleteAsync(string objectPath, CancellationToken cancellationToken) =>
         await _container.GetBlobClient(objectPath).DeleteIfExistsAsync(DeleteSnapshotsOption.IncludeSnapshots, cancellationToken: cancellationToken);
 
-    /// <summary>Created on first use (Azurite starts empty); in Azure the infrastructure template creates it, and this is a no-op.</summary>
+    /// <summary>For Azurite, which starts empty; in Azure the infrastructure template creates the container.</summary>
     private async Task EnsureContainerAsync(CancellationToken cancellationToken)
     {
         if (_containerExists)

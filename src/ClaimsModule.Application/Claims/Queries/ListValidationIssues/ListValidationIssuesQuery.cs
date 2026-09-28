@@ -6,7 +6,7 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Queries.ListValidationIssues;
 
-/// <summary>GET /api/claims/{id}/validation-issues (D-08): every issue of the claim, open, acknowledged and resolved.</summary>
+/// <summary>Every status, resolved included.</summary>
 public sealed record ListValidationIssuesQuery(Guid ClaimId) : IQuery<IReadOnlyList<ValidationIssueDto>>;
 
 internal sealed class ListValidationIssuesQueryHandler(IClaimQueries claims)

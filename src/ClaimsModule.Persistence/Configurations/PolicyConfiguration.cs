@@ -9,7 +9,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace ClaimsModule.Persistence.Configurations;
 
-/// <summary>Policies (FRS §9.10), seeded with FRS §5.5 (+ D-34).</summary>
 internal sealed class PolicyConfiguration : IEntityTypeConfiguration<Policy>
 {
     public void Configure(EntityTypeBuilder<Policy> builder)
@@ -23,8 +22,7 @@ internal sealed class PolicyConfiguration : IEntityTypeConfiguration<Policy>
         builder.Property(policy => policy.ExpirationDate).IsRequired();  // DATE
         builder.Property(policy => policy.Status).IsRequired();
 
-        // FRS §9.10 "Comma-separated list or JSON array": a JSON array in NVARCHAR(MAX) (D-33). The
-        // comparer makes EF compare the list by content, so an unchanged list is not written back.
+        // A JSON array (D-33). The comparer compares by content, so an unchanged list is not written back.
         builder.Property(policy => policy.CoverageTypes)
             .HasConversion(
                 coverageTypes => CoverageTypesJson.Serialize(coverageTypes),

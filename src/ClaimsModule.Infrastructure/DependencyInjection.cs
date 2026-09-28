@@ -15,7 +15,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        // The only clock in the application (CLAUDE.md rule 9). Tests replace it with FakeTimeProvider.
+        // The only clock in the application. Tests replace it with FakeTimeProvider.
         services.TryAddSingleton(TimeProvider.System);
 
         services.AddScoped<CorrelationContext>();

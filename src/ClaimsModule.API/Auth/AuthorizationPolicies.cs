@@ -4,10 +4,8 @@ using Microsoft.AspNetCore.Authorization;
 namespace ClaimsModule.API.Auth;
 
 /// <summary>
-/// Role policies. Roles are hierarchical (FRS §3), so each policy admits its role and every role
-/// above it: "Handler" = any role, "Supervisor" = supervisor or manager, "Manager" = manager only.
-/// Policies gate endpoints (403 when the role can never perform the action, D-25); data-dependent
-/// authority checks happen again in the domain.
+/// Each policy admits its role and every role above it. They return 403 when a role can never act (D-25);
+/// data-dependent authority is checked again in the domain.
 /// </summary>
 public static class AuthorizationPolicies
 {
@@ -21,7 +19,6 @@ public static class AuthorizationPolicies
         options.AddPolicy(Supervisor, policy => policy.RequireRole(RoleCodesAtLeast(UserRole.Supervisor)));
         options.AddPolicy(Manager, policy => policy.RequireRole(RoleCodesAtLeast(UserRole.Manager)));
 
-        // Every endpoint requires a valid token unless it opts out with [AllowAnonymous].
         options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
     }
 

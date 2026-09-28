@@ -6,12 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ClaimsModule.API.Middleware;
 
-/// <summary>
-/// The single place where exceptions become HTTP responses (CLAUDE.md rule 12):
-/// ValidationException → 422, BusinessRuleViolationException → 422, NotFoundException → 404,
-/// ForbiddenAccessException → 403, ConflictException and DbUpdateConcurrencyException → 409, anything else → 500.
-/// Controllers and handlers never build error responses themselves.
-/// </summary>
+/// <summary>The single place where exceptions become HTTP responses.</summary>
 internal sealed class ExceptionHandlingMiddleware(
     RequestDelegate next,
     ILogger<ExceptionHandlingMiddleware> logger,
@@ -25,7 +20,6 @@ internal sealed class ExceptionHandlingMiddleware(
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
-            // The client disconnected; there is nobody to answer.
             logger.LogInformation("Request was cancelled by the client");
         }
         catch (Exception exception) when (!context.Response.HasStarted)
@@ -45,27 +39,27 @@ internal sealed class ExceptionHandlingMiddleware(
 
     private ProblemDetails ToProblem(Exception exception) => exception switch
     {
-        ValidationException validation => ApiProblems.Validation(ToDictionary(validation.Errors)),
+        ValidationException validation => ErrorResponseFactory.Validation(ToDictionary(validation.Errors)),
 
-        BusinessRuleViolationException violation => ApiProblems.Validation(ToDictionary(violation.Errors)),
+        BusinessRuleViolationException violation => ErrorResponseFactory.Validation(ToDictionary(violation.Errors)),
 
-        NotFoundException notFound => ApiProblems.Create(
+        NotFoundException notFound => ErrorResponseFactory.Create(
             StatusCodes.Status404NotFound, "The requested resource was not found.", notFound.Message),
 
-        ForbiddenAccessException forbidden => ApiProblems.Create(
+        ForbiddenAccessException forbidden => ErrorResponseFactory.Create(
             StatusCodes.Status403Forbidden, "You do not have permission to perform this action.", forbidden.Message),
 
-        ConflictException conflict => ApiProblems.Create(
+        ConflictException conflict => ErrorResponseFactory.Create(
             StatusCodes.Status409Conflict, "The request conflicts with the current state of the resource.", conflict.Message),
 
-        DbUpdateConcurrencyException => ApiProblems.Create(
+        DbUpdateConcurrencyException => ErrorResponseFactory.Create(
             StatusCodes.Status409Conflict,
             "The resource was changed by another request. Reload it and try again."),
 
-        BadHttpRequestException badRequest => ApiProblems.Create(
+        BadHttpRequestException badRequest => ErrorResponseFactory.Create(
             badRequest.StatusCode, "The request could not be processed.", badRequest.Message),
 
-        _ => ApiProblems.Create(
+        _ => ErrorResponseFactory.Create(
             StatusCodes.Status500InternalServerError,
             "An unexpected error occurred.",
             environment.IsDevelopment() ? exception.ToString() : null),
@@ -79,7 +73,7 @@ internal sealed class ExceptionHandlingMiddleware(
         }
         else
         {
-            // Expected outcomes: no stack trace, the exception type is enough to follow the request.
+            // Expected outcomes: the exception type is enough, no stack trace.
             logger.LogInformation("Request failed with {StatusCode} ({ExceptionType})", statusCode, exception.GetType().Name);
         }
     }

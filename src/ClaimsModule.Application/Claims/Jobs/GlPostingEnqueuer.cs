@@ -6,11 +6,8 @@ using Microsoft.Extensions.Logging;
 namespace ClaimsModule.Application.Claims.Jobs;
 
 /// <summary>
-/// Enqueues PostGLReserveChangeJob once an approval has committed (FRS §6.3, §6.4 step 8; CLAUDE.md rule 5):
-/// auto-approval, manual approval, and a retry of a failed posting. After commit, so the job never sees
-/// uncommitted rows and never runs for an approval that rolled back (ARCHITECTURE-PLAN §6.1 R5). If the
-/// enqueue itself fails, the request still succeeds (the change is committed) and the GL sweeper re-enqueues
-/// the posting later (D-15, R4).
+/// After commit, so the job never sees uncommitted rows or runs for a rolled-back approval. A failed enqueue is picked
+/// up later by the GL sweeper (D-15).
 /// </summary>
 internal sealed class GlPostingEnqueuer(IBackgroundJobScheduler scheduler, ILogger<GlPostingEnqueuer> logger) :
     IAfterCommitHandler<ReserveAutoApproved>,

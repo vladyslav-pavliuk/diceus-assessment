@@ -28,19 +28,16 @@ internal static class DependencyInjection
         services
             .AddControllers(options =>
             {
-                // Model binding only binds; FluentValidation in the MediatR pipeline validates (CLAUDE.md
-                // rule 2). Without this, [ApiController] would reject a missing non-nullable string with
-                // its own message before our validator runs.
+                // Otherwise [ApiController] rejects a missing non-nullable string with its own message before the
+                // validator runs.
                 options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
 
-                // D-24: replays a repeated Idempotency-Key on every write endpoint.
                 options.Filters.Add<IdempotencyFilter>();
             })
             .AddJsonOptions(options =>
             {
-                // Binding never rejects a value the validator is responsible for, so the 422 carries the
-                // FRS §8 wording (D-40). The lenient converters come first and therefore win;
-                // JsonStringEnumConverter stays in the list only so Swagger documents enums as names.
+                // The lenient converters come first and win (D-40); JsonStringEnumConverter stays only so Swagger
+                // documents enums as names.
                 options.JsonSerializerOptions.Converters.Add(new LenientEnumConverterFactory());
                 options.JsonSerializerOptions.Converters.Add(new LenientNullableDateTimeOffsetConverter());
                 options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -57,14 +54,14 @@ internal static class DependencyInjection
                             entry => entry.Value!.Errors.Select(error => error.ErrorMessage).ToArray(),
                             StringComparer.Ordinal);
 
-                    return new UnprocessableEntityObjectResult(ApiProblems.Validation(errors))
+                    return new UnprocessableEntityObjectResult(ErrorResponseFactory.Validation(errors))
                     {
                         ContentTypes = { "application/problem+json" },
                     };
                 };
             });
 
-        services.AddProblemDetails(options => options.CustomizeProblemDetails = ApiProblems.Normalise);
+        services.AddProblemDetails(options => options.CustomizeProblemDetails = ErrorResponseFactory.Normalise);
 
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, HttpCurrentUser>();
@@ -82,17 +79,16 @@ internal static class DependencyInjection
     {
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
 
-        // Configured from AuthOptions at resolve time, so the issuer and the validator share one key and
-        // one issuer/audience pair.
+        // Configured from AuthOptions, so the issuer and the validator share one key and issuer/audience pair.
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
             .Configure<IOptions<AuthOptions>>((jwt, authOptions) =>
             {
                 var settings = authOptions.Value;
 
-                // Keep the short JWT claim names (sub, name, role, org) instead of the WS-* URIs.
+                // Keep the short JWT claim names instead of the WS-* URIs.
                 jwt.MapInboundClaims = false;
 
-                // The Hangfire dashboard also accepts the token from ?access_token= / its cookie (D-41).
+                // Lets the Hangfire dashboard read the token from the query string or its cookie (D-41).
                 jwt.Events = new JwtBearerEvents
                 {
                     OnMessageReceived = DashboardTokenHandoff.OnMessageReceived,
@@ -120,8 +116,7 @@ internal static class DependencyInjection
     {
         services.AddCors();
 
-        // Origins come from Cors:AllowedOrigins: localhost:4200 in development, the Static Web App
-        // origin in Azure. No credentials: the SPA sends a Bearer header, not cookies.
+        // No credentials: the SPA sends a Bearer header, not cookies.
         services.AddOptions<CorsOptions>()
             .Configure<IConfiguration>((cors, configuration) =>
             {

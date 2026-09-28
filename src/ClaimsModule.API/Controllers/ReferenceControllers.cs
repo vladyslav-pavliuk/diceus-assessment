@@ -13,7 +13,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ClaimsModule.API.Controllers;
 
-/// <summary>Reference data (FRS §10.3).</summary>
 [ApiController]
 [Route("api/reference")]
 [Authorize(Policy = AuthorizationPolicies.Handler)]
@@ -31,13 +30,11 @@ public sealed class ReferenceDataController(ISender sender) : ControllerBase
         Ok(await sender.Send(new ListClaimStatusesQuery(), cancellationToken));
 }
 
-/// <summary>The simulated policy lookup (FRS §5.5, §10.3; brief §3.3.2).</summary>
 [ApiController]
 [Route("api/policies")]
 [Authorize(Policy = AuthorizationPolicies.Handler)]
 public sealed class PoliciesController(ISender sender) : ControllerBase
 {
-    /// <summary>Policies whose number or client name contains <paramref name="q"/>.</summary>
     [HttpGet("search")]
     [ProducesResponseType<IReadOnlyList<PolicyDto>>(StatusCodes.Status200OK)]
     [ProducesResponseType<HttpValidationProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
@@ -51,7 +48,6 @@ public sealed class PoliciesController(ISender sender) : ControllerBase
         Ok(await sender.Send(new GetPolicyCoverageQuery(id), cancellationToken));
 }
 
-/// <summary>Users of the caller's organisation (D-29 handler filter, D-18 assign dialog).</summary>
 [ApiController]
 [Route("api/users")]
 [Authorize(Policy = AuthorizationPolicies.Handler)]

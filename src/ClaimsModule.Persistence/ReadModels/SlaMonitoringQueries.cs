@@ -7,9 +7,8 @@ using Microsoft.EntityFrameworkCore;
 namespace ClaimsModule.Persistence.ReadModels;
 
 /// <summary>
-/// The SLA job's query (FRS §12.2, D-01), one SQL statement for the current tenant. UpdatedAt is null for a
-/// claim never changed since creation, and those are exactly the stale ones, so the age is COALESCE(UpdatedAt,
-/// CreatedAt). The "no breach in the last 24h" check uses IX_ClaimAuditLog_ClaimId_EventType_CreatedAt.
+/// UpdatedAt is null for a claim never changed since creation, exactly the stale ones, so the age is
+/// COALESCE(UpdatedAt, CreatedAt) (D-01).
 /// </summary>
 internal sealed class SlaMonitoringQueries(ClaimsDbContext dbContext) : ISlaMonitoringQueries
 {

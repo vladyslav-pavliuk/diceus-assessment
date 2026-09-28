@@ -23,7 +23,7 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasForeignKey(user => user.OrganisationId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Unique system-wide, not per organisation: sign-in resolves the user before the tenant is known.
+        // Unique system-wide: sign-in resolves the user before the tenant is known.
         builder.HasIndex(user => user.Username).IsUnique();
 
         // Anonymous objects can set private setters and shadow properties (CreatedAt, IsDeleted).

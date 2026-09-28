@@ -31,11 +31,11 @@ public static class DependencyInjection
                 throw new InvalidOperationException($"Connection string '{ConnectionStringName}' is not configured.");
             }
 
-            // Retries cover transient Azure SQL errors, including a serverless database resuming from
-            // auto-pause (D-36). Explicit transactions therefore run inside the execution strategy (UnitOfWork).
+            // Covers a serverless database resuming from auto-pause (D-36), so explicit transactions run inside the
+            // execution strategy.
             options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure());
 
-            // Order matters: the immutability guard must see a delete before it becomes a soft delete.
+            // The immutability guard must see a delete before it becomes a soft delete.
             options.AddInterceptors(
                 provider.GetRequiredService<ImmutableRowsInterceptor>(),
                 provider.GetRequiredService<AuditColumnsInterceptor>());
@@ -52,7 +52,6 @@ public static class DependencyInjection
         services.AddScoped<IGlPostingStore, GlPostingStore>();
         services.AddScoped<ITenantDirectory, TenantDirectory>();
 
-        // Read side (D-40): SQL projections behind Application-owned contracts.
         services.AddScoped<IClaimQueries, ClaimQueries>();
         services.AddScoped<IReferenceDataQueries, ReferenceDataQueries>();
         services.AddScoped<IPolicyQueries, PolicyQueries>();
@@ -67,6 +66,6 @@ public static class DependencyInjection
 
 public static class HealthCheckTags
 {
-    /// <summary>Dependencies that must be up before the API takes traffic (the readiness probe).</summary>
+    /// <summary>For the readiness probe.</summary>
     public const string Ready = "ready";
 }

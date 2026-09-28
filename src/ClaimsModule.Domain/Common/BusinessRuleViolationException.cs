@@ -1,9 +1,8 @@
 namespace ClaimsModule.Domain.Common;
 
 /// <summary>
-/// A domain rule rejected the operation (for example "Self-approval is not permitted.").
-/// Mapped to HTTP 422 with the FRS §10.4 body. Errors are keyed by field or condition so that one
-/// exception can report several failed conditions at once (BR-ST-03 lists every blocking condition).
+/// A domain rule rejected the operation (HTTP 422). Errors are keyed by field or condition, so one
+/// exception reports every failed condition (BR-ST-03).
 /// </summary>
 public sealed class BusinessRuleViolationException : Exception
 {

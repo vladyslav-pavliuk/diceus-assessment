@@ -17,7 +17,6 @@ public sealed class ReserveEndpointTests(ApiFixture fixture) : IAsyncLifetime
     private ClaimsApi _handler = null!;
     private ClaimsApi _otherHandler = null!;
     private ClaimsApi _supervisor = null!;
-    private ClaimsApi _otherSupervisor = null!;
     private ClaimsApi _manager = null!;
 
     private IServiceProvider Services => fixture.Factory.Services;
@@ -27,7 +26,6 @@ public sealed class ReserveEndpointTests(ApiFixture fixture) : IAsyncLifetime
         _handler = await ClaimsApi.SignInAsync(fixture.Factory, "handler.alex");
         _otherHandler = await ClaimsApi.SignInAsync(fixture.Factory, "handler.blake");
         _supervisor = await ClaimsApi.SignInAsync(fixture.Factory, "supervisor.casey");
-        _otherSupervisor = await ClaimsApi.SignInAsync(fixture.Factory, "supervisor.drew");
         _manager = await ClaimsApi.SignInAsync(fixture.Factory, "manager.emery");
     }
 

@@ -15,9 +15,7 @@ public static class DependencyInjection
         {
             configuration.RegisterServicesFromAssembly(assembly);
 
-            // Order matters: the first behaviour added is the outermost.
-            // Logging wraps everything (including validation failures); validation runs before the
-            // UnitOfWorkBehavior, so an invalid request never opens a transaction.
+            // The first behaviour added is the outermost.
             configuration.AddOpenBehavior(typeof(LoggingBehavior<,>));
             configuration.AddOpenBehavior(typeof(ValidationBehavior<,>));
             configuration.AddOpenBehavior(typeof(UnitOfWorkBehavior<,>));
@@ -33,7 +31,7 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>Registers every handler class of this assembly under each closed handler interface it implements.</summary>
+    /// <summary>Assembly scan: handlers such as ClaimAuditTrail are never referenced by name.</summary>
     private static void AddDomainEventHandlers(this IServiceCollection services, Type openHandlerInterface)
     {
         var handlerTypes = typeof(DependencyInjection).Assembly.GetTypes()

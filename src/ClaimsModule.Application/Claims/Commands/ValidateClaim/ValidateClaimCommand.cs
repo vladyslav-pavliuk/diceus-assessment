@@ -8,11 +8,7 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Commands.ValidateClaim;
 
-/// <summary>
-/// POST /api/claims/{id}/validate (FRS §5.4 "the validate endpoint", D-08). Re-runs every rule that is
-/// persisted as an issue: newly failing rules raise issues, passing rules resolve them. It changes
-/// data, so it is a command. Returns every issue of the claim.
-/// </summary>
+/// <summary>A command rather than a query, because it raises and resolves persisted issues.</summary>
 public sealed record ValidateClaimCommand(Guid ClaimId) : ICommand<IReadOnlyList<ValidationIssueDto>>;
 
 internal sealed class ValidateClaimCommandHandler(

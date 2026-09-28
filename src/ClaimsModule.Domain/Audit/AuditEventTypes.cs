@@ -1,9 +1,6 @@
 namespace ClaimsModule.Domain.Audit;
 
-/// <summary>
-/// ClaimAuditLog.EventType values. The FRS §14.1 list, then the additions of D-08 (BR-A-02: "every
-/// significant business action"). Strings, not an enum: the list is open-ended.
-/// </summary>
+/// <summary>ClaimAuditLog.EventType values. Strings rather than an enum, because the list is open-ended.</summary>
 public static class AuditEventTypes
 {
     // FRS §14.1.

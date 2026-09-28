@@ -1,6 +1,5 @@
 using System.Net;
 using ClaimsModule.IntegrationTests.Fixtures;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;

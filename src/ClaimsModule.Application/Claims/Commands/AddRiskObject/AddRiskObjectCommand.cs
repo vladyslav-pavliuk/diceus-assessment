@@ -11,11 +11,7 @@ using MediatR;
 
 namespace ClaimsModule.Application.Claims.Commands.AddRiskObject;
 
-/// <summary>
-/// POST /api/claims/{id}/risk-objects (D-40, decided by Vlad 2026-09-28): adds a damaged asset after
-/// FNOL, so the "no risk objects" warning (FRS §5.4) can be cleared later, not only at intake. The
-/// first risk object becomes primary, and one marked primary takes over (D-33). Audit: RISK_OBJECT_ADDED.
-/// </summary>
+/// <summary>Lets the "no risk objects" warning be cleared after intake (D-40).</summary>
 public sealed record AddRiskObjectCommand(
     Guid ClaimId,
     AssetType? AssetType,
