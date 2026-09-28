@@ -3,7 +3,6 @@ using System.Net.Http.Json;
 using ClaimsModule.Application.Users;
 using ClaimsModule.Domain.Users;
 using ClaimsModule.IntegrationTests.Fixtures;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.IdentityModel.JsonWebTokens;
 
 namespace ClaimsModule.IntegrationTests.Auth;

@@ -1,7 +1,6 @@
 using ClaimsModule.Application.Claims.Inputs;
 using ClaimsModule.Application.Common.Messaging;
 using ClaimsModule.Domain.Claims;
-using ClaimsModule.Domain.Reserves;
 
 namespace ClaimsModule.Application.Claims.Commands.CreateClaim;
 
