@@ -268,7 +268,7 @@ Yes. RCSI changes what plain SELECTs read, not how an UPDATE qualifies rows: the
 clause against the latest committed row. Only SNAPSHOT isolation would work on a stale version, and it fails with an update-conflict error instead of
 double-posting. The tests run on SQL Server's default (locking READ COMMITTED); the argument covers RCSI.
 
-**Why `= 'Pending'` and not `<> 'Posted'` as CLAUDE.md says?** (D-41 Q1, open)
+**Why `= 'Pending'` and not `<> 'Posted'` as CLAUDE.md says?** (D-41 Q1, accepted)
 With `<> 'Posted'`, a Failed posting can be posted by any stray copy of the job, silently and without GL_POSTING_RETRIED, and that races the user's retry.
 With `= 'Pending'`, Failed is terminal until the audited retry puts it back to Pending. Same single statement, same "1 row" rule; it only narrows what the
 job may touch.

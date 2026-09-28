@@ -98,10 +98,13 @@ types or Azure SDKs. AutoMapper profiles live in Application.
   and `UPDATE … OUTPUT INSERTED` **inside the claim-creation transaction**. A SQL SEQUENCE can leave gaps on rollback
   or cache loss, which breaks "no gaps". Explain this trade-off in DECISIONS.md.
 - **GL job** `PostGLReserveChangeJob(reserveHistoryId, claimId, idempotencyKey)` needs a race-safe no-op.
-  Use a conditional update (`… SET PostingStatus='Posted' WHERE Id=@id AND PostingStatus<>'Posted'`) and write the
-  audit row only if exactly 1 row changed, all in one transaction. Also put a unique filtered index on the idempotency
-  key as a backstop. Do **not** use a naive check-then-act. After retries are exhausted (state filter or
-  `OnAttemptsExceeded`), set PostingStatus=Failed and write GL_POSTING_FAILED.
+  Use a conditional update (`… SET PostingStatus='Posted' WHERE Id=@id AND ClaimId=@claimId AND IdempotencyKey=@key
+  AND PostingStatus='Pending' AND ApprovalStatus IN ('Approved','AutoApproved')`) and write the audit row only if exactly
+  1 row changed, all in one transaction. `= 'Pending'`, not `<> 'Posted'`: a Failed posting is posted again only after the
+  audited retry endpoint puts it back to Pending (D-41 Q1). Backstops: unique index on the idempotency key and a unique
+  filtered index allowing one GL_POSTING_SIMULATED per transaction. Do **not** use a naive check-then-act. Retries:
+  `[AutomaticRetry(Attempts = 3)]` (a constant); the last attempt sets PostingStatus=Failed (same compare-and-set on
+  Pending) and writes GL_POSTING_FAILED in a new unit of work, then rethrows so Hangfire shows the job as Failed (D-41 Q2).
 - **SLA job** `SlaMonitoringJob`, cron `*/15 * * * *`: finds Draft/Open claims with `UpdatedAt` older than 48h and
   writes SLA_BREACH_DETECTED at most once per 24h per claim. It does **not** change `Status`.
 - **Documents**: `IStorageService` has `AzureBlobStorageService` (container `claim-documents`, path

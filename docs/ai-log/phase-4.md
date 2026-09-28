@@ -94,7 +94,17 @@ Where Claude deliberately departed from written text, it did not decide silently
 **Q2** (constant retry count; rethrow after recording the failure, amending D-35) are open questions for Vlad, implemented as recommended.
 
 ## 6. Open items for Vlad
-- Decide D-41 Q1 and Q2. If Q1 is accepted, update the GL-job line in `CLAUDE.md` (Claude did not edit it).
+- ~~Decide D-41 Q1 and Q2.~~ Done, see §7.
 - Review D-41 items 1–19 (PROPOSED), and D-38 / D-40 items, still PROPOSED.
 - Phase 7: Hangfire creates its schema at first start, so the app's database user needs DDL rights then (D-41 item 14); the startup registration
   needs the database reachable, so a paused serverless database delays the first start (EF retries do not cover Hangfire's own connection).
+
+## 7. Vlad's decisions after the summary
+Vlad's reply (verbatim):
+```
+Accept Q1 and Q2, update CLAUDE.md accordingly.
+```
+Applied: the GL-job line in `CLAUDE.md` now specifies `PostingStatus='Pending'` (plus approved and all three job arguments matching), the two
+backstop indexes, the constant retry count and the rethrow after recording the failure. D-41 Q1/Q2 marked ACCEPTED, D-35 amended, REVIEW-PREP and
+the matrix updated. No code change was needed: both were already implemented as recommended.
+

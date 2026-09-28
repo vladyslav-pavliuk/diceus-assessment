@@ -53,7 +53,7 @@ Markers used below:
 | D-38 | Phase 1 cross-cutting choices (errors, auth, shadow columns, health, toolchain) | PROPOSED |
 | D-39 | Phase 2 domain and schema choices (+ two open questions) | ACCEPTED |
 | D-40 | Phase 3 API, read-side and pipeline choices (+ two decisions by Vlad) | PROPOSED (Q1, Q2 ACCEPTED) |
-| D-41 | Phase 4 reserves, GL posting, SLA job and Hangfire choices (+ two open questions) | PROPOSED |
+| D-41 | Phase 4 reserves, GL posting, SLA job and Hangfire choices (+ two decisions by Vlad) | PROPOSED (Q1, Q2 ACCEPTED) |
 
 ---
 
@@ -810,7 +810,8 @@ demonstrability. It is also explicit code that a reviewer can read and a unit te
 (`Jobs:GlPosting:SimulateFailure`) makes the failure path demonstrable.
 
 **Rationale.** A filter (c) works too, but it puts business logic in Hangfire plumbing. Option (b) keeps it next to the job.
-**Status:** ACCEPTED (2026-09-27)
+**Status:** ACCEPTED (2026-09-27). **Amended by D-41 Q2 (2026-09-28):** the retry count is a constant (3 retries, delays 10/30/60 s), not config,
+and after recording Failed + GL_POSTING_FAILED the job rethrows instead of swallowing.
 
 ## D-36 — Azure hosting: Container Apps (scale to zero) + serverless SQL
 **Context.** Brief §3.8 encourages the "free tier or trial". Brief §2.3 allows "App Service or Container Apps", although §3.8's minimum list names
@@ -1096,7 +1097,7 @@ nothing, or refinements of earlier decisions. None changes an FRS business rule.
 **Context.** Phase 4 built the reserve commands and endpoints, the GL posting job, the sweeper, the SLA job, the idempotency clean-up
 job and the Hangfire dashboard. The race conditions they defend against are written up in ARCHITECTURE-PLAN §6.1 (R1–R13), before the
 code, as the prompt required. Two points depart from text that was already written down (CLAUDE.md and D-35), so they are open questions
-for Vlad (Q1, Q2). The other items are choices where the FRS and the brief say nothing, or refinements of earlier decisions. None changes an
+for Vlad (Q1, Q2; both accepted on 2026-09-28). The other items are choices where the FRS and the brief say nothing, or refinements of earlier decisions. None changes an
 FRS business rule.
 
 **Open questions (implemented as recommended; each is a small change to reverse).**
@@ -1108,7 +1109,8 @@ FRS business rule.
     approved change it was created for.
   - **Recommendation: (b), implemented.** It is still one conditional UPDATE and still "audit only if exactly 1 row changed", so every
     guarantee of (a) holds; it only narrows what the job may touch. `JOB_02_A_failed_posting_is_not_posted_by_a_stray_job` fails under (a)
-    (mutation-checked). If accepted, the CLAUDE.md line and REQUIREMENTS-MATRIX JOB-02 should say `= 'Pending'`.
+    (mutation-checked).
+  - **Decision (Vlad, 2026-09-28): (b).** CLAUDE.md's GL-job line updated to `= 'Pending'`; REQUIREMENTS-MATRIX JOB-02 already says so.
 - **Q2. The exhausted-retries path (amends D-35).** D-35 said: attempts from config (`Jobs:GlPosting:MaxAttempts`), and on the last attempt
   "catch, set Failed, write GL_POSTING_FAILED, swallow".
   - The attempt count is a **constant** (`PostGLReserveChangeJob.RetryAttempts = 3`, delays 10 s / 30 s / 60 s, so four runs in about
@@ -1117,6 +1119,7 @@ FRS business rule.
   - On the last attempt the job records Failed + GL_POSTING_FAILED in a **new** unit of work (the failed attempt's transaction has rolled back),
     then **rethrows**, so Hangfire also shows the job as Failed (dashboard, logs) instead of Succeeded. The business state is the same either way.
   - **Recommendation: accept both.** `Jobs:GlPosting:SimulateFailure` from D-35 is kept.
+  - **Decision (Vlad, 2026-09-28): accepted.** D-35 amended; CLAUDE.md's GL-job line updated.
 
 **Choices (ASSUMPTION unless cited).**
 1. **Jobs are thin; the work is an Application command.** `PostGLReserveChangeJob`, `SlaMonitoringJob`, `GlPostingSweeperJob` open a DI scope
@@ -1188,5 +1191,5 @@ FRS business rule.
 
 **Rationale.** Each item is small and reversible, and each is covered by a test named after its rule (or, for items 14 and 15, by the
 container smoke run recorded in `docs/ai-log/phase-4.md`), so none is a silent choice.
-**Status:** PROPOSED (2026-09-28). Q1 and Q2 need Vlad's decision; items 1–19 await review.
+**Status:** PROPOSED (2026-09-28). Q1 and Q2 ACCEPTED by Vlad (2026-09-28); items 1–19 await review.
 
