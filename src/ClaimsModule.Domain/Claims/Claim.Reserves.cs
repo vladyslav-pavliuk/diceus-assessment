@@ -142,7 +142,8 @@ public sealed partial class Claim
 
     /// <summary>
     /// POST /claims/{id}/reserves/{txnId}/reject (FRS §6.4 step 9). Rejecting needs the same authority
-    /// as approving (FRS §3 "approve/reject reserves up to …"). The row stays in history (BR-R-04).
+    /// as approving (FRS §3 "approve/reject reserves up to …"), and, like approving, must be someone else's
+    /// decision: the submitter withdraws their own transaction with Retract (D-45). The row stays in history (BR-R-04).
     /// </summary>
     public void RejectReserveTransaction(Guid transactionId, string? rejectionReason, Actor approver, DateTimeOffset now)
     {
@@ -152,6 +153,11 @@ public sealed partial class Claim
         var (_, transaction) = FindPendingTransaction(transactionId);
 
         var violations = new RuleViolations();
+        if (transaction.SubmittedByUserId == approver.UserId)
+        {
+            violations.Add(ErrorKeys.ReserveApproval, DomainMessages.SelfRejectionNotPermitted);
+        }
+
         if (!ReserveAuthorityPolicy.CanApprove(approver.Role, transaction.RequiredAuthority))
         {
             violations.Add(ErrorKeys.ReserveApproval, DomainMessages.NoRejectionAuthority);
