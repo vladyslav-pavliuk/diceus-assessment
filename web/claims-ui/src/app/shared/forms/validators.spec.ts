@@ -10,8 +10,7 @@ import {
   requiredForPartyType,
 } from './validators';
 
-// The FNOL validators (FRS §8, §11.2). Test names start with the requirement IDs of
-// docs/REQUIREMENTS-MATRIX.md; each error carries the API's own message.
+// Test names start with requirement IDs; each error carries the API's own message.
 
 const NOW = new Date('2026-09-28T12:00:00Z');
 const clock = () => NOW;

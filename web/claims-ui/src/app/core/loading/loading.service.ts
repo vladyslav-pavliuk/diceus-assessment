@@ -1,6 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
 
-/** Counts API calls in flight; the shell shows a progress bar while any is running (FRS §11.4). */
 @Injectable({ providedIn: 'root' })
 export class LoadingService {
   private readonly inFlight = signal(0);

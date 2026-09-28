@@ -1,5 +1,4 @@
-// Global theme (FRS §11.4, brief §3.7.4): Material 3 with a custom primary palette generated from the
-// brand colour #1B4F72 (`ng generate @angular/material:theme-color`, see styles/_theme-colors.scss).
+// Material 3 with a palette generated from the brand colour #1B4F72 (see styles/_theme-colors.scss).
 @use '@angular/material' as mat;
 @use './styles/theme-colors' as brand;
 
@@ -17,9 +16,7 @@ html {
     )
   );
 
-  // Status colours are fixed by FRS §11.1 and do not follow the theme palette:
-  // Draft grey | Open blue | UnderInvestigation orange | PendingPayment purple | Closed green |
-  // Reopened amber | Withdrawn dark grey. Each pair keeps text contrast at WCAG AA or better.
+  // Status colours are fixed by FRS §11.1, not the theme. Each pair meets WCAG AA text contrast.
   --status-grey-bg: #e3e5e8;
   --status-grey-fg: #3c4043;
   --status-blue-bg: #d6e6ff;

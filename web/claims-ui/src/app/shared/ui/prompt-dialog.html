@@ -1,0 +1,24 @@
+<h2 mat-dialog-title>{{ data.title }}</h2>
+<mat-dialog-content>
+  @if (data.message) {
+    <p>{{ data.message }}</p>
+  }
+  <mat-form-field class="prompt__field">
+    <mat-label>{{ data.label }}</mat-label>
+    <textarea matInput [formControl]="text" rows="3" cdkFocusInitial></textarea>
+    @if (data.maxLength) {
+      <mat-hint align="end">{{ text.value.length }} / {{ data.maxLength }}</mat-hint>
+    }
+    <mat-error>
+      @if (text.hasError('maxlength')) {
+        At most {{ data.maxLength }} characters.
+      } @else {
+        {{ data.label }} is required.
+      }
+    </mat-error>
+  </mat-form-field>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Cancel</button>
+  <button mat-flat-button (click)="submit()">{{ data.confirmText ?? 'Confirm' }}</button>
+</mat-dialog-actions>

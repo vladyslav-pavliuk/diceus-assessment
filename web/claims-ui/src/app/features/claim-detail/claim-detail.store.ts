@@ -15,10 +15,8 @@ const POSTING_POLL_INTERVAL_MS = 3000;
 const POSTING_POLL_ATTEMPTS = 10;
 
 /**
- * The claim-detail screen's state, provided by the page component and destroyed with it (a route-level
- * provider would outlive the page). The server is the
- * source of truth: every change is a command to the API followed by a reload of what it affects, never
- * an optimistic local edit. A 409 (another user changed the claim, RowVer) reloads everything.
+ * Provided by the page component, because a route-level provider would outlive the page. The server is the source of
+ * truth: every change is a command followed by a reload of what it affects, never an optimistic local edit.
  */
 @Injectable()
 export class ClaimDetailStore {
@@ -44,7 +42,6 @@ export class ClaimDetailStore {
     return user ? { id: user.id, role: user.role } : null;
   });
 
-  /** Closed and Withdrawn claims accept no changes except a reopen (D-26). */
   readonly isReadOnly = computed(() => {
     const claim = this.claim();
     return claim != null && isReadOnlyStatus(claim.status);
@@ -101,13 +98,12 @@ export class ClaimDetailStore {
     }
   }
 
-  /** After a reserve command: the claim (balances, status rules) and the reserves both change. */
   afterReserveChange(): void {
     this.reloadClaim();
     this.reloadReserves();
   }
 
-  /** A 409 means someone else changed the claim first: show the latest version (D-41 item 5). */
+  /** A 409 means someone else changed the claim first (D-41). */
   handleError(error: unknown): void {
     if (error instanceof ApiError && error.status === 409) {
       this.reloadClaim();
@@ -118,9 +114,8 @@ export class ClaimDetailStore {
   }
 
   /**
-   * The GL job posts approved reserves in the background (FRS §6.5, §12.1). While a row is approved but
-   * still Pending, re-read the reserves every few seconds for a short while, so the badge turns Posted
-   * without a manual refresh. Bounded: the job's retries take about two minutes at worst (D-41 Q2).
+   * Polls while an approved row is still Pending, so the badge turns Posted without a refresh. Bounded, because the
+   * job's retries take about two minutes at worst (D-41).
    */
   private watchPendingPostings(): void {
     const awaitingPosting = (reserves: ClaimReserves | null) =>

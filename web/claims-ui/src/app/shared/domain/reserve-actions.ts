@@ -2,9 +2,8 @@ import { canApproveTier, isAtLeast } from '../../core/auth/roles';
 import { UserRole } from '../../core/models/enums';
 import { ReserveHistoryEntry } from '../../core/models/reserve.models';
 
-// Which buttons a row of the Reserves history table shows (FRS §11.3 Tab 3), mirrored from
-// Claim.Reserves.cs. The UI hides what a role can never do (SEC-03) and disables, with the API's own
-// message, what this particular row does not allow; the API re-checks everything.
+// Mirrors Claim.Reserves.cs. Hides what a role can never do, and disables with the API's own message what this
+// row does not allow; the API re-checks everything.
 
 export interface CurrentUser {
   id: string;
@@ -12,15 +11,12 @@ export interface CurrentUser {
 }
 
 export interface ReserveRowActions {
-  /** Approve/Reject are shown only to supervisors and managers, on pending rows (FRS §11.3, brief §3.7.4). */
   showDecision: boolean;
-  /** Why Approve is disabled, in the API's words; null when it is enabled. */
+  /** In the API's words; null when enabled. */
   approveBlockedReason: string | null;
-  /** Why Reject is disabled; null when it is enabled. */
+  /** Null when enabled. */
   rejectBlockedReason: string | null;
-  /** Retract: the submitter, on their own pending row (FRS §6.4). */
   showRetract: boolean;
-  /** Retry: an approved row whose GL posting failed (FRS §11.3, D-08). */
   showRetryPosting: boolean;
 }
 
@@ -64,12 +60,12 @@ export function reserveRowActions(
     approveBlockedReason,
     rejectBlockedReason,
     showRetract: pending && user != null && row.submittedByUserId === user.id,
-    // Allowed on Closed/Withdrawn claims too: it completes the accounting of an earlier approval (D-41 item 9).
+    // Allowed on Closed/Withdrawn claims too: it completes the accounting of an earlier approval (D-41).
     showRetryPosting: approved && row.postingStatus === 'Failed',
   };
 }
 
-/** Closed and Withdrawn claims accept no changes except a reopen (D-26); mirrors Claim.IsReadOnlyStatus. */
+/** Mirrors Claim.IsReadOnlyStatus (D-26). */
 export function isReadOnlyStatus(status: string): boolean {
   return status === 'Closed' || status === 'Withdrawn';
 }

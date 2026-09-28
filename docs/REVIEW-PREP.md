@@ -139,7 +139,7 @@ Test: `Int: BR_A_01_Db_trigger_blocks_raw_update_and_delete`.
 - `CanApprove` is hierarchical, so a manager can approve a supervisor-tier transaction.
 - Boundaries are tested at 10,000 / 10,000.01 / 100,000 / 100,000.01, both signs (`Dom: BR_R_02_Tier_boundaries`,
   `tests/ClaimsModule.Domain.Tests/Reserves/ReserveAuthorityTests.cs:21`).
-- The UI mirrors it in `web/claims-ui/src/app/shared/domain/authority.ts:49` (`Web: RSV_09_*`). In the Add Reserve panel the preview also
+- The UI mirrors it in `web/claims-ui/src/app/shared/domain/authority.ts:37` (`Web: RSV_09_*`). In the Add Reserve panel the preview also
   applies the $10M escalation (`exceedsAggregateLimit`, `:30`). That was Phase 8 finding F3: before the fix, a $5k increase on a claim at
   $9,998,000 previewed "Auto-approved", while the API sent it to a manager.
 
@@ -248,26 +248,26 @@ Test: `Int: BR_A_01_Db_trigger_blocks_raw_update_and_delete`.
 ### Frontend and Azure
 
 **22. How is the FNOL reactive form designed?**
-- `web/claims-ui/src/app/features/fnol-intake/fnol-form.ts:34` creates one typed `FormGroup` per step under a `linear` `MatStepper`, so each
+- `web/claims-ui/src/app/features/fnol-intake/fnol-form.ts:33` creates one typed `FormGroup` per step under a `linear` `MatStepper`, so each
   step validates independently.
 - Validators return the API's own messages (`web/claims-ui/src/app/shared/forms/validators.ts`):
   - `lossDateValidator(now)` at `:29`, which reads an injected clock;
   - `lossDescriptionValidator` (20 trimmed characters) at `:42`;
   - `atLeastOneClaimant` on the parties FormArray at `:57`.
 - The time picker is a separate control merged into the date, because of the Phase 6 bug (see AI-WORKFLOW §5 item 6).
-- Server 422 keys are mapped back to control paths and to their step (`web/claims-ui/src/app/shared/forms/server-errors.ts:21-39`,
-  `fnol-form.ts:131`).
+- Server 422 keys are mapped back to control paths and to their step (`web/claims-ui/src/app/shared/forms/server-errors.ts:17-34`,
+  `fnol-form.ts:126`).
 - Tests: `Web: UI_FNOL_*`.
 
 **23. How is the UI gated by role, and how do you guarantee no component calls HTTP directly?**
-- `web/claims-ui/src/app/shared/domain/reserve-actions.ts:42-68` decides which buttons a row shows:
+- `web/claims-ui/src/app/shared/domain/reserve-actions.ts:38-64` decides which buttons a row shows:
   - Approve/Reject only for supervisor+ on pending rows, disabled with the API message for self-approval or too little authority;
   - Retract only for the submitter;
   - Retry only for a Failed posting.
 - The backend still decides everything.
 - `HttpClient` is banned outside `core/api` by `no-restricted-imports` (`web/claims-ui/eslint.config.js:47`).
 - `authInterceptor` adds the Bearer token only for API URLs, and `errorInterceptor` turns ProblemDetails into snackbars
-  (`web/claims-ui/src/app/core/http/interceptors.ts:21, 50`).
+  (`web/claims-ui/src/app/core/http/interceptors.ts:17, 50`).
 - Tests: `Web: SEC_03_*`, `UI_GEN_03_*`, `UI_GEN_05_*`.
 
 **24. Walk me through the Azure deployment. Where are the secrets?**

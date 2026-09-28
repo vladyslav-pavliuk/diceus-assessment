@@ -1,0 +1,8 @@
+<div class="empty">
+  <mat-icon class="empty__icon">{{ icon() }}</mat-icon>
+  <div class="empty__title">{{ title() }}</div>
+  @if (message()) {
+    <div class="empty__message">{{ message() }}</div>
+  }
+  <div class="empty__actions"><ng-content /></div>
+</div>

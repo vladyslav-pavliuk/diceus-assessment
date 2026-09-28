@@ -20,10 +20,7 @@ export interface PromptDialogData {
   maxLength?: number;
 }
 
-/**
- * Asks for one piece of text: a rejection reason, an acknowledgement note, an override reason. Resolves
- * with the trimmed text, or not at all when cancelled.
- */
+/** Resolves with the trimmed text, or not at all when cancelled. */
 @Component({
   selector: 'app-prompt-dialog',
   imports: [
@@ -33,38 +30,8 @@ export interface PromptDialogData {
     MatFormFieldModule,
     MatInputModule,
   ],
-  template: `
-    <h2 mat-dialog-title>{{ data.title }}</h2>
-    <mat-dialog-content>
-      @if (data.message) {
-        <p>{{ data.message }}</p>
-      }
-      <mat-form-field class="prompt__field">
-        <mat-label>{{ data.label }}</mat-label>
-        <textarea matInput [formControl]="text" rows="3" cdkFocusInitial></textarea>
-        @if (data.maxLength) {
-          <mat-hint align="end">{{ text.value.length }} / {{ data.maxLength }}</mat-hint>
-        }
-        <mat-error>
-          @if (text.hasError('maxlength')) {
-            At most {{ data.maxLength }} characters.
-          } @else {
-            {{ data.label }} is required.
-          }
-        </mat-error>
-      </mat-form-field>
-    </mat-dialog-content>
-    <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close>Cancel</button>
-      <button mat-flat-button (click)="submit()">{{ data.confirmText ?? 'Confirm' }}</button>
-    </mat-dialog-actions>
-  `,
-  styles: `
-    .prompt__field {
-      width: 100%;
-      min-width: 400px;
-    }
-  `,
+  templateUrl: './prompt-dialog.html',
+  styleUrl: './prompt-dialog.scss',
 })
 export class PromptDialog {
   protected readonly data = inject<PromptDialogData>(MAT_DIALOG_DATA);

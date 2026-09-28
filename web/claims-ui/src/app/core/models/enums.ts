@@ -1,5 +1,4 @@
-// The backend's enums, serialised by name (D-38 item 8). Each list is in the backend's declaration
-// order, which is also the order the UI shows them in (FRS §4.1, §6.2).
+// Serialised by name. Each list is in the backend's declaration order, which is also the display order.
 
 export const CLAIM_STATUSES = [
   'Draft',

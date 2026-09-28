@@ -22,11 +22,7 @@ type LoadState =
   | { status: 'loaded'; page: PagedResult<ClaimSummary> }
   | { status: 'failed' };
 
-/**
- * The dashboard (FRS §11.1, brief §3.7.1): a server-paginated, filterable claims table. The URL is the
- * state: filters and paging are query parameters, and every change of them loads the matching page;
- * switchMap drops a slower, older response.
- */
+/** The URL is the state: every change of its query parameters loads a page, and switchMap drops a stale response. */
 @Component({
   selector: 'app-claims-list',
   imports: [
@@ -67,10 +63,10 @@ export class ClaimsList {
     requireSync: true,
   });
 
-  /** Emits to load the current page again (the "Try again" button). */
+  /** The "Try again" button. */
   private readonly reload$ = new BehaviorSubject<void>(undefined);
 
-  /** The last page that loaded, kept on screen (dimmed) while the next one loads. */
+  /** Kept on screen, dimmed, while the next page loads. */
   private readonly lastLoaded = signal<PagedResult<ClaimSummary> | null>(null);
 
   private readonly state = toSignal(
@@ -122,7 +118,6 @@ export class ClaimsList {
   });
 
   protected onFiltersChange(filters: ClaimFilters): void {
-    // A new filter starts again from the first page.
     this.navigate({ ...this.query(), ...filters, page: 1 });
   }
 

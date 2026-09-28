@@ -1,6 +1,5 @@
 import { Pipe, PipeTransform } from '@angular/core';
 
-/** A byte count as B, KB or MB (FRS §11.3 Tab 4 "file size"). */
 @Pipe({ name: 'fileSize' })
 export class FileSizePipe implements PipeTransform {
   transform(bytes: number | null | undefined): string {

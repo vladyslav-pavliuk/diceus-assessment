@@ -1,9 +1,8 @@
 import { AbstractControl, FormArray, ValidationErrors, ValidatorFn } from '@angular/forms';
 import { PartyRole, PartyType, ReserveComponentType } from '../../core/models/enums';
 
-// Client-side copies of the FNOL rules (FRS §8, §11.2). Each error carries the API's own message, so
-// the text next to a field is the same whether the browser or the server caught the problem. The API
-// validates everything again (CLAUDE.md rule 2); these only save a round trip.
+// Each error carries the API's own message, so the text is the same whichever side caught the problem. The API
+// validates everything again; these only save a round trip.
 
 export const MESSAGES = {
   lossDateRequired: 'Loss date is required.',
@@ -25,7 +24,7 @@ export const MESSAGES = {
 export const LOSS_DESCRIPTION_MIN_LENGTH = 20;
 export const MAX_DECIMAL_PLACES = 4;
 
-/** BR-C-01: the loss date is required and may not be later than now (no tolerance, D-32). */
+/** BR-C-01, with no tolerance (D-32). */
 export function lossDateValidator(now: () => Date): ValidatorFn {
   return (control: AbstractControl): ValidationErrors | null => {
     const value = control.value as Date | null;
@@ -38,7 +37,7 @@ export function lossDateValidator(now: () => Date): ValidatorFn {
   };
 }
 
-/** BR-C-07: at least 20 characters after trimming, as LossEvent trims before it counts. */
+/** BR-C-07: counted after trimming, as LossEvent does. */
 export function lossDescriptionValidator(control: AbstractControl): ValidationErrors | null {
   const length = trimmedLength(control.value);
   return length >= LOSS_DESCRIPTION_MIN_LENGTH
@@ -50,10 +49,7 @@ export function trimmedLength(value: unknown): number {
   return typeof value === 'string' ? value.trim().length : 0;
 }
 
-/**
- * BR-C-03 / BR-P-01 on the parties FormArray: at least one Claimant. The UI requires it at intake
- * (FRS §11.2 step 2, brief §3.7.2), although the API would accept a Draft without one (D-06).
- */
+/** The UI requires a Claimant at intake, although the API would accept a Draft without one (D-06). */
 export function atLeastOneClaimant(control: AbstractControl): ValidationErrors | null {
   const parties = (control as FormArray).value as { role: PartyRole | null }[];
   return parties.some((party) => party.role === 'Claimant')
@@ -61,11 +57,7 @@ export function atLeastOneClaimant(control: AbstractControl): ValidationErrors |
     : { claimantRequired: { message: MESSAGES.claimantRequired } };
 }
 
-/**
- * FRS §9.3: a person needs first and last name, a company needs a company name. Put on the name
- * controls; it reads the sibling `type` control, so the group must re-validate the names when the
- * type changes.
- */
+/** Reads the sibling `type` control, so the group must re-validate the names when the type changes. */
 export function requiredForPartyType(partyType: PartyType): ValidatorFn {
   return (control: AbstractControl): ValidationErrors | null => {
     const type = control.parent?.get('type')?.value as PartyType | null | undefined;
@@ -79,9 +71,8 @@ export function requiredForPartyType(partyType: PartyType): ValidatorFn {
 }
 
 /**
- * BR-R-01 / D-05 for an opening (Add) transaction: greater than zero, except SubrogationRecoverable,
- * which may be negative but not zero; at most 4 decimal places (DECIMAL(19,4)). Put on the amount
- * control; it reads the sibling `component` control. An empty amount is left to `required`.
+ * BR-R-01 for an Add: SubrogationRecoverable may be negative, but never zero. Reads the sibling `component` control;
+ * an empty amount is left to `required`.
  */
 export function openingReserveAmountValidator(control: AbstractControl): ValidationErrors | null {
   const amount = toNumber(control.value);
@@ -104,7 +95,7 @@ export function openingReserveAmountValidator(control: AbstractControl): Validat
     : null;
 }
 
-/** An adjustment on an existing component: signed, non-zero, at most 4 decimals (D-05). */
+/** Signed and non-zero (D-05). */
 export function adjustmentAmountValidator(control: AbstractControl): ValidationErrors | null {
   const amount = toNumber(control.value);
   if (amount == null) {
@@ -118,7 +109,6 @@ export function adjustmentAmountValidator(control: AbstractControl): ValidationE
     : null;
 }
 
-/** The optional estimated loss amount: not negative, at most 4 decimals. */
 export function estimatedLossValidator(control: AbstractControl): ValidationErrors | null {
   const amount = toNumber(control.value);
   if (amount == null) {
@@ -132,7 +122,6 @@ export function estimatedLossValidator(control: AbstractControl): ValidationErro
     : null;
 }
 
-/** Plain `required` with a message of our choosing. */
 export function requiredWithMessage(message: string): ValidatorFn {
   return (control: AbstractControl): ValidationErrors | null => {
     const value = control.value;
@@ -158,7 +147,6 @@ function decimalPlaces(value: number): number {
   return dot < 0 ? 0 : text.length - dot - 1;
 }
 
-/** The message to show for a control's first error (Material mat-error pattern, FRS §11.4). */
 export function errorMessage(control: AbstractControl | null | undefined): string {
   const errors = control?.errors;
   if (!errors) {

@@ -1,8 +1,6 @@
-// Mirrors of ClaimsModule.Application/Claims/DocumentDtos.cs.
-
 import { DocumentType } from './enums';
 
-/** DocumentDto: a document with a download URL valid for one hour (BR-D-02). */
+/** The download URL is valid for one hour (BR-D-02). */
 export interface ClaimDocumentWithUrl {
   id: string;
   documentType: DocumentType;

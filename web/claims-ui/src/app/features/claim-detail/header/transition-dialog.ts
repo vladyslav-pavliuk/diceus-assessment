@@ -21,14 +21,10 @@ export interface TransitionDialogData {
   transition: ClaimStatusTransition;
 }
 
-/** The new status, or 'conflict' when someone else changed the claim first (the caller reloads). */
+/** 'conflict' when someone else changed the claim first; the caller reloads. */
 export type TransitionDialogResult = ClaimStatusChanged | 'conflict' | undefined;
 
-/**
- * Confirms a status change (FRS §11.3 "opens confirmation dialog"; brief §3.7.3). Asks for the reason
- * where the transition table requires one (D-09), shows the pre-flight checklist for Closed (CC-01..04)
- * and for opening a Draft (BR-ST-02), and the justification note CC-04 needs when reserves are still open.
- */
+/** Shows the pre-flight checklist for Closed and for opening a Draft, and asks for a reason where the row requires one. */
 @Component({
   selector: 'app-transition-dialog',
   imports: [
@@ -56,7 +52,7 @@ export class TransitionDialog {
   protected readonly checklist = transitionPreflight(this.data.claim, this.target);
   protected readonly blocked = this.checklist.some((item) => item.blocking && !item.satisfied);
   protected readonly openReserves = openReservesTotal(this.data.claim);
-  /** CC-04: closing with open reserves needs an explicit justification note (D-26). */
+  /** CC-04 (D-26). */
   protected readonly needsJustification = this.target === 'Closed' && this.openReserves > 0;
 
   protected readonly reason = new FormControl('', {
@@ -100,7 +96,6 @@ export class TransitionDialog {
           if (error instanceof ApiError && error.status === 409) {
             this.dialogRef.close('conflict');
           } else if (error instanceof ApiError && error.isValidation) {
-            // The API lists every failed condition (BR-ST-03) or the valid next statuses.
             this.serverErrors.set(error.messages);
           }
         },

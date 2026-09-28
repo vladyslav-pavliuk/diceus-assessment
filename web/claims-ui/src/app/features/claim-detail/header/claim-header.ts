@@ -25,10 +25,6 @@ import {
   TransitionDialogResult,
 } from './transition-dialog';
 
-/**
- * The always-visible header (FRS §11.3): copyable claim number, status chip, policy and client, loss
- * date and cause, assigned handler, and the transition menu with the valid next statuses (D-09).
- */
 @Component({
   selector: 'app-claim-header',
   imports: [
@@ -64,7 +60,7 @@ export class ClaimHeader {
     ),
   );
 
-  /** D-18: supervisors and managers (re)assign the handler; not on Closed/Withdrawn claims (D-26). */
+  /** Not on Closed/Withdrawn claims (D-18, D-26). */
   protected readonly canAssign = computed(
     () => isAtLeast(this.store.currentUser()?.role, 'Supervisor') && !this.store.isReadOnly(),
   );

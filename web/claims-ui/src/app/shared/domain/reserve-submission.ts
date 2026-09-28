@@ -1,17 +1,16 @@
 import { ReserveComponentType, ReserveTransactionType } from '../../core/models/enums';
 import { ReserveComponentSummary } from '../../core/models/reserve.models';
 
-// The Add Reserve panel's rules (FRS §6, §11.3; D-05, D-22), mirrored from Claim.Reserves.cs so the panel
-// can explain a refusal before the user submits. The API applies the same rules again.
+// Mirrors Claim.Reserves.cs so the panel can explain a refusal before submitting; the API applies the rules again.
 
-/** D-05: the first transaction on a component opens it (Add); later ones adjust it or reverse it. */
+/** The first transaction on a component is an Add (D-05). */
 export function inferTransactionType(
   existing: ReserveComponentSummary | undefined,
 ): ReserveTransactionType {
   return existing ? 'Adjust' : 'Add';
 }
 
-/** The signed amount a transaction moves the balance by; Reverse releases the whole balance. */
+/** Reverse releases the whole balance. */
 export function effectiveAmount(
   type: ReserveTransactionType,
   amount: number | null,
@@ -23,15 +22,11 @@ export function effectiveAmount(
   return amount;
 }
 
-/** Only SubrogationRecoverable may go negative (FRS §6.2). */
 export function mayGoNegative(component: ReserveComponentType): boolean {
   return component === 'SubrogationRecoverable';
 }
 
-/**
- * Why a component cannot take a new transaction right now, in the API's words, or null. Covers
- * BR-C-06 (no policy), D-26 (read-only claim) and D-22 (one pending transaction per component).
- */
+/** In the API's words: BR-C-06, D-26 and D-22 (one pending transaction per component). */
 export function submissionBlocker(options: {
   hasPolicy: boolean;
   readOnlyStatus: string | null;
@@ -49,7 +44,6 @@ export function submissionBlocker(options: {
   return null;
 }
 
-/** D-05: a cost component's balance may not go below zero. */
 export function balanceError(
   component: ReserveComponentType,
   existing: ReserveComponentSummary | undefined,

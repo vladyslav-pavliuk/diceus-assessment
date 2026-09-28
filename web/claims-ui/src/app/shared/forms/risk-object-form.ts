@@ -17,7 +17,7 @@ export type RiskObjectGroup = FormGroup<{
   assetReference: FormControl<string>;
 }>;
 
-/** A damaged asset's controls (FRS §9.4, the API's column sizes). */
+/** Uses the API's column sizes. */
 export function createRiskObjectGroup(value: Partial<RiskObjectInput> = {}): RiskObjectGroup {
   return new FormGroup({
     assetType: new FormControl<AssetType | null>(
@@ -39,7 +39,7 @@ export function createRiskObjectGroup(value: Partial<RiskObjectInput> = {}): Ris
   });
 }
 
-/** The request body; the API makes the first risk object of a claim primary (D-33). */
+/** The API makes the first risk object of a claim primary (D-33). */
 export function toRiskObjectInput(group: RiskObjectGroup): RiskObjectInput {
   const value = group.getRawValue();
   return {
@@ -51,7 +51,6 @@ export function toRiskObjectInput(group: RiskObjectGroup): RiskObjectInput {
   };
 }
 
-/** The inline "Add risk object" row (FRS §11.2 step 2; the Parties tab after intake, D-40 Q1). */
 @Component({
   selector: 'app-risk-object-form',
   imports: [
@@ -62,53 +61,7 @@ export function toRiskObjectInput(group: RiskObjectGroup): RiskObjectInput {
     MatButtonModule,
     MatProgressSpinnerModule,
   ],
-  template: `
-    <form class="inline-form" [formGroup]="group" (ngSubmit)="submit()">
-      <div class="inline-form__row">
-        <mat-form-field class="inline-form__role">
-          <mat-label>Asset type</mat-label>
-          <mat-select formControlName="assetType" required>
-            @for (type of assetTypes; track type) {
-              <mat-option [value]="type">{{ type }}</mat-option>
-            }
-          </mat-select>
-          <mat-error>{{ error(group.controls.assetType) }}</mat-error>
-        </mat-form-field>
-        <mat-form-field class="inline-form__wide">
-          <mat-label>Asset description</mat-label>
-          <input matInput formControlName="assetDescription" required autocomplete="off" />
-          <mat-error>{{ error(group.controls.assetDescription) }}</mat-error>
-        </mat-form-field>
-        <mat-form-field>
-          <mat-label>Reference number (optional)</mat-label>
-          <input
-            matInput
-            formControlName="assetReference"
-            autocomplete="off"
-            placeholder="Registration, serial…"
-          />
-          <mat-error>{{ error(group.controls.assetReference) }}</mat-error>
-        </mat-form-field>
-      </div>
-      <div class="inline-form__row">
-        <mat-form-field class="inline-form__wide">
-          <mat-label>Damage description</mat-label>
-          <input matInput formControlName="damageDescription" autocomplete="off" />
-        </mat-form-field>
-        <div class="inline-form__actions">
-          <button mat-button type="button" (click)="cancelled.emit()" [disabled]="pending()">
-            Cancel
-          </button>
-          <button mat-flat-button type="submit" [disabled]="pending()">
-            @if (pending()) {
-              <mat-spinner diameter="18" />
-            }
-            {{ submitLabel() }}
-          </button>
-        </div>
-      </div>
-    </form>
-  `,
+  templateUrl: './risk-object-form.html',
   styleUrl: './inline-form.scss',
 })
 export class RiskObjectForm {

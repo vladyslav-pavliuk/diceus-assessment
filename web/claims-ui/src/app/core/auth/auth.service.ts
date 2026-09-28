@@ -15,10 +15,8 @@ interface Session {
 const STORAGE_KEY = 'claims-ui.session';
 
 /**
- * Mock authentication (FRS §11.4, D-16). The API issues a real signed JWT for a seeded user through
- * POST /api/auth/dev-token, and validates it on every request; this service only picks the user.
- * The session lives in sessionStorage, so each browser tab can be a different user (a handler submits
- * in one tab, a supervisor approves in another).
+ * Mock authentication (D-16): the API issues and validates a real JWT; this service only picks the user. The session
+ * lives in sessionStorage, so each browser tab can be a different user.
  */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -31,7 +29,7 @@ export class AuthService {
   readonly userId = computed(() => this.session()?.user.id ?? null);
   readonly isSignedIn = computed(() => this.session() !== null);
 
-  /** The bearer token, or null when there is no session or it has expired. */
+  /** Null when there is no session or it has expired. */
   accessToken(): string | null {
     const current = this.session();
     if (!current || new Date(current.expiresAt) <= this.now()) {
@@ -40,7 +38,7 @@ export class AuthService {
     return current.accessToken;
   }
 
-  /** App start-up: restore the tab's session, or sign in as the default demo user. Never throws. */
+  /** Restores the tab's session or signs in as the default demo user. Never throws. */
   async restore(): Promise<void> {
     const stored = readStoredSession();
     if (stored && new Date(stored.expiresAt) > this.now()) {
@@ -51,7 +49,7 @@ export class AuthService {
     try {
       await firstValueFrom(this.signIn(environment.defaultUsername));
     } catch {
-      // The API may be asleep (D-36 cold start). The shell shows "Not signed in" and the switcher.
+      // The API may be cold-starting (D-36); the shell then shows "Not signed in".
       this.clear();
     }
   }
@@ -69,12 +67,11 @@ export class AuthService {
     );
   }
 
-  /** The seeded users for the role switcher (GET /api/auth/users). */
   demoUsers(): Observable<User[]> {
     return this.http.get<User[]>(apiUrl('auth', 'users'));
   }
 
-  /** A 401 from the API: the token is no longer accepted. */
+  /** Called on a 401. */
   clear(): void {
     this.session.set(null);
     try {

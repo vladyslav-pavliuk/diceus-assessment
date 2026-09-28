@@ -1,48 +1,10 @@
 import { Component, input } from '@angular/core';
 import { BadgeTone } from './badge-tones';
 
-/** A small coloured label: severity, approval status, GL posting status, audit event type, party role. */
 @Component({
   selector: 'app-badge',
-  template: `<span class="badge badge--{{ tone() }}"><ng-content /></span>`,
-  styles: `
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 1px 8px;
-      border-radius: 6px;
-      font: var(--mat-sys-label-small);
-      letter-spacing: 0.02em;
-      white-space: nowrap;
-      border: 1px solid transparent;
-    }
-    .badge--neutral {
-      background: var(--mat-sys-surface-container-high);
-      color: var(--mat-sys-on-surface-variant);
-    }
-    .badge--info {
-      background: var(--app-info-bg);
-      color: var(--app-info-fg);
-    }
-    .badge--success {
-      background: var(--app-success-bg);
-      color: var(--app-success-fg);
-    }
-    .badge--warning {
-      background: var(--app-warning-bg);
-      color: var(--app-warning-fg);
-      border-color: var(--app-warning-border);
-    }
-    .badge--danger {
-      background: var(--mat-sys-error-container);
-      color: var(--mat-sys-on-error-container);
-    }
-    .badge--accent {
-      background: var(--mat-sys-tertiary-container);
-      color: var(--mat-sys-on-tertiary-container);
-    }
-  `,
+  templateUrl: './badge.html',
+  styleUrl: './badge.scss',
 })
 export class Badge {
   readonly tone = input<BadgeTone>('neutral');

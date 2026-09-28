@@ -1,6 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 
-/** The ProblemDetails body every API error carries (FRS §10.4, D-38 item 1). */
+/** FRS §10.4. */
 export interface ProblemDetails {
   type?: string;
   title?: string;
@@ -9,10 +9,7 @@ export interface ProblemDetails {
   errors?: Record<string, string[]>;
 }
 
-/**
- * What the error interceptor rethrows: the HTTP status, the ProblemDetails title and, for a 422, the
- * `errors` dictionary keyed by request property path (`LossDate`, `Parties[0].FirstName`, D-40 item 4).
- */
+/** For a 422, `errors` is keyed by request property path, e.g. `Parties[0].FirstName` (D-40). */
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -28,7 +25,7 @@ export class ApiError extends Error {
     return this.status === 422;
   }
 
-  /** Every message in the errors dictionary, in key order; the title when there are none. */
+  /** The title when there are no field errors. */
   get messages(): string[] {
     const all = Object.values(this.errors).flat();
     return all.length > 0 ? all : [this.title];

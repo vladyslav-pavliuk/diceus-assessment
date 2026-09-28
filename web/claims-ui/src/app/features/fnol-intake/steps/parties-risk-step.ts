@@ -11,11 +11,7 @@ import { INTAKE_WARNING_MESSAGES } from '../../../shared/domain/intake-warnings'
 import { Badge } from '../../../shared/ui/badge';
 import { FnolForm } from '../fnol-form';
 
-/**
- * FNOL step 2: parties & risk objects (FRS §11.2). Each section adds items through an inline row and
- * shows them as cards with a remove button. The parties array requires a Claimant (its validator
- * blocks the step); risk objects are only advised.
- */
+/** A Claimant is required to leave the step; risk objects are only advised. */
 @Component({
   selector: 'app-parties-risk-step',
   imports: [MatButtonModule, MatIconModule, MatTooltipModule, PartyForm, RiskObjectForm, Badge],

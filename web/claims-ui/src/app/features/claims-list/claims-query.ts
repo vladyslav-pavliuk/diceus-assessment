@@ -2,8 +2,7 @@ import { ParamMap, Params } from '@angular/router';
 import { ClaimListQuery } from '../../core/models/claim.models';
 import { CLAIM_STATUSES, ClaimStatus } from '../../core/models/enums';
 
-// The list's filters and page live in the URL (shareable, survive a refresh, work with the back button).
-// These two functions are the only translation between the URL and the API query (D-29, D-40 item 9).
+// The only translation between the URL and the API query (D-29, D-40).
 
 export const DEFAULT_PAGE_SIZE = 25;
 export const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
@@ -27,7 +26,7 @@ export function queryFromParams(params: ParamMap): ClaimListQuery {
   };
 }
 
-/** URL params for a query; defaults are left out so a plain /claims stays plain. */
+/** Defaults are left out, so a plain /claims stays plain. */
 export function paramsFromQuery(query: ClaimListQuery): Params {
   return {
     status: query.status?.length ? query.status : null,
@@ -41,7 +40,7 @@ export function paramsFromQuery(query: ClaimListQuery): Params {
   };
 }
 
-/** A picked calendar date as 'yyyy-MM-dd' in the user's own calendar (the API's DateOnly). */
+/** In the user's own calendar, not UTC. */
 export function toDateOnly(date: Date | null | undefined): string | null {
   if (!date || Number.isNaN(date.getTime())) {
     return null;
@@ -51,7 +50,7 @@ export function toDateOnly(date: Date | null | undefined): string | null {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
-/** 'yyyy-MM-dd' → a local Date at midnight, for the date-range picker. */
+/** A local Date at midnight, for the date-range picker. */
 export function fromDateOnly(value: string | null | undefined): Date | null {
   const match = value ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(value) : null;
   return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : null;

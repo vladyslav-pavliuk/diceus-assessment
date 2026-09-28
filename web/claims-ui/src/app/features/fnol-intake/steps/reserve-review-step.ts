@@ -13,10 +13,6 @@ import { errorMessage } from '../../../shared/forms/validators';
 import { AuthorityIndicator } from '../../../shared/ui/authority-indicator';
 import { FnolForm } from '../fnol-form';
 
-/**
- * FNOL step 3: optional initial reserve with the live authority indicator, and the read-only review of
- * everything entered (FRS §11.2).
- */
 @Component({
   selector: 'app-reserve-review-step',
   imports: [
@@ -34,7 +30,7 @@ import { FnolForm } from '../fnol-form';
 })
 export class ReserveReviewStep {
   readonly group = input.required<FnolForm['controls']['reserve']>();
-  /** The request as it would be sent now: the review shows exactly what Create will submit. */
+  /** The review shows exactly what Create will submit. */
   readonly review = input.required<CreateClaimRequest>();
   readonly policy = input<Policy | null>(null);
   readonly causeName = input<string>('');

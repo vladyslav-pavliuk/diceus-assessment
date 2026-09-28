@@ -7,17 +7,13 @@ import { LoadingService } from '../loading/loading.service';
 import { NotificationService, NotificationSeverity } from '../notify/notification.service';
 import { ApiError } from './api-error';
 
-/** Opt a request out of the global progress bar (the policy typeahead has its own spinner). */
+/** For requests with their own spinner, such as the policy typeahead. */
 export const SKIP_GLOBAL_LOADING = new HttpContextToken<boolean>(() => false);
 
-/** Opt a request out of the error snackbar, for a caller that reports the error itself. */
+/** For a caller that reports the error itself. */
 export const SKIP_ERROR_SNACKBAR = new HttpContextToken<boolean>(() => false);
 
-/**
- * Adds the Bearer token (FRS §11.4) and a new correlation id to every API call. The API accepts a
- * client correlation id only as a GUID in the "D" form (D-39 Q1), which is what randomUUID returns;
- * it stamps the id on every audit row the request writes (CLAUDE.md rule 6).
- */
+/** The API accepts a correlation id only as a "D"-form GUID, which is what randomUUID returns (D-39). */
 export const authInterceptor: HttpInterceptorFn = (request, next) => {
   if (!isApiRequest(request.url)) {
     return next(request);
@@ -31,7 +27,6 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
   return next(request.clone({ setHeaders: headers }));
 };
 
-/** Drives the shell's progress bar while any API call is in flight (FRS §11.4 loading states). */
 export const loadingInterceptor: HttpInterceptorFn = (request, next) => {
   if (!isApiRequest(request.url) || request.context.get(SKIP_GLOBAL_LOADING)) {
     return next(request);
@@ -43,9 +38,8 @@ export const loadingInterceptor: HttpInterceptorFn = (request, next) => {
 };
 
 /**
- * Every API error becomes an {@link ApiError} and a snackbar with a severity (FRS §11.4). The error is
- * still rethrown, so a form can put a 422's messages next to its controls and a store can reload
- * after a 409.
+ * Shows a snackbar and still rethrows an {@link ApiError}, so a form can place a 422's messages next to its
+ * controls and a store can reload after a 409.
  */
 export const errorInterceptor: HttpInterceptorFn = (request, next) => {
   const auth = inject(AuthService);

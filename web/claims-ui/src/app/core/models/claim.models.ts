@@ -1,5 +1,4 @@
-// Mirrors of ClaimsModule.Application/Claims/ClaimDtos.cs and the claim command inputs, field for field
-// (camelCase JSON). DateTimeOffset → ISO string; decimal → number; Guid → string.
+// Mirrors ClaimDtos.cs field for field. DateTimeOffset → ISO string; decimal → number; Guid → string.
 
 import {
   AssetType,
@@ -15,7 +14,6 @@ import {
 } from './enums';
 import { ReserveComponentSummary, ReserveSubmitted } from './reserve.models';
 
-/** A row of GET /api/claims (ClaimSummaryDto). */
 export interface ClaimSummary {
   id: string;
   claimNumber: string;
@@ -34,7 +32,7 @@ export interface ClaimSummary {
   reportedDate: string;
 }
 
-/** GET /api/claims query string (D-29, D-40 item 9). `status` repeats. */
+/** `status` repeats in the query string. */
 export interface ClaimListQuery {
   status?: ClaimStatus[];
   dateFrom?: string | null;
@@ -47,7 +45,6 @@ export interface ClaimListQuery {
   pageSize: number;
 }
 
-/** GET /api/claims/{id} (ClaimDetailDto). */
 export interface ClaimDetail {
   id: string;
   claimNumber: string;
@@ -126,7 +123,6 @@ export interface ValidationIssue {
   resolutionNote: string | null;
 }
 
-/** Document metadata as listed in the claim detail (ClaimDocumentDto). */
 export interface ClaimDocument {
   id: string;
   documentType: DocumentType;
@@ -138,7 +134,7 @@ export interface ClaimDocument {
   notes: string | null;
 }
 
-/** One ClaimAuditLog row (AuditEntryDto). A null createdByUserId is the system actor (D-33). */
+/** A null createdByUserId is a background job (D-33). */
 export interface AuditEntry {
   id: string;
   eventType: string;
@@ -153,7 +149,6 @@ export interface AuditEntry {
   createdByName: string | null;
 }
 
-/** PartyInput: FNOL parties and POST /claims/{id}/parties. */
 export interface PartyInput {
   role: PartyRole;
   type: PartyType;
@@ -165,7 +160,6 @@ export interface PartyInput {
   notes: string | null;
 }
 
-/** RiskObjectInput: FNOL risk objects and POST /claims/{id}/risk-objects. */
 export interface RiskObjectInput {
   assetType: AssetType;
   assetDescription: string;
@@ -180,7 +174,7 @@ export interface InitialReserveInput {
   changeReason: string | null;
 }
 
-/** POST /api/claims (CreateClaimCommand). policyId null = the "Unknown policy" intake. */
+/** A null policyId is the "Unknown policy" intake. */
 export interface CreateClaimRequest {
   policyId: string | null;
   lossDate: string;
@@ -195,7 +189,6 @@ export interface CreateClaimRequest {
   initialReserve: InitialReserveInput | null;
 }
 
-/** The 201 body of POST /api/claims (ClaimCreatedDto). */
 export interface ClaimCreated {
   id: string;
   claimNumber: string;
@@ -204,7 +197,6 @@ export interface ClaimCreated {
   initialReserve: ReserveSubmitted | null;
 }
 
-/** PUT /api/claims/{id}/status (TransitionClaimStatusRequest, D-26). */
 export interface TransitionClaimStatusRequest {
   targetStatus: ClaimStatus;
   reason: string | null;
@@ -217,7 +209,7 @@ export interface ClaimStatusChanged {
   status: ClaimStatus;
 }
 
-/** PATCH /api/claims/{id}: null leaves a field unchanged; "" clears the notes (D-40 item 8). */
+/** Null leaves a field unchanged; "" clears the notes (D-40). */
 export interface UpdateClaimDetailsRequest {
   notes: string | null;
   severity: ClaimSeverity | null;

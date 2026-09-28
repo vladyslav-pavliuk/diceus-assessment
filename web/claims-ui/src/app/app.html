@@ -1,0 +1,16 @@
+<mat-toolbar class="app-toolbar">
+  <a class="app-brand" routerLink="/claims">
+    <span class="app-brand__mark" aria-hidden="true">◆</span>
+    <span>DICEUS Claims</span>
+  </a>
+  <span class="app-toolbar__spacer"></span>
+  <app-user-switcher />
+</mat-toolbar>
+<div class="app-progress" aria-hidden="true">
+  @if (loading.busy()) {
+    <mat-progress-bar mode="indeterminate" />
+  }
+</div>
+<main class="app-main">
+  <router-outlet />
+</main>
