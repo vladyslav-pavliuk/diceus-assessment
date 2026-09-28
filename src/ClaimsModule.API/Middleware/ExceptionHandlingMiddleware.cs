@@ -9,7 +9,7 @@ namespace ClaimsModule.API.Middleware;
 /// <summary>
 /// The single place where exceptions become HTTP responses (CLAUDE.md rule 12):
 /// ValidationException → 422, BusinessRuleViolationException → 422, NotFoundException → 404,
-/// ForbiddenAccessException → 403, DbUpdateConcurrencyException → 409, anything else → 500.
+/// ForbiddenAccessException → 403, ConflictException and DbUpdateConcurrencyException → 409, anything else → 500.
 /// Controllers and handlers never build error responses themselves.
 /// </summary>
 internal sealed class ExceptionHandlingMiddleware(
@@ -54,6 +54,9 @@ internal sealed class ExceptionHandlingMiddleware(
 
         ForbiddenAccessException forbidden => ApiProblems.Create(
             StatusCodes.Status403Forbidden, "You do not have permission to perform this action.", forbidden.Message),
+
+        ConflictException conflict => ApiProblems.Create(
+            StatusCodes.Status409Conflict, "The request conflicts with one still in progress.", conflict.Message),
 
         DbUpdateConcurrencyException => ApiProblems.Create(
             StatusCodes.Status409Conflict,

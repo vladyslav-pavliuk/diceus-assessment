@@ -1,6 +1,8 @@
 using System.Text.Json.Serialization;
 using ClaimsModule.API.Auth;
 using ClaimsModule.API.Errors;
+using ClaimsModule.API.Idempotency;
+using ClaimsModule.API.Json;
 using ClaimsModule.API.Middleware;
 using ClaimsModule.Application.Abstractions;
 using ClaimsModule.Application.Abstractions.Auth;
@@ -30,8 +32,19 @@ internal static class DependencyInjection
                 // rule 2). Without this, [ApiController] would reject a missing non-nullable string with
                 // its own message before our validator runs.
                 options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
+
+                // D-24: replays a repeated Idempotency-Key on every write endpoint.
+                options.Filters.Add<IdempotencyFilter>();
             })
-            .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()))
+            .AddJsonOptions(options =>
+            {
+                // Binding never rejects a value the validator is responsible for, so the 422 carries the
+                // FRS §8 wording (D-40). The lenient converters come first and therefore win;
+                // JsonStringEnumConverter stays in the list only so Swagger documents enums as names.
+                options.JsonSerializerOptions.Converters.Add(new LenientEnumConverterFactory());
+                options.JsonSerializerOptions.Converters.Add(new LenientNullableDateTimeOffsetConverter());
+                options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+            })
             .ConfigureApiBehaviorOptions(options =>
             {
                 // Unbindable input (for example a malformed date) gets the same 422 body as validation.
@@ -110,7 +123,7 @@ internal static class DependencyInjection
                     .WithOrigins(origins)
                     .AllowAnyHeader()
                     .AllowAnyMethod()
-                    .WithExposedHeaders(CorrelationIdMiddleware.HeaderName, "Location"));
+                    .WithExposedHeaders(CorrelationIdMiddleware.HeaderName, "Location", IdempotencyFilter.ReplayedHeaderName));
             });
     }
 
