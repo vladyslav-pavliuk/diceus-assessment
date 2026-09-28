@@ -22,6 +22,9 @@ public interface IClaimQueries
 
     /// <summary>Every issue of the claim, oldest first. Null when the claim does not exist in the caller's organisation.</summary>
     Task<IReadOnlyList<ValidationIssueDto>?> ListValidationIssuesAsync(Guid claimId, CancellationToken cancellationToken);
+
+    /// <summary>Reserve summary and full history (FRS §10.2). Null when the claim does not exist in the caller's organisation.</summary>
+    Task<ClaimReservesDto?> GetReservesAsync(Guid claimId, CancellationToken cancellationToken);
 }
 
 /// <summary>

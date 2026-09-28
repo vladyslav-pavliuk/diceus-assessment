@@ -8,8 +8,9 @@ namespace ClaimsModule.Application.Abstractions;
 public interface IBackgroundJobScheduler
 {
     /// <summary>
-    /// Enqueues PostGLReserveChangeJob (FRS §12.1) and returns the job id, which is stored in
-    /// ReserveHistory.PostingJobId.
+    /// Enqueues PostGLReserveChangeJob (FRS §12.1) and returns the Hangfire job id, for logging. The job
+    /// writes its own id to ReserveHistory.PostingJobId when it posts, because several jobs may exist for
+    /// one transaction (a retry, the sweeper) and the one that posted is the one worth recording (D-41).
     /// </summary>
     string EnqueueGlPosting(Guid reserveHistoryId, Guid claimId, string idempotencyKey);
 }

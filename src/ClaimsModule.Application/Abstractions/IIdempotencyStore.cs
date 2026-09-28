@@ -16,6 +16,9 @@ public interface IIdempotencyStore
 
     /// <summary>Frees the key after a failed request, so the client may retry with it.</summary>
     Task ReleaseAsync(Guid recordId, CancellationToken cancellationToken);
+
+    /// <summary>Deletes the records created before <paramref name="createdBefore"/> (24h retention, D-24); returns how many.</summary>
+    Task<int> PurgeAsync(DateTimeOffset createdBefore, CancellationToken cancellationToken);
 }
 
 /// <summary>What identifies a request: who sent it, under which key, to where, with which body (SHA-256 hex).</summary>

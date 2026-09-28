@@ -1,7 +1,6 @@
-using System.Globalization;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using ClaimsModule.Application.Abstractions;
+using ClaimsModule.Application.Common.Auditing;
 using ClaimsModule.Application.Common.Events;
 using ClaimsModule.Domain.Audit;
 using ClaimsModule.Domain.Claims.Events;
@@ -33,20 +32,16 @@ internal sealed class ClaimAuditTrail(IAuditLogService auditLog) :
     IBeforeCommitHandler<ReserveApproved>,
     IBeforeCommitHandler<ReserveRejected>,
     IBeforeCommitHandler<ReserveRetracted>,
+    IBeforeCommitHandler<GlPostingRetryRequested>,
     IBeforeCommitHandler<DocumentUploaded>
 {
     private const string PartyEntity = "ClaimParty";
     private const string RiskObjectEntity = "ClaimRiskObject";
     private const string IssueEntity = "ClaimValidationIssue";
-    private const string ReserveTransactionEntity = "ReserveTransaction";
+    private const string ReserveTransactionEntity = AuditValues.ReserveTransactionEntity;
     private const string DocumentEntity = "ClaimDocument";
     private const string PolicyEntity = "Policy";
     private const string UserEntity = "User";
-
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
-    {
-        Converters = { new JsonStringEnumConverter() },
-    };
 
     public Task HandleAsync(ClaimCreated e, CancellationToken cancellationToken) => Record(
         e.ClaimId, AuditEventTypes.ClaimCreated, $"Claim {e.ClaimNumber} created.",
@@ -162,13 +157,20 @@ internal sealed class ClaimAuditTrail(IAuditLogService auditLog) :
         newValue: new { ApprovalStatus = "Cancelled" },
         relatedEntityId: e.TransactionId, relatedEntityType: ReserveTransactionEntity);
 
+    /// <summary>D-08: a user put a failed GL posting back to Pending; the job is enqueued after commit.</summary>
+    public Task HandleAsync(GlPostingRetryRequested e, CancellationToken cancellationToken) => Record(
+        e.ClaimId, AuditEventTypes.GlPostingRetried, $"GL posting of the reserve change of {Money(e.Amount)} retried.",
+        oldValue: new { PostingStatus = "Failed" },
+        newValue: new { PostingStatus = "Pending", e.IdempotencyKey },
+        relatedEntityId: e.TransactionId, relatedEntityType: ReserveTransactionEntity);
+
     /// <summary>FRS §13: RelatedEntityId = documentId.</summary>
     public Task HandleAsync(DocumentUploaded e, CancellationToken cancellationToken) => Record(
         e.ClaimId, AuditEventTypes.DocumentUploaded, $"Document {e.DocumentName} uploaded.",
         newValue: new { e.DocumentName },
         relatedEntityId: e.DocumentId, relatedEntityType: DocumentEntity);
 
-    private static string Money(decimal amount) => amount.ToString("$#,##0.00;-$#,##0.00", CultureInfo.InvariantCulture);
+    private static string Money(decimal amount) => AuditValues.Money(amount);
 
     private Task Record(
         Guid claimId,
@@ -183,8 +185,8 @@ internal sealed class ClaimAuditTrail(IAuditLogService auditLog) :
             claimId,
             eventType,
             description,
-            oldValue is null ? null : JsonSerializer.Serialize(oldValue, Json),
-            newValue is null ? null : JsonSerializer.Serialize(newValue, Json),
+            AuditValues.ToJson(oldValue),
+            AuditValues.ToJson(newValue),
             relatedEntityId,
             relatedEntityType));
 

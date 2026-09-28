@@ -58,7 +58,7 @@ internal sealed class CreateClaimCommandHandler(
 
         // FRS §5.2 step 3: the same domain method as POST /claims/{id}/reserves (Phase 4), so authority
         // tiers, the $10M check and auto-approval behave identically at intake.
-        InitialReserveDto? initialReserve = null;
+        ReserveSubmittedDto? initialReserve = null;
         if (request.InitialReserve is { } reserve)
         {
             var submitted = claim.SubmitReserveTransaction(
@@ -69,7 +69,7 @@ internal sealed class CreateClaimCommandHandler(
                 actor,
                 now);
 
-            initialReserve = new InitialReserveDto(
+            initialReserve = new ReserveSubmittedDto(
                 reserve.Component.Value, mapper.Map<ReserveTransactionDto>(submitted.Transaction), submitted.Warnings);
         }
 

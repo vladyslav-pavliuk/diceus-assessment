@@ -33,7 +33,5 @@ public sealed record ClaimCreatedDto(
     string ClaimNumber,
     ClaimStatus Status,
     IReadOnlyList<ValidationIssueDto> ValidationIssues,
-    InitialReserveDto? InitialReserve);
+    ReserveSubmittedDto? InitialReserve);
 
-/// <summary>The initial reserve transaction and its non-blocking warnings (BR-R-05).</summary>
-public sealed record InitialReserveDto(ReserveComponentType Component, ReserveTransactionDto Transaction, IReadOnlyList<string> Warnings);

@@ -17,6 +17,8 @@ internal static class RequestMessages
     public const string PageMustBePositive = "Page must be 1 or greater.";
     public const string LossDateRangeInvalid = "dateFrom must not be later than dateTo.";
     public const string SearchTermRequired = "A search term is required.";
+    public const string NewAmountRequired = "The new reserve amount is required.";
+    public const string OverrideEnabledRequired = "Enabled is required.";
 
     public static string PageSizeOutOfRange(int max) => $"Page size must be between 1 and {max}.";
 

@@ -1,7 +1,6 @@
 using ClaimsModule.Domain.Claims;
 using ClaimsModule.Domain.Documents;
 using ClaimsModule.Domain.ReferenceData;
-using ClaimsModule.Domain.Reserves;
 
 namespace ClaimsModule.Application.Claims;
 
@@ -161,22 +160,6 @@ public sealed record ValidationIssueDto(
     Guid? ResolvedByUserId,
     string? ResolutionNote);
 
-/// <summary>A reserve summary card (FRS §11.3 Tab 3): current balance and the amount awaiting approval (D-11, D-21).</summary>
-public sealed record ReserveComponentSummaryDto
-{
-    public required Guid Id { get; init; }
-
-    public required ReserveComponentType Component { get; init; }
-
-    public required decimal CurrentAmount { get; init; }
-
-    public required decimal PendingAmount { get; init; }
-
-    public required bool HasPendingApproval { get; init; }
-
-    public required ReserveComponentStatus Status { get; init; }
-}
-
 /// <summary>Document metadata (FRS §9.7). The download URL comes from the documents endpoints (Phase 5).</summary>
 public sealed record ClaimDocumentDto(
     Guid Id,
@@ -216,25 +199,3 @@ public sealed record AuditEntryDto
 
     public required string? CreatedByName { get; init; }
 }
-
-/// <summary>One ReserveHistory row (FRS §9.6), as returned when a transaction is submitted.</summary>
-public sealed record ReserveTransactionDto(
-    Guid Id,
-    Guid ReserveComponentId,
-    ReserveTransactionType TransactionType,
-    decimal Amount,
-    decimal PreviousBalance,
-    decimal NewBalance,
-    ReserveApprovalStatus ApprovalStatus,
-    ApprovalAuthority RequiredAuthority,
-    bool ExceedsAggregateLimit,
-    string ChangeReason,
-    int ChangeSequence,
-    string IdempotencyKey,
-    PostingStatus PostingStatus,
-    Guid SubmittedByUserId,
-    Guid? ApprovedByUserId,
-    DateTimeOffset? ApprovedAt,
-    Guid? RejectedByUserId,
-    DateTimeOffset? RejectedAt,
-    string? RejectionReason);
