@@ -109,3 +109,10 @@ Vlad ran `infra/bootstrap.sh` (all repository variables set) and then `gh workfl
      Claude had not checked the repository's OIDC settings. Fix: `bootstrap.sh` reads `sub_claim_prefix` from `GET repos/{repo}/actions/oidc/customization/sub`,
      refuses a custom subject template, and updates an existing credential whose subject differs. Verified that the computed subject equals the one in the
      error. D-44 Q3 and DEPLOYMENT.md (manual table, troubleshooting) updated.
+3. **Re-run of 36429843805** (after the federated credential was corrected and the package made public): `azure/login` succeeded.
+   - `image`: the anonymous-pull check still failed; it ran before the visibility change took effect. Checked afterwards: anonymous pull of
+     `:eab37f8…` and `:latest` returns 200. No change.
+   - `infra`: `main.bicep` failed with `RoleDefinitionDoesNotExist … 'db58b8e5c6ad4a2a83424fbe1bd5bc79'`. **Claude's mistake:** the Storage Blob Delegator
+     role id was written from memory with a wrong last group (`…-4fbe1bd5bc79`; the real id is `db58b8e5-c6ad-4a2a-8342-4190687cbf4a`). The Bicep linter
+     cannot catch it (any GUID is valid). Fix, plus all four role ids now checked against `az role definition list --name "<role>"`; the other three were correct.
+     Lesson recorded in D-44: built-in role ids are looked up, never recalled.

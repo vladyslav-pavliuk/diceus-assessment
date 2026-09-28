@@ -1457,6 +1457,9 @@ reviewer will probe (Q1–Q3), implemented as recommended; the rest are choices 
     than Owner/User Access Administrator: it can manage role assignments and nothing else. A condition restricting it to the four roles the templates
     assign would tighten it further (noted, not done).
 
+**Corrections from the first Azure run (2026-09-28):** the federated-credential subject (immutable subjects, Q3) and the Storage Blob Delegator role id
+(`db58b8e5-c6ad-4a2a-8342-4190687cbf4a`; the one first written from memory did not exist). All four role ids are now checked against `az role definition list`.
+
 **Not verified (no Azure deployment was made in this phase).** The templates compile with the Bicep linter (0 warnings), the workflows pass actionlint,
 the scripts pass shellcheck, the migrations bundle builds with the workflow's exact command in `sdk:9.0`, go-sqlcmd runs the grant script with the
 workflow's exact flags, and the smoke test passes against the local stack twice (as dbo and as the restricted user). What only a real deployment proves:

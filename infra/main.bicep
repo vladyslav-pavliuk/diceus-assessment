@@ -51,10 +51,11 @@ var names = {
   staticWebApp: 'swa-${appName}-${suffix}'
 }
 
-// Built-in role definition ids (https://learn.microsoft.com/azure/role-based-access-control/built-in-roles).
+// Built-in role definition ids, checked with `az role definition list --name "<role name>" --query "[0].name"` (a wrong
+// GUID compiles fine and fails only at deployment: RoleDefinitionDoesNotExist).
 var roles = {
   storageBlobDataContributor: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
-  storageBlobDelegator: 'db58b8e5-c6ad-4a2a-8342-4fbe1bd5bc79'
+  storageBlobDelegator: 'db58b8e5-c6ad-4a2a-8342-4190687cbf4a'
   keyVaultSecretsUser: '4633458b-17de-408a-b874-0445c86b69e6'
   keyVaultSecretsOfficer: 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7'
 }
