@@ -56,7 +56,7 @@ Markers used below:
 | D-41 | Phase 4 reserves, GL posting, SLA job and Hangfire choices (+ two decisions by Vlad) | PROPOSED (Q1, Q2 ACCEPTED) |
 | D-42 | Phase 5 documents: upload orchestration, sanitising, allowlist and sniffing, SAS, local fallback (+ three decisions by Vlad) | PROPOSED (Q1–Q3 ACCEPTED) |
 | D-43 | Phase 6 Angular frontend: toolchain, service layer, auth session, errors, state, UI mirrors of domain rules, scope additions (+ three decisions by Vlad) | PROPOSED (Q1–Q3 ACCEPTED) |
-| D-44 | Phase 7 Azure deployment and CI/CD: Bicep, passwordless SQL, least-privilege API database user, OIDC pipeline, smoke test (+ three questions for Vlad) | PROPOSED |
+| D-44 | Phase 7 Azure deployment and CI/CD: Bicep, passwordless SQL, least-privilege API database user, OIDC pipeline, smoke test (+ three decisions by Vlad) | PROPOSED (Q1–Q3 ACCEPTED) |
 
 ---
 
@@ -1380,18 +1380,19 @@ against the running API (see `docs/ai-log/phase-6.md`), so none is a silent choi
 replaced it with **Azure Container Apps**, and brief §2.3 allows either, so D-36 wins and this entry builds on it. Three points are judgement calls a
 reviewer will probe (Q1–Q3), implemented as recommended; the rest are choices where the brief and FRS say nothing. None changes an FRS business rule.
 
-**Open questions (implemented as recommended; need Vlad's decision).**
+**Open questions (implemented as recommended; all three ACCEPTED by Vlad on 2026-09-28).**
 - **Q1. How the API authenticates to Azure SQL.** (a) **Entra-only authentication**: the API connects as its managed identity
   (`Authentication=Active Directory Managed Identity`), the deployment service principal is the server's Entra admin, SQL logins are disabled. No password
   exists anywhere. (b) A SQL admin login whose password is a GitHub secret, with the connection string in Key Vault. (b) is one step simpler to set up;
   (a) removes the only long-lived database credential and is the Azure default recommendation. Cost of (a): the pipeline must create the identity's
   database user (`infra/sql/grant-api-identity.sql`), and nobody can query the database without an Entra user (bootstrap offers an optional read-only one).
-  **Recommendation: (a).**
+  **Recommendation: (a).** **Decision (Vlad, 2026-09-28): (a).**
 - **Q2. The API is a plain database user, not dbo.** Rights: `db_datareader`, `db_datawriter`, the `claims_app` role (D-39 item 15: `DENY UPDATE, DELETE`
   on ClaimAuditLog, now in effect), `CREATE TABLE`, and ownership of the `[HangFire]` schema only. Hangfire therefore still installs and upgrades its own
   tables (D-41 item 14) but the API cannot alter `dbo`, cannot drop or disable the audit trigger, and cannot rewrite the audit log even with raw SQL.
   Alternatives: (b) `db_owner`, simplest, but the audit protections then rest on the trigger alone, which dbo can drop; (c) install Hangfire's schema from
   the pipeline and give the API no DDL at all, which ties the pipeline to Hangfire's internal install script. **Recommendation: (a) as built.**
+  **Decision (Vlad, 2026-09-28): (a).**
   Verified locally against SQL Server 2022 with an equivalent SQL-auth user: the full smoke test passes, Hangfire creates its schema, and `UPDATE
   ClaimAuditLog` (Msg 229), `DISABLE`/`DROP TRIGGER` (Msg 1088/3701), `CREATE TABLE dbo.x` (Msg 2760) and `ALTER TABLE dbo.Claims` (Msg 1088) are refused.
 - **Q3. No GitHub environment; the federated credential trusts `refs/heads/main`.** GitHub environments (and their approval gates) are not available for
@@ -1400,7 +1401,7 @@ reviewer will probe (Q1–Q3), implemented as recommended; the rest are choices 
   (`actions/oidc/customization/sub` → `sub_claim_prefix`): this repository uses **immutable subjects**, `repo:vladyslav-pavliuk@64861208/diceus-assessment@1390636621`,
   which also stop a deleted-and-recreated repository of the same name from inheriting the trust (found on the first run, see the AI log). If the repository becomes public, or the plan allows it, switch to an environment
   (`environment: production` on the Azure jobs, subject `repo:…:environment:production`) and add a required reviewer. **Recommendation: main-branch
-  subject now.**
+  subject now.** **Decision (Vlad, 2026-09-28): main-branch subject.**
 
 **Choices (ASSUMPTION unless cited).**
 1. **Two Bicep templates.** `infra/main.bicep` (identity, Log Analytics, Container Apps environment, Key Vault, Storage, SQL, Static Web App, role
@@ -1473,4 +1474,4 @@ propagation timing (each step that depends on it retries).
 
 **Rationale.** Every credential is either an Entra token or a single Key Vault secret nobody handles; the API has the least database and storage rights
 the features need; the pipeline is re-runnable end to end; and each manual step is a one-time act of an owner that no pipeline can do for itself.
-**Status:** PROPOSED (2026-09-28): Q1–Q3 and items 1–17 await Vlad's review.
+**Status:** PROPOSED (2026-09-28). Q1–Q3 ACCEPTED by Vlad (2026-09-28); items 1–17 await review.

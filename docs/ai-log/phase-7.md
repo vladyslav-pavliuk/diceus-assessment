@@ -133,3 +133,11 @@ Vlad ran `infra/bootstrap.sh` (all repository variables set) and then `gh workfl
 Three deployment defects reached Azure, all Claude's (§7 items 2–4): a hard-coded OIDC subject format, a role id written from memory, and a bundle
 invocation that was built but never run the way the workflow ran it. Each passed every local check that existed, which is the honest limit of the
 pre-deployment verification in §4.
+
+## 8. Vlad's decisions after the summary
+Asked through the desktop app's question dialog (three options each, recommended first); Vlad chose:
+- Q1: "Entra-only, managed identity (Recommended)"
+- Q2: "Plain user, owns HangFire (Recommended)"
+- Q3: "main branch only (Recommended)"
+
+Applied: D-44 Q1–Q3 marked ACCEPTED. No code change was needed: all three were already deployed as recommended. Items 1–17 remain PROPOSED.
