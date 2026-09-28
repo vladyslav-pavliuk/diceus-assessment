@@ -10,13 +10,14 @@ namespace ClaimsModule.Application.Common.Behaviors;
 /// (audit rows), saves, commits, and then dispatches the after-commit events. Queries pass straight
 /// through: they never open a transaction.
 /// Validation runs before this behaviour, so an invalid request never opens a transaction.
+/// A command marked <see cref="IHandlesOwnUnitOfWork"/> runs its unit of work itself (D-42).
 /// </summary>
 internal sealed class UnitOfWorkBehavior<TRequest, TResponse>(IUnitOfWork unitOfWork) : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
 {
     public Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
     {
-        if (request is not (ICommand or ICommand<TResponse>))
+        if (request is not (ICommand or ICommand<TResponse>) || request is IHandlesOwnUnitOfWork)
         {
             return next(cancellationToken);
         }

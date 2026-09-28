@@ -1,6 +1,7 @@
 using ClaimsModule.Application.Claims;
 using ClaimsModule.Application.Common.Paging;
 using ClaimsModule.Domain.Claims;
+using ClaimsModule.Domain.Documents;
 
 namespace ClaimsModule.Application.Abstractions.ReadModels;
 
@@ -25,7 +26,38 @@ public interface IClaimQueries
 
     /// <summary>Reserve summary and full history (FRS §10.2). Null when the claim does not exist in the caller's organisation.</summary>
     Task<ClaimReservesDto?> GetReservesAsync(Guid claimId, CancellationToken cancellationToken);
+
+    /// <summary>The claim's status alone. Null when the claim does not exist in the caller's organisation.</summary>
+    Task<ClaimStatus?> GetStatusAsync(Guid claimId, CancellationToken cancellationToken);
+
+    /// <summary>Every document of the claim, newest first (FRS §10.1). Null when the claim does not exist in the caller's organisation.</summary>
+    Task<IReadOnlyList<ClaimDocumentRecord>?> ListDocumentsAsync(Guid claimId, CancellationToken cancellationToken);
+
+    /// <summary>One document of the claim. Null when either does not exist in the caller's organisation.</summary>
+    Task<ClaimDocumentRecord?> GetDocumentAsync(Guid claimId, Guid documentId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Whether a document row exists, read straight from the database. Used after a failed upload commit, whose outcome
+    /// may be unknown, before its blob is removed (D-42).
+    /// </summary>
+    Task<bool> DocumentExistsAsync(Guid documentId, CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// A document's stored metadata (FRS §9.7) plus the uploader's name. Carries the blob path, which the Application needs to
+/// sign a download URL and which is never returned to a client.
+/// </summary>
+public sealed record ClaimDocumentRecord(
+    Guid Id,
+    DocumentType DocumentType,
+    string DocumentName,
+    string ContentType,
+    long FileSizeBytes,
+    DateTimeOffset UploadedAt,
+    Guid? UploadedByUserId,
+    string? UploadedByName,
+    string? Notes,
+    string BlobPath);
 
 /// <summary>
 /// GET /api/claims filters (FRS §10.1, D-29). Loss dates compare the UTC calendar date of the loss,

@@ -160,7 +160,7 @@ public sealed record ValidationIssueDto(
     Guid? ResolvedByUserId,
     string? ResolutionNote);
 
-/// <summary>Document metadata (FRS §9.7). The download URL comes from the documents endpoints (Phase 5).</summary>
+/// <summary>Document metadata (FRS §9.7), as listed in the claim detail. The download URL comes from the documents endpoints (<see cref="DocumentDto"/>).</summary>
 public sealed record ClaimDocumentDto(
     Guid Id,
     DocumentType DocumentType,

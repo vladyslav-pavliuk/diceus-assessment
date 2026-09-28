@@ -167,7 +167,7 @@ internal sealed class ClaimAuditTrail(IAuditLogService auditLog) :
     /// <summary>FRS §13: RelatedEntityId = documentId.</summary>
     public Task HandleAsync(DocumentUploaded e, CancellationToken cancellationToken) => Record(
         e.ClaimId, AuditEventTypes.DocumentUploaded, $"Document {e.DocumentName} uploaded.",
-        newValue: new { e.DocumentName },
+        newValue: new { e.DocumentName, e.DocumentType, e.ContentType, e.FileSizeBytes },
         relatedEntityId: e.DocumentId, relatedEntityType: DocumentEntity);
 
     private static string Money(decimal amount) => AuditValues.Money(amount);
