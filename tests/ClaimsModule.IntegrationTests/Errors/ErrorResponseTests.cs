@@ -84,6 +84,10 @@ public sealed class ErrorResponseTests(ApiFixture fixture)
         {
             builder.UseEnvironment("Production");
             builder.UseSetting("Auth:SigningKey", "production-like-signing-key-for-this-test-only");
+
+            // Outside Development documents must go to Azure Blob Storage, or the host refuses to start (D-42). The client is
+            // created on first use, which this test never reaches.
+            builder.UseSetting("Storage:AzureBlob:ServiceUri", "https://claimsdocs.blob.core.windows.net");
         });
 
         var response = await production.CreateClient().GetAsync("/test/probe/throw/unexpected");

@@ -160,4 +160,56 @@ internal sealed class ClaimsApi(HttpClient client)
 
     public Task<HttpResponseMessage> SetReserveLimitOverrideAsync(Guid claimId, bool? enabled, string? reason) =>
         client.PutAsJsonAsync($"/api/claims/{claimId}/reserve-limit-override", new { enabled, reason });
+
+    /// <summary>A minimal genuine PDF: the signature is all content sniffing looks at.</summary>
+    public static byte[] PdfBytes(string text = "claim evidence") => System.Text.Encoding.ASCII.GetBytes($"%PDF-1.7\n% {text}\n%%EOF\n");
+
+    /// <summary>POST /api/claims/{id}/documents as a browser would send it: multipart/form-data with a "file" part.</summary>
+    public Task<HttpResponseMessage> UploadDocumentAsync(
+        Guid claimId,
+        string fileName,
+        byte[] content,
+        string contentType = "application/pdf",
+        string? documentType = null,
+        string? notes = null,
+        string? idempotencyKey = null)
+    {
+        var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(content);
+        file.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(contentType);
+        form.Add(file, "file", fileName);
+        if (documentType is not null)
+        {
+            form.Add(new StringContent(documentType), "documentType");
+        }
+
+        if (notes is not null)
+        {
+            form.Add(new StringContent(notes), "notes");
+        }
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"/api/claims/{claimId}/documents") { Content = form };
+        if (idempotencyKey is not null)
+        {
+            request.Headers.Add("Idempotency-Key", idempotencyKey);
+        }
+
+        return client.SendAsync(request);
+    }
+
+    /// <summary>Uploads and expects 201. The declared type is the one a browser would send for the extension.</summary>
+    public async Task<DocumentDto> UploadDocumentOkAsync(Guid claimId, string fileName = "Police Report.pdf", byte[]? content = null, string? documentType = null)
+    {
+        var declared = ClaimsModule.Domain.Documents.DocumentFormat.FromExtension(Path.GetExtension(fileName))?.ContentType ?? "application/octet-stream";
+        var response = await UploadDocumentAsync(claimId, fileName, content ?? PdfBytes(), declared, documentType);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<DocumentDto>(TestAuth.Json))!;
+    }
+
+    public async Task<IReadOnlyList<DocumentDto>> ListDocumentsAsync(Guid claimId)
+    {
+        var response = await client.GetAsync($"/api/claims/{claimId}/documents");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<List<DocumentDto>>(TestAuth.Json))!;
+    }
 }
